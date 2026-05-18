@@ -1,12 +1,6 @@
 {
   "version": 2,
   "installCommand": "npm install --legacy-peer-deps",
-  "buildCommand": "echo 'API only'",
-  "outputDirectory": "public",
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    }
-  ]
+  "buildCommand": "echo skip",
+  "outputDirectory": "public"
 }
