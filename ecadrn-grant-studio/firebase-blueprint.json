@@ -1,0 +1,201 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization Profile",
+      "description": "Details about the nonprofit organization and its ADR work.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "profileText": { "type": "string", "description": "Raw text description of programs, mission, and work." },
+        "voiceProfile": {
+          "type": "object",
+          "properties": {
+            "toneDescriptors": { "type": "array", "items": { "type": "string" } },
+            "keyPhrases": { "type": "array", "items": { "type": "string" } },
+            "voiceRules": { "type": "array", "items": { "type": "string" } },
+            "writingSamples": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "profileText"]
+    },
+    "Funder": {
+      "title": "Funder Research",
+      "description": "Funder intelligence and research reports.",
+      "type": "object",
+      "properties": {
+        "funderName": { "type": "string" },
+        "website": { "type": "string" },
+        "contactName": { "type": "string" },
+        "relationshipStage": { "type": "string" },
+        "notes": { "type": "string" },
+        "intelligence": { "type": "object" },
+        "lastAnalysisAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ProposalTemplate": {
+      "title": "Proposal Template",
+      "description": "Reusable proposal sections and metadata.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "funder": { "type": "string" },
+        "description": { "type": "string" },
+        "sections": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "creatorEmail": { "type": "string" }
+      }
+    },
+    "Comment": {
+      "title": "Proposal Comment",
+      "description": "Discussion on specific sections of a proposal.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "author": { "type": "string" },
+        "authorEmail": { "type": "string" },
+        "sectionIndex": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "resolved": { "type": "boolean" }
+      }
+    },
+    "Presence": {
+      "title": "Collaborator Presence",
+      "description": "Real-time cursor and selection tracking.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "cursorPosition": { "type": "number" },
+        "selection": { "type": "object" },
+        "sectionIndex": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Grant": {
+      "title": "Grant Opportunity",
+      "description": "Tracked grant opportunities and match scores.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "funderName": { "type": "string" },
+        "amountMin": { "type": "number" },
+        "amountMax": { "type": "number" },
+        "deadline": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "focusAreas": { "type": "array", "items": { "type": "string" } },
+        "geographicFocus": { "type": "string" },
+        "matchData": { "type": "object" },
+        "status": { "type": "string", "enum": ["discovery", "strategic_assessment", "pursuing", "submitted", "passed"] },
+        "orgId": { "type": "string" }
+      }
+    },
+    "BudgetLineItem": {
+      "title": "Budget Line Item",
+      "description": "A single expense row in a grant budget.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "justification": { "type": "string" }
+      }
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time alerts for collaborators.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["comment", "assignment"] },
+        "message": { "type": "string" },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Proposal": {
+      "title": "Grant Proposal",
+      "description": "A draft proposal with sections.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "grantId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "review", "submitted"] },
+        "sections": {
+          "type": "object",
+          "properties": {
+            "executiveSummary": { "type": "string" },
+            "needStatement": { "type": "string" },
+            "projectDescription": { "type": "string" },
+            "goalsObjectives": { "type": "string" },
+            "methodology": { "type": "string" },
+            "evaluationPlan": { "type": "string" },
+            "sustainability": { "type": "string" },
+            "organizationalCapacity": { "type": "string" },
+            "budgetNarrative": { "type": "string" }
+          }
+        },
+        "budget": {
+          "type": "array",
+          "items": { "$ref": "BudgetLineItem" }
+        },
+        "reviewResults": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Submission": {
+      "title": "Grant Submission",
+      "description": "Tracking for a submitted proposal.",
+      "type": "object",
+      "properties": {
+        "proposalId": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "confirmationNumber": { "type": "string" },
+        "amountRequested": { "type": "number" },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/organizations/{orgId}": {
+      "schema": "Organization",
+      "description": "Main organization data."
+    },
+    "/organizations/{orgId}/funders/{funderId}": {
+      "schema": "Funder",
+      "description": "Funder research for an organization."
+    },
+    "/organizations/{orgId}/grants/{grantId}": {
+      "schema": "Grant",
+      "description": "Grant tracking for an organization."
+    },
+    "/organizations/{orgId}/templates/{templateId}": {
+      "schema": "ProposalTemplate",
+      "description": "Templates for proposals."
+    },
+    "/organizations/{orgId}/proposals/{proposalId}": {
+      "schema": "Proposal",
+      "description": "Grant proposals for an organization."
+    },
+    "/organizations/{orgId}/proposals/{proposalId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a proposal."
+    },
+    "/organizations/{orgId}/proposals/{proposalId}/presence/{userId}": {
+      "schema": "Presence",
+      "description": "Real-time presence tracking."
+    },
+    "/organizations/{orgId}/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Submissions for an organization."
+    },
+    "/organizations/{orgId}/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    }
+  }
+}
