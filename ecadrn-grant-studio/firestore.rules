@@ -1,0 +1,151 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Definitions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEcadrnUser() {
+      return isSignedIn() && request.auth.token.email.matches('.*@ecadrn\\.org$') && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isEcadrnUser() && request.auth.uid == userId;
+    }
+
+    function isOrgMember(orgId) {
+      return isOwner(orgId);
+    }
+
+    // Entity Validations
+    function isValidOrganization(data) {
+      return data.keys().hasAll(['name', 'profileText', 'updatedAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.profileText is string && data.profileText.size() <= 10000 &&
+             data.updatedAt is string;
+    }
+
+    function isValidFunder(data) {
+      return data.keys().hasAll(['updatedAt']) &&
+             data.get('funderName', '') is string && data.get('funderName', '').size() <= 200 &&
+             data.get('website', '') is string && data.get('website', '').size() <= 256 &&
+             data.get('contactName', '') is string && data.get('contactName', '').size() <= 200 &&
+             data.get('relationshipStage', '') is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidGrant(data) {
+      return data.keys().hasAll(['title', 'updatedAt']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.updatedAt is string;
+    }
+
+    function isValidProposal(data) {
+      return data.keys().hasAll(['title', 'status', 'updatedAt']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.status in ['draft', 'review', 'submitted'] &&
+             data.updatedAt is string;
+    }
+
+    function isValidTemplate(data) {
+      return data.keys().hasAll(['name', 'sections', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.sections is list &&
+             data.createdAt is string;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'type', 'message', 'read', 'timestamp']) &&
+             data.keys().size() >= 5 &&
+             data.userId == request.auth.uid &&
+             (data.type == 'comment' || data.type == 'assignment') &&
+             data.message is string && data.message.size() <= 1000 &&
+             data.read is bool &&
+             data.timestamp is string;
+    }
+
+    // Organizations
+    match /organizations/{orgId} {
+      allow get: if isOrgMember(orgId) && isValidId(orgId);
+      allow list: if isEcadrnUser() && isOrgMember(request.auth.uid);
+      allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
+      allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt'])
+      );
+
+      match /funders/{funderId} {
+        allow get: if isOrgMember(orgId) && isValidId(funderId);
+        allow list: if isOrgMember(orgId);
+        allow create: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['funderName', 'website', 'contactName', 'relationshipStage', 'notes', 'intelligence', 'lastAnalysisAt', 'updatedAt'])
+        );
+        allow delete: if isOrgMember(orgId) && isValidId(funderId);
+      }
+
+      match /templates/{templateId} {
+        allow read: if isOrgMember(orgId) && isValidId(templateId);
+        allow create: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming()) && (
+          incoming().createdAt == existing().createdAt
+        );
+        allow delete: if isOrgMember(orgId) && isValidId(templateId);
+      }
+
+      match /grants/{grantId} {
+        allow get: if isOrgMember(orgId) && isValidId(grantId);
+        allow list: if isOrgMember(orgId);
+        allow create: if isOrgMember(orgId) && isValidId(grantId) && isValidGrant(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(grantId) && isValidGrant(incoming());
+        allow delete: if isOrgMember(orgId) && isValidId(grantId);
+      }
+
+      match /proposals/{proposalId} {
+        allow get: if isOrgMember(orgId) && isValidId(proposalId);
+        allow list: if isOrgMember(orgId);
+        allow create: if isOrgMember(orgId) && isValidId(proposalId) && isValidProposal(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(proposalId) && isValidProposal(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'sections', 'updatedAt', 'reviewResults', 'collaborators', 'budget'])
+        );
+        allow delete: if isOrgMember(orgId) && isValidId(proposalId);
+
+        match /comments/{commentId} {
+          allow read: if isOrgMember(orgId) && isValidId(commentId);
+          allow write: if isOrgMember(orgId) && isValidId(commentId);
+        }
+
+        match /presence/{userId} {
+          allow read: if isOrgMember(orgId) && isValidId(userId);
+          allow write: if isOrgMember(orgId) && isOwner(userId) && isValidId(userId);
+        }
+      }
+
+      match /notifications/{notificationId} {
+        allow get: if isOrgMember(orgId) && isValidId(notificationId) && resource.data.userId == request.auth.uid;
+        allow list: if isOrgMember(orgId) && resource.data.userId == request.auth.uid;
+        allow create: if isOrgMember(orgId) && isValidNotification(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(notificationId) && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if isOrgMember(orgId) && isValidId(notificationId) && resource.data.userId == request.auth.uid;
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "ECADRN Grant Studio",
+  "description": "An AI-powered grant writing and management platform for ADR professionals. Features rich-text collaboration, version history, template systems, and a unified strategy calendar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
