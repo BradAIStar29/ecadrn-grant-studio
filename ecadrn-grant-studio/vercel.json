@@ -1,11 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.ts",
-      "use": "@vercel/node"
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "echo 'API only — no frontend build needed'",
+  "outputDirectory": "public",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/api/(.*)",
