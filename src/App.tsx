@@ -239,15 +239,13 @@ CORE PROGRAMS:
     provider.setCustomParameters({ hd: 'ecadrn.org' });
     try {
       const result = await signInWithPopup(auth, provider);
-      const email = result.user.email || '';
-      if (!email.endsWith('@ecadrn.org')) {
+      if (!result.user.email?.endsWith('@ecadrn.org')) {
         await result.user.delete();
-        alert('Access denied. Only @ecadrn.org email addresses are allowed.');
-        return;
+        alert('Access restricted to @ecadrn.org accounts only.');
       }
-    } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        console.error(err);
+    } catch (e: any) {
+      if (e.code !== 'auth/popup-closed-by-user') {
+        alert('Sign in failed: ' + e.message);
       }
     }
   };
