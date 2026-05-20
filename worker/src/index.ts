@@ -4,6 +4,7 @@ export interface Env {
   GEMINI_API_KEY: string;
   ALLOWED_ORIGIN: string;
   FIREBASE_PROJECT_ID: string;
+  GOOGLE_DRIVE_TOKEN?: string; // Optional: set via Cloudflare secret for server-side Drive access
 }
 
 // ── Prompt builder ──────────────────────────────────────────────────────────
@@ -207,24 +208,20 @@ OUTPUT FORMAT — Respond ONLY with a valid JSON array. No preamble. No markdown
 
 // ── Firebase token verification ─────────────────────────────────────────────
 
-async function verifyFirebaseToken(token: string, projectId: string): Promise<string | null> {
+async function verifyFirebaseToken(token: string, projectId: string): Promise<{ email: string; uid: string } | null> {
   try {
-    // Decode JWT header to get key ID
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
     const header = JSON.parse(atob(parts[0]));
     const payload = JSON.parse(atob(parts[1]));
 
-    // Check expiry
     if (payload.exp < Date.now() / 1000) return null;
-    // Check audience matches project
     if (payload.aud !== projectId) return null;
-    // Check email domain
+
     const email: string = payload.email || '';
     if (!email.endsWith('@ecadrn.org')) return null;
 
-    // Fetch Google's public keys and verify signature
     const keysRes = await fetch(
       'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
     );
@@ -232,27 +229,22 @@ async function verifyFirebaseToken(token: string, projectId: string): Promise<st
     const certPem = keys[header.kid];
     if (!certPem) return null;
 
-    // Import the certificate and verify
     const certDer = pemToDer(certPem);
     const cryptoKey = await crypto.subtle.importKey(
-      'spki',
-      certDer,
+      'spki', certDer,
       { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['verify']
+      false, ['verify']
     );
 
     const signingInput = `${parts[0]}.${parts[1]}`;
     const signature = base64UrlDecode(parts[2]);
 
     const valid = await crypto.subtle.verify(
-      'RSASSA-PKCS1-v1_5',
-      cryptoKey,
-      signature,
+      'RSASSA-PKCS1-v1_5', cryptoKey, signature,
       new TextEncoder().encode(signingInput)
     );
 
-    return valid ? email : null;
+    return valid ? { email, uid: payload.sub } : null;
   } catch {
     return null;
   }
@@ -275,6 +267,19 @@ function base64UrlDecode(str: string, standard = false): ArrayBuffer {
   return bytes.buffer;
 }
 
+// ── Google Drive helpers ─────────────────────────────────────────────────────
+
+async function driveRequest(path: string, options: RequestInit, token: string) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3${path}`, {
+    ...options,
+    headers: {
+      ...((options.headers as Record<string, string>) || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res;
+}
+
 // ── Main handler ────────────────────────────────────────────────────────────
 
 export default {
@@ -283,93 +288,188 @@ export default {
 
     const corsHeaders = {
       'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Drive-Token',
     };
 
-    // Handle preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
+    const json = (data: any, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-    }
 
     // Verify Firebase auth token
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Unauthorized' }, 401);
     }
 
-    const token = authHeader.split('Bearer ')[1];
-    const email = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID);
-    if (!email) {
-      return new Response(JSON.stringify({ error: 'Access restricted to @ecadrn.org accounts' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const firebaseToken = authHeader.slice(7);
+    const user = await verifyFirebaseToken(firebaseToken, env.FIREBASE_PROJECT_ID);
+    if (!user) {
+      return json({ error: 'Forbidden: @ecadrn.org accounts only' }, 403);
     }
 
-    // Extract action from URL path: /ai/generate-draft → generate-draft
     const url = new URL(request.url);
-    const action = url.pathname.split('/').filter(Boolean).pop() || '';
-    const data = await request.json();
+    const path = url.pathname;
 
-    const promptText = getPrompt(action, data);
-    if (promptText === 'INVALID') {
-      return new Response(JSON.stringify({ error: 'Invalid action' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // ── AI Routes ──────────────────────────────────────────────────────────
+    if (path.startsWith('/ai/')) {
+      const action = path.replace('/ai/', '');
+      if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+      const body = await request.json() as any;
+      const prompt = getPrompt(action, body);
+      if (prompt === 'INVALID') return json({ error: `Unknown action: ${action}` }, 400);
+
+      const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
       });
+
+      const text = result.text?.trim() || '';
+      const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+      try {
+        return json(JSON.parse(cleaned));
+      } catch {
+        return json({ raw: cleaned });
+      }
     }
 
-    const isJson = action !== 'chat';
+    // ── Google Drive Routes ────────────────────────────────────────────────
+    // Drive token is passed in X-Drive-Token header (user's OAuth token from frontend)
+    const driveToken = request.headers.get('X-Drive-Token');
 
-    try {
-      const genai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+    if (path === '/drive/files' && request.method === 'POST') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+      const body = await request.json() as any;
 
-      const config = isJson
-        ? { responseMimeType: 'application/json' as const, temperature: 0.4, topP: 0.85 }
-        : { temperature: 0.7, topP: 0.9 };
+      let q = "trashed=false";
+      if (body.folderId) q += ` and '${body.folderId}' in parents`;
+      if (body.query) q += ` and (name contains '${body.query}' or fullText contains '${body.query}')`;
+      // Only docs, sheets, plain text, and PDFs
+      q += " and (mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet' or mimeType='text/plain' or mimeType='application/pdf')";
 
-      const response = await genai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ role: 'user', parts: [{ text: promptText }] }],
-        config,
+      const params = new URLSearchParams({
+        q,
+        fields: 'files(id,name,mimeType,modifiedTime,size,webViewLink,parents),nextPageToken',
+        pageSize: String(body.pageSize || 20),
+        orderBy: 'modifiedTime desc',
+      });
+      if (body.pageToken) params.set('pageToken', body.pageToken);
+
+      const res = await driveRequest(`/files?${params}`, { method: 'GET' }, driveToken);
+      if (!res.ok) return json({ error: 'Drive API error', details: await res.text() }, res.status);
+      return json(await res.json());
+    }
+
+    if (path.match(/^\/drive\/file\/[^/]+\/content$/) && request.method === 'GET') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+      const fileId = path.split('/')[3];
+
+      // First get metadata to check mime type
+      const metaRes = await driveRequest(`/files/${fileId}?fields=mimeType,name`, { method: 'GET' }, driveToken);
+      if (!metaRes.ok) return json({ error: 'File not found' }, 404);
+      const meta = await metaRes.json() as any;
+
+      let content = '';
+      if (meta.mimeType === 'application/vnd.google-apps.document') {
+        // Export Google Doc as plain text
+        const exportRes = await driveRequest(`/files/${fileId}/export?mimeType=text/plain`, { method: 'GET' }, driveToken);
+        if (!exportRes.ok) return json({ error: 'Export failed' }, 500);
+        content = await exportRes.text();
+      } else if (meta.mimeType === 'text/plain') {
+        const dlRes = await driveRequest(`/files/${fileId}?alt=media`, { method: 'GET' }, driveToken);
+        if (!dlRes.ok) return json({ error: 'Download failed' }, 500);
+        content = await dlRes.text();
+      } else {
+        content = `[File: ${meta.name} — binary content cannot be displayed as text]`;
+      }
+
+      return json({ content, name: meta.name, mimeType: meta.mimeType });
+    }
+
+    if (path === '/drive/folders' && request.method === 'GET') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+      const params = new URLSearchParams({
+        q: "mimeType='application/vnd.google-apps.folder' and trashed=false",
+        fields: 'files(id,name)',
+        pageSize: '50',
+        orderBy: 'name',
+      });
+      const res = await driveRequest(`/files?${params}`, { method: 'GET' }, driveToken);
+      if (!res.ok) return json({ error: 'Drive API error' }, res.status);
+      const data = await res.json() as any;
+      return json({ folders: data.files || [] });
+    }
+
+    if (path === '/drive/export' && request.method === 'POST') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+      const body = await request.json() as any;
+
+      // Build document content as plain text
+      const sections = body.sections || [];
+      let docContent = `${body.title}\nFor: ${body.funder}\n\n`;
+      sections.forEach((s: any) => {
+        docContent += `${s.title.toUpperCase()}\n\n`;
+        // Strip HTML tags
+        docContent += s.content.replace(/<[^>]*>/g, '') + '\n\n';
       });
 
-      const text = response.text || '';
-
-      if (isJson) {
-        try {
-          const parsed = JSON.parse(text);
-          return new Response(JSON.stringify(parsed), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        } catch {
-          return new Response(JSON.stringify({ error: 'Invalid JSON from AI', raw: text }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-      } else {
-        return new Response(text, {
-          headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+      if (body.budget && body.budget.length > 0) {
+        docContent += 'BUDGET\n\n';
+        body.budget.forEach((item: any) => {
+          docContent += `${item.category}: $${item.amount?.toLocaleString()} — ${item.description}\n`;
         });
       }
-    } catch (error: any) {
-      console.error('AI Error:', error);
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+      // Create the Google Doc via Drive API
+      const metadata = {
+        name: `${body.title} — ${body.funder}`,
+        mimeType: 'application/vnd.google-apps.document',
+        ...(body.folderId ? { parents: [body.folderId] } : {}),
+      };
+
+      // Upload as multipart: metadata + plain text content
+      const boundary = '-------314159265358979323846';
+      const multipart = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify(metadata),
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        docContent,
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      const uploadRes = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${driveToken}`,
+            'Content-Type': `multipart/related; boundary="${boundary}"`,
+          },
+          body: multipart,
+        }
+      );
+
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        return json({ error: 'Export to Drive failed', details: errText }, uploadRes.status);
+      }
+
+      return json(await uploadRes.json());
     }
+
+    return json({ error: 'Not found' }, 404);
   },
 };
