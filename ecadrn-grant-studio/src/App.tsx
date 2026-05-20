@@ -144,6 +144,11 @@ const WALKTHROUGH_STEPS = [
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
+    return (localStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
+  });
+  // The Firestore org namespace to use for all data ops
+  const orgId = activeWorkspace === 'shared' ? SHARED_ORG_ID : (user?.uid || '');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -180,7 +185,7 @@ export default function App() {
     if (!user) return;
 
     // Load Notifications
-    const notifPath = `organizations/${user.uid}/notifications`;
+    const notifPath = `organizations/${orgId}/notifications`;
     const notifRef = collection(db, notifPath);
     const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user.uid), where('read', '==', false), orderBy('timestamp', 'desc'), limit(10)), (snap) => {
       setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -189,13 +194,14 @@ export default function App() {
     });
 
     // Load Organization
-    const orgPath = `organizations/${user.uid}`;
+    const orgPath = `organizations/${orgId}`;
     const orgRef = doc(db, orgPath);
     const unsubOrg = onSnapshot(orgRef, (snap) => {
       if (snap.exists()) {
         setOrganization(snap.data());
       } else {
-        // Initial setup for new user
+        // Initial setup for new user or new shared workspace
+        const isShared = orgId === SHARED_ORG_ID;
         const initialOrg = {
           name: 'ECADRN (Early Career ADR Network)',
           profileText: `The Early Career ADR Network (ECADRN) is a global consortium of early-career ADR practitioners, scholars, and enthusiasts. 
@@ -229,7 +235,7 @@ CORE PROGRAMS:
     });
 
     // Load Proposals
-    const proposalsPath = `organizations/${user.uid}/proposals`;
+    const proposalsPath = `organizations/${orgId}/proposals`;
     const proposalsRef = collection(db, proposalsPath);
     const unsubProposals = onSnapshot(query(proposalsRef, orderBy('updatedAt', 'desc')), (snap) => {
       setProposals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -238,7 +244,7 @@ CORE PROGRAMS:
     });
 
     // Load Grants
-    const grantsPath = `organizations/${user.uid}/grants`;
+    const grantsPath = `organizations/${orgId}/grants`;
     const grantsRef = collection(db, grantsPath);
     const unsubGrants = onSnapshot(query(grantsRef, limit(20)), (snap) => {
       setGrants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -247,7 +253,7 @@ CORE PROGRAMS:
     });
 
     // Load Funders
-    const fundersPath = `organizations/${user.uid}/funders`;
+    const fundersPath = `organizations/${orgId}/funders`;
     const fundersRef = collection(db, fundersPath);
     const unsubFunders = onSnapshot(query(fundersRef, limit(20)), (snap) => {
       setFunders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -256,7 +262,7 @@ CORE PROGRAMS:
     });
 
     // Load Voice Profiles
-    const voiceProfilesPath = `organizations/${user.uid}/voiceProfiles`;
+    const voiceProfilesPath = `organizations/${orgId}/voiceProfiles`;
     const voiceProfilesRef = collection(db, voiceProfilesPath);
     const unsubVoice = onSnapshot(query(voiceProfilesRef, orderBy('createdAt', 'desc')), (snap) => {
       const pList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -275,7 +281,7 @@ CORE PROGRAMS:
       unsubFunders();
       unsubVoice();
     };
-  }, [user]);
+  }, [user, orgId]); // reload when workspace switches
 
   const exportMasterMarkdown = () => {
     let md = `# ECADRN - Nexus OS Mastery Export\n\n`;
@@ -388,7 +394,64 @@ CORE PROGRAMS:
           )}
         </div>
 
-        <nav id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1 mt-4">
+        <nav           {/* ── Workspace Switcher ── */}
+          {isSidebarOpen && (
+            <div className="px-4 pt-4 pb-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 px-1">Workspace</p>
+              <div className="flex rounded-xl overflow-hidden border border-slate-700">
+                <button
+                  onClick={() => {
+                    setActiveWorkspace('personal');
+                    localStorage.setItem('ecadrn_workspace', 'personal');
+                  }}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
+                    activeWorkspace === 'personal'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Personal
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveWorkspace('shared');
+                    localStorage.setItem('ecadrn_workspace', 'shared');
+                  }}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
+                    activeWorkspace === 'shared'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Team
+                </button>
+              </div>
+              {activeWorkspace === 'shared' && (
+                <p className="text-[9px] text-indigo-400 mt-1.5 px-1">
+                  🤝 ECADRN shared workspace
+                </p>
+              )}
+            </div>
+          )}
+          {!isSidebarOpen && (
+            <div className="px-3 pt-3">
+              <button
+                onClick={() => {
+                  const next = activeWorkspace === 'personal' ? 'shared' : 'personal';
+                  setActiveWorkspace(next);
+                  localStorage.setItem('ecadrn_workspace', next);
+                }}
+                title={activeWorkspace === 'personal' ? 'Switch to Team workspace' : 'Switch to Personal workspace'}
+                className={`w-full flex items-center justify-center py-2 rounded-xl transition-colors ${
+                  activeWorkspace === 'shared' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <Users size={16} />
+              </button>
+            </div>
+          )}
+          
+          <div id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1 mt-4">
           <NavItem 
             icon={<Layout size={20} />} 
             label="Dashboard" 
@@ -487,7 +550,16 @@ CORE PROGRAMS:
       {/* Main Content */}
       <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-[260px]' : 'ml-[80px]'}`}>
         <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-10 font-sans">
-          <h1 className="text-lg font-semibold text-slate-900 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-slate-900 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+              activeWorkspace === 'shared'
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'bg-slate-100 text-slate-500'
+            }`}>
+              {activeWorkspace === 'shared' ? '🤝 Team' : '👤 Personal'}
+            </span>
+          </div>
           <div className="flex items-center gap-4">
             <div className="relative">
                <button 
@@ -509,7 +581,7 @@ CORE PROGRAMS:
                        <button 
                          onClick={async () => {
                            for (const n of notifications) {
-                             await setDoc(doc(db, `organizations/${user.uid}/notifications`, n.id), { read: true }, { merge: true });
+                             await setDoc(doc(db, `organizations/${orgId}/notifications`, n.id), { read: true }, { merge: true });
                            }
                          }}
                          className="text-[9px] font-bold text-indigo-600 hover:underline"
@@ -581,7 +653,7 @@ CORE PROGRAMS:
               return updated;
             });
             // Add a notification
-            const notifPath = `organizations/${user?.uid}/notifications`;
+            const notifPath = `organizations/${orgId}/notifications`;
             addDoc(collection(db, notifPath), {
               message: `📄 Imported from Drive: "${fileName}"`,
               timestamp: new Date().toISOString(),
@@ -808,6 +880,7 @@ function ProposalsView({
       voiceProfiles={voiceProfiles}
       selectedVoiceProfileId={selectedVoiceProfileId}
       onSetVoiceProfileId={onSetVoiceProfileId}
+      orgId={orgId}
     />;
   }
 
@@ -842,15 +915,17 @@ function ProposalsView({
         sections = data;
       }
 
-      await addDoc(collection(db, 'organizations', auth.currentUser!.uid, 'proposals'), {
+      await addDoc(collection(db, 'organizations', orgId, 'proposals'), {
         title: template?.name || newProposalData.title,
         funder: template?.funder || newProposalData.funder,
         description: template?.description || newProposalData.description,
         status: 'draft',
         sections: sections,
         updatedAt: new Date().toISOString(),
+        createdBy: auth.currentUser?.email || '',
+        lastEditedBy: auth.currentUser?.email || '',
         collaborators: [auth.currentUser!.email]
-      }).catch(e => handleFirestoreError(e, OperationType.WRITE, `organizations/${auth.currentUser!.uid}/proposals`));
+      }).catch(e => handleFirestoreError(e, OperationType.WRITE, `organizations/${orgId}/proposals`));
       
       setShowNewForm(false);
       setNewProposalData({ title: '', funder: '', description: '' });
@@ -989,6 +1064,20 @@ function ProposalsView({
                     ))}
                   </div>
                 </td>
+                <td className="px-8 py-5">
+                  {p.lastEditedBy ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-[9px] font-black text-violet-600">
+                        {p.lastEditedBy.slice(0, 1).toUpperCase()}
+                      </div>
+                      <span className="text-xs text-slate-500 truncate max-w-[120px]" title={p.lastEditedBy}>
+                        {p.lastEditedBy.split('@')[0]}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-300">—</span>
+                  )}
+                </td>
                 <td className="px-8 py-5 text-slate-400 font-medium">
                   {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'N/A'}
                 </td>
@@ -1030,9 +1119,9 @@ function ProposalsView({
 }
 
 function ProposalEditor({ 
-  proposal, onBack, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId 
+  proposal, onBack, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId
 }: { 
-  proposal: any, onBack: () => void, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void 
+  proposal: any, onBack: () => void, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string
 }) {
   const [sections, setSections] = useState<any[]>(() => {
     return (proposal.sections || []).map((s: any) => ({
@@ -1088,7 +1177,7 @@ function ProposalEditor({
       setFunderGivingPriorities(givingPR);
       setFunderGeoFocus(geoFC);
       setFunderRationale(rational);
-      const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
+      const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       setDoc(doc(db, propPath), {
         funder: fObj.funderName || '',
         updatedAt: new Date().toISOString()
@@ -1142,7 +1231,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   }, [sections, budget]);
 
   useEffect(() => {
-    const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
+    const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
     
     // Versions
     const unsubVersions = onSnapshot(query(collection(db, propPath, 'versions'), orderBy('timestamp', 'desc'), limit(20)), (snap) => {
@@ -1216,11 +1305,12 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   const saveProposal = async (auto = false, customMsg: string = '') => {
     if (!auto) setIsSaving(true);
     try {
-      const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
+      const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       await setDoc(doc(db, propPath), {
         sections,
         budget,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        lastEditedBy: auth.currentUser?.email || '',
       }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, propPath));
 
       if (!auto) {
@@ -1242,7 +1332,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   };
 
   const saveAsTemplate = async () => {
-    const templatesPath = `organizations/${auth.currentUser!.uid}/templates`;
+    const templatesPath = `organizations/${orgId}/templates`;
     setIsSaving(true);
     try {
       await addDoc(collection(db, templatesPath), {
@@ -1267,7 +1357,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     newSections[sectionIdx].assignedTo = user;
     setSections(newSections);
     
-    const notifPath = `organizations/${auth.currentUser!.uid}/notifications`;
+    const notifPath = `organizations/${orgId}/notifications`;
     await addDoc(collection(db, notifPath), {
       userId: auth.currentUser!.uid, // In real app, look up user's ID
       type: 'assignment',
@@ -1284,7 +1374,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   const addComment = async () => {
     if (!newComment.trim()) return;
     try {
-      const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
+      const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       await addDoc(collection(db, propPath, 'comments'), {
         text: newComment,
         author: auth.currentUser!.email,
@@ -1298,7 +1388,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       for (const email of collaborators) {
         if (email !== auth.currentUser!.email) {
           // In a real app we'd look up the UID by email. Here we'll stick to a simple org-wide alert for demo.
-          await addDoc(collection(db, `organizations/${auth.currentUser!.uid}/notifications`), {
+          await addDoc(collection(db, `organizations/${orgId}/notifications`), {
             userId: auth.currentUser!.uid, // Simplified for AI Studio
             type: 'comment',
             message: `New comment on ${proposal.title}: "${newComment.slice(0, 30)}..."`,
@@ -2254,7 +2344,7 @@ function TemplateModal({ isOpen, onClose, onSelect }: { isOpen: boolean, onClose
 
   useEffect(() => {
     if (!isOpen || !auth.currentUser) return;
-    const templatesPath = `organizations/${auth.currentUser.uid}/templates`;
+    const templatesPath = `organizations/${orgId}/templates`;
     const templatesRef = collection(db, templatesPath);
     const unsub = onSnapshot(templatesRef, (snap) => {
       setCustomTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -2382,7 +2472,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
     setIsSubmittingManual(true);
     try {
       const cleanUrl = manualWebsite.startsWith('http') ? manualWebsite : `https://${manualWebsite}`;
-      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersPath = `organizations/${orgId}/funders`;
       const fundersRef = collection(db, fundersPath);
       
       const newFunder = {
@@ -2479,7 +2569,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
         funderNotes: funder?.notes || 'Researching for strategic alignment.'
       });
 
-      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersPath = `organizations/${orgId}/funders`;
       
       const autoTags: string[] = [];
       if (data.givingPriorities && Array.isArray(data.givingPriorities)) {
@@ -2544,7 +2634,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
   };
 
   const saveEdit = async (id: string) => {
-    const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+    const fundersPath = `organizations/${orgId}/funders`;
     const docRef = doc(db, fundersPath, id);
     await setDoc(docRef, {
       ...editData,
@@ -2930,7 +3020,7 @@ function FunderNotesField({ funderId, initialNotes }: { funderId: string, initia
     if (notes === initialNotes) return;
     setIsSaving(true);
     try {
-      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersPath = `organizations/${orgId}/funders`;
       await setDoc(doc(db, fundersPath, funderId), { 
         notes, 
         updatedAt: new Date().toISOString() 
@@ -3176,7 +3266,7 @@ function FunderCard({
                   <button 
                     onClick={async (e) => {
                       e.stopPropagation();
-                      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                      const fundersPath = `organizations/${orgId}/funders`;
                       const docRef = doc(db, fundersPath, f.id);
                       const updated = (f.tags || []).filter((tg: string) => tg !== t);
                       await setDoc(docRef, {
@@ -3199,7 +3289,7 @@ function FunderCard({
                 e.preventDefault();
                 const cleanT = inlineTagText.trim();
                 if (cleanT) {
-                  const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                  const fundersPath = `organizations/${orgId}/funders`;
                   const docRef = doc(db, fundersPath, f.id);
                   const exists = (f.tags || []).some((tg: string) => tg.toLowerCase() === cleanT.toLowerCase());
                   if (!exists) {
@@ -3245,7 +3335,7 @@ function FunderCard({
                     }
                   }
                   if (added) {
-                    const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                    const fundersPath = `organizations/${orgId}/funders`;
                     const docRef = doc(db, fundersPath, f.id);
                     await setDoc(docRef, {
                       tags: newTags,
@@ -3289,7 +3379,7 @@ function FunderCard({
                       <button
                         key={sug}
                         onClick={async () => {
-                          const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                          const fundersPath = `organizations/${orgId}/funders`;
                           const docRef = doc(db, fundersPath, f.id);
                           await setDoc(docRef, {
                             tags: [...(f.tags || []), sug],
@@ -3450,7 +3540,7 @@ function GrantsView({
         searchQuery: `Linguistic styles preferred: ${activeVoiceForSuggestions.toneDescriptors?.join(', ') || 'Scholarly, Equitable'}. Target programmatic messaging key terms: ${activeVoiceForSuggestions.keyPhrases?.join(', ') || 'ADR professional development, peer mentorship'}. Look for foundations interested in these specific communication styles and priorities.`
       });
 
-      const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+      const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       for (const g of results) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
@@ -3535,7 +3625,7 @@ Deadline: 2026-11-15`;
           const result = await callAI('analyze-uploaded-grant', { text });
           
           // Save result to Firestore
-          const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+          const grantsPath = `organizations/${orgId}/grants`;
           const grantsRef = collection(db, grantsPath);
           const autoTags = Array.isArray(result.focusAreas) ? [...result.focusAreas] : [];
           if (result.geographicFocus && !autoTags.includes(result.geographicFocus)) {
@@ -3596,7 +3686,7 @@ Deadline: 2026-11-15`;
         eligibility: grant.eligibility || '501(c)(3) Nonprofit'
       });
       
-      const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+      const grantsPath = `organizations/${orgId}/grants`;
       const docRef = doc(db, grantsPath, grant.id);
       await setDoc(docRef, {
         ecadrnAlignmentScore: data.ecadrnAlignmentScore,
@@ -3639,7 +3729,7 @@ Deadline: 2026-11-15`;
         searchQuery: "Early career ADR network funding"
       });
 
-      const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+      const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       for (const g of results) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
@@ -3775,7 +3865,7 @@ Deadline: 2026-11-15`;
                     setIsUploading(true);
                     callAI('analyze-uploaded-grant', { text })
                       .then((result) => {
-                        const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+                        const grantsPath = `organizations/${orgId}/grants`;
                         const grantsRef = collection(db, grantsPath);
                         const autoTags = Array.isArray(result.focusAreas) ? [...result.focusAreas] : [];
                         if (result.geographicFocus && !autoTags.includes(result.geographicFocus)) {
@@ -4435,7 +4525,7 @@ function VoiceView({
     .sort((a, b) => b.styleMatchScore - a.styleMatchScore);
 
   const saveToProfiles = async (data: any, name: string) => {
-    const profilesPath = `organizations/${auth.currentUser!.uid}/voiceProfiles`;
+    const profilesPath = `organizations/${orgId}/voiceProfiles`;
     const docRef = await addDoc(collection(db, profilesPath), {
       toneDescriptors: data.toneDescriptors || [],
       keyPhrases: data.keyPhrases || [],
@@ -4533,7 +4623,7 @@ function VoiceView({
         if (geo && !autoTags.includes(geo)) autoTags.push(geo);
       }
 
-      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersPath = `organizations/${orgId}/funders`;
       const fundersRef = collection(db, fundersPath);
       await addDoc(fundersRef, {
         funderName: sf.funderName,
