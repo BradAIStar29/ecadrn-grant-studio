@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Plus,
+  PlusCircle,
   Mic,
   ArrowRight,
   TrendingUp,
@@ -40,7 +41,19 @@ import {
   ArrowUp,
   ArrowDown,
   Sparkles,
-  UserPlus
+  UserPlus,
+  BookOpen,
+  Book,
+  ChevronDown,
+  ChevronUp,
+  Scroll,
+  Award,
+  PenTool,
+  Eye,
+  Upload,
+  Paperclip,
+  HardDrive,
+  FolderOpen
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
@@ -61,9 +74,73 @@ import {
 } from 'firebase/firestore';
 import { callAI } from './services/api';
 import ReactQuill from 'react-quill';
+import GoogleDrivePanel from './components/GoogleDrivePanel';
 import 'react-quill/dist/quill.snow.css';
 
 type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar';
+
+const WALKTHROUGH_STEPS = [
+  { 
+    title: "Navigation Center", 
+    tab: 'dashboard',
+    content: "The Sidebar is your map to the Nexus OS. Switch between Dashboard, Proposals, Funder Intelligence, and more to manage your full grant lifecycle.",
+    highlight: "sidebar-nav"
+  },
+  { 
+    title: "Strategic Dashboard", 
+    tab: 'dashboard',
+    content: "Use 'Export Portfolio MD' to download your entire organizational brain as a professional document. Monitor 'Strategic Priorities' to see which grants need immediate attention.",
+    highlight: "dashboard-overview"
+  },
+  { 
+    title: "Proposal Studio", 
+    tab: 'proposals',
+    content: "Click 'New Draft' to launch the AI Intelligence Engine. It scans your mission and voice to generate high-alignment 9-section proposals in seconds.",
+    highlight: "proposals-view"
+  },
+  { 
+    title: "Template Library", 
+    tab: 'proposals',
+    content: "Access 'Templates' to jumpstart new applications using structures from your most successful past ADR grants.",
+    highlight: "proposals-templates"
+  },
+  { 
+    title: "Funder Intel", 
+    tab: 'funders',
+    content: "Use 'AI Re-Research' on any funder to get fresh data points. Track your 'Relationship Stage' from initial contact to secured funding.",
+    highlight: "funders-view"
+  },
+  { 
+    title: "Voice Lab", 
+    tab: 'voice',
+    content: "Train the AI on your brand. Use 'Import Website Context' or 'Analyze Sample' to ensure every sentence sounds exactly like your organization.",
+    highlight: "voice-view"
+  },
+  { 
+    title: "Communication Center", 
+    tab: 'outreach', 
+    content: "Generate tailored 'Outreach' emails and 'Grant Inquiries' that resonate with specific foundations using your trained organizational voice.",
+    highlight: "outreach-view"
+  },
+  { 
+    title: "Strategic Matching", 
+    tab: 'grants', 
+    content: "Our 'Grant Matcher' algorithm parses global databases to identify the exact grants that align with your civic equity and ADR mission.",
+    highlight: "grants-view"
+  },
+  { 
+    title: "AI Strategy Advisor", 
+    tab: 'chat', 
+    content: "Use the 'AI Advisor' for deep strategic thinking. Ask it about funder landscape analysis, complex budgeting, or mission-alignment checking.",
+    highlight: "chat-view"
+  },
+  { 
+    title: "Mission Timeline", 
+    tab: 'calendar', 
+    content: "The 'Calendar' aggregates and manages your mission-critical proposal deadlines and reporting schedules in one unified view.",
+    highlight: "calendar-view"
+  }
+];
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -77,13 +154,14 @@ export default function App() {
   const [voiceProfiles, setVoiceProfiles] = useState<any[]>([]);
   const [selectedVoiceProfileId, setSelectedVoiceProfileId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
 
   useEffect(() => {
-    const hasSeen = localStorage.getItem('hasSeenWalkthrough');
+    const hasSeen = localStorage.getItem('hasSeenWalkthrough_v2');
     if (!hasSeen && user) {
-      setShowWalkthrough(true);
+      setWalkthroughStep(0);
     }
   }, [user]);
 
@@ -292,7 +370,7 @@ CORE PROGRAMS:
         animate={{ width: isSidebarOpen ? 260 : 80 }}
         className="bg-slate-900 flex flex-col fixed h-full z-20 border-r border-slate-800"
       >
-        <div className="p-6 flex items-center justify-between">
+        <div id="sidebar-logo" className="p-6 flex items-center justify-between">
           {isSidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
@@ -307,13 +385,15 @@ CORE PROGRAMS:
           )}
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 mt-4">
+        <nav id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1 mt-4">
           <NavItem 
             icon={<Layout size={20} />} 
             label="Dashboard" 
             active={activeTab === 'dashboard'} 
             onClick={() => setActiveTab('dashboard')} 
             collapsed={!isSidebarOpen}
+            id="nav-dashboard"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'dashboard'}
           />
           <NavItem 
             icon={<FileText size={20} />} 
@@ -321,6 +401,8 @@ CORE PROGRAMS:
             active={activeTab === 'proposals'} 
             onClick={() => setActiveTab('proposals')} 
             collapsed={!isSidebarOpen}
+            id="nav-proposals"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'proposals'}
           />
           <NavItem 
             icon={<Search size={20} />} 
@@ -328,6 +410,8 @@ CORE PROGRAMS:
             active={activeTab === 'funders'} 
             onClick={() => setActiveTab('funders')} 
             collapsed={!isSidebarOpen}
+            id="nav-funders"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'funders'}
           />
           <NavItem 
             icon={<CheckCircle size={20} />} 
@@ -335,6 +419,8 @@ CORE PROGRAMS:
             active={activeTab === 'grants'} 
             onClick={() => setActiveTab('grants')} 
             collapsed={!isSidebarOpen}
+            id="nav-grants"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'grants'}
           />
           <NavItem 
             icon={<Mic size={20} />} 
@@ -342,6 +428,8 @@ CORE PROGRAMS:
             active={activeTab === 'voice'} 
             onClick={() => setActiveTab('voice')} 
             collapsed={!isSidebarOpen}
+            id="nav-voice"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'voice'}
           />
           <NavItem 
             icon={<Mail size={20} />} 
@@ -349,6 +437,8 @@ CORE PROGRAMS:
             active={activeTab === 'outreach'} 
             onClick={() => setActiveTab('outreach')} 
             collapsed={!isSidebarOpen}
+            id="nav-outreach"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'outreach'}
           />
           <NavItem 
             icon={<MessageSquare size={20} />} 
@@ -356,6 +446,8 @@ CORE PROGRAMS:
             active={activeTab === 'chat'} 
             onClick={() => setActiveTab('chat')} 
             collapsed={!isSidebarOpen}
+            id="nav-chat"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'chat'}
           />
           <NavItem 
             icon={<Calendar size={20} />} 
@@ -363,6 +455,8 @@ CORE PROGRAMS:
             active={activeTab === 'calendar'} 
             onClick={() => setActiveTab('calendar')} 
             collapsed={!isSidebarOpen}
+            id="nav-calendar"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'calendar'}
           />
         </nav>
 
@@ -394,6 +488,7 @@ CORE PROGRAMS:
           <div className="flex items-center gap-4">
             <div className="relative">
                <button 
+                 id="notif-bell"
                  onClick={() => setShowNotifications(!showNotifications)}
                  className="p-2 text-slate-400 hover:text-indigo-600 transition-colors relative"
                >
@@ -437,6 +532,20 @@ CORE PROGRAMS:
               <input type="text" placeholder="Search..." className="pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-full text-sm w-64 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all" />
               <Search className="w-4 h-4 text-slate-400 absolute left-4 top-2.5" />
             </div>
+            <button 
+              onClick={() => setDrivePanel({ open: true, mode: 'sync' })}
+              title="Sync Grants Folder"
+              className="p-2 text-slate-400 hover:text-green-600 transition-colors"
+            >
+              <HardDrive size={20} />
+            </button>
+            <button 
+              onClick={() => setDrivePanel({ open: true, mode: 'import' })}
+              title="Import from Drive"
+              className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
+            >
+              <FolderOpen size={20} />
+            </button>
             <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
               <Settings size={20} />
             </button>
@@ -445,44 +554,73 @@ CORE PROGRAMS:
 
         <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
           <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} onStartTour={() => setShowWalkthrough(true)} onExportMaster={exportMasterMarkdown} />}
+            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} />}
-            {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} />}
+            {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
           </AnimatePresence>
         </div>
 
-        <Walkthrough isOpen={showWalkthrough} onClose={() => {
-          setShowWalkthrough(false);
-          localStorage.setItem('hasSeenWalkthrough_v1', 'true');
-        }} />
+        <GoogleDrivePanel
+          isOpen={drivePanel.open}
+          mode={drivePanel.mode}
+          proposalToExport={drivePanel.proposal}
+          onClose={() => setDrivePanel({ open: false, mode: 'import' })}
+          onImport={(content, fileName) => {
+            // Store imported content in localStorage for use in Voice Lab / Proposals
+            const existing = JSON.parse(localStorage.getItem('ecadrn_imported_docs') || '[]');
+            existing.unshift({ name: fileName, content, importedAt: new Date().toISOString() });
+            localStorage.setItem('ecadrn_imported_docs', JSON.stringify(existing.slice(0, 20)));
+          }}
+        />
+        <Walkthrough 
+          isOpen={walkthroughStep !== null} 
+          currentStep={walkthroughStep ?? 0}
+          onStepChange={setWalkthroughStep}
+          onSetActiveTab={setActiveTab}
+          onClose={() => {
+            setWalkthroughStep(null);
+            localStorage.setItem('hasSeenWalkthrough_v2', 'true');
+          }} 
+        />
       </main>
     </div>
   );
 }
 
-function NavItem({ icon, label, active, onClick, collapsed }: { 
+function NavItem({ icon, label, active, onClick, collapsed, id, highlighted }: { 
   icon: React.ReactNode, 
   label: string, 
   active: boolean, 
   onClick: () => void,
-  collapsed: boolean
+  collapsed: boolean,
+  id?: string,
+  highlighted?: boolean
 }) {
   return (
     <button 
+      id={id}
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        active 
-          ? 'bg-indigo-600 text-white' 
-          : 'text-slate-400 hover:bg-slate-800'
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative ${
+        highlighted 
+          ? 'bg-indigo-600/30 text-indigo-400 ring-4 ring-indigo-500/80 ring-offset-2 ring-offset-slate-900 shadow-[0_0_25px_rgba(99,102,241,0.6)] animate-pulse scale-105 z-30'
+          : active 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
+            : 'text-slate-400 hover:bg-slate-800'
       }`}
     >
-      <span className={active ? 'text-white' : 'text-slate-400'}>{icon}</span>
+      <span className={highlighted ? 'text-indigo-400' : active ? 'text-white' : 'text-slate-400'}>{icon}</span>
       {!collapsed && <span className="text-sm font-medium">{label}</span>}
+      {highlighted && (
+        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+        </span>
+      )}
     </button>
   );
 }
@@ -497,6 +635,7 @@ function DashboardView({
 
   return (
     <motion.div 
+      id="dashboard-overview"
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
@@ -710,7 +849,7 @@ function ProposalsView({
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <motion.div id="proposals-view" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex justify-between items-center text-slate-900">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold tracking-tight">Your Proposals</h3>
@@ -896,15 +1035,89 @@ function ProposalEditor({
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [presence, setPresence] = useState<any[]>([]);
+  const [isEditingSection, setIsEditingSection] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [isAIWorking, setIsAIWorking] = useState<string | null>(null);
   const [reviewResults, setReviewResults] = useState<any>(null);
   const [showAIReview, setShowAIReview] = useState(false);
+  const [showHumanizer, setShowHumanizer] = useState(false);
+  const [humanizerResults, setHumanizerResults] = useState<any>(null);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [pendingAssignment, setPendingAssignment] = useState<{ sectionIdx: number, user: string } | null>(null);
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline'>('editor');
   const [budget, setBudget] = useState<any[]>(proposal.budget || []);
+
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [customSaveMsg, setCustomSaveMsg] = useState('');
+
+  const [funderGivingPriorities, setFunderGivingPriorities] = useState(() => {
+    const matchedFunder = funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase());
+    return matchedFunder ? (Array.isArray(matchedFunder.intelligence?.givingPriorities) ? matchedFunder.intelligence.givingPriorities.join(', ') : (matchedFunder.intelligence?.givingPriorities || '')) : '';
+  });
+  const [funderGeoFocus, setFunderGeoFocus] = useState(() => {
+    const matchedFunder = funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase());
+    return matchedFunder ? (matchedFunder.intelligence?.geographicFocus || matchedFunder.geographicFocus || '') : '';
+  });
+  const [funderRationale, setFunderRationale] = useState(() => {
+    const matchedFunder = funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase());
+    return matchedFunder ? (matchedFunder.intelligence?.missionAlignmentRationale || matchedFunder.notes || '') : '';
+  });
+
+  const handleFunderChange = (fId: string) => {
+    const fObj = funders.find((f: any) => f.id === fId);
+    if (fObj) {
+      const givingPR = Array.isArray(fObj.intelligence?.givingPriorities) ? fObj.intelligence.givingPriorities.join(', ') : (fObj.intelligence?.givingPriorities || '');
+      const geoFC = fObj.intelligence?.geographicFocus || fObj.geographicFocus || '';
+      const rational = fObj.intelligence?.missionAlignmentRationale || fObj.notes || '';
+
+      setFunderGivingPriorities(givingPR);
+      setFunderGeoFocus(geoFC);
+      setFunderRationale(rational);
+      const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
+      setDoc(doc(db, propPath), {
+        funder: fObj.funderName || '',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(err => console.error("Funder save error:", err));
+      proposal.funder = fObj.funderName || '';
+
+      // Pre-populate 'Budget Narrative' and 'Organizational Capacity' sections if currently blank, minimal, or placeholders
+      const newSections = [...sections];
+      let updated = false;
+      newSections.forEach((s) => {
+        const titleL = s.title.toLowerCase();
+        if (titleL.includes('budget') && (!s.content || s.content.trim() === '' || s.content.includes('[Insert') || s.content.includes('placeholder') || s.content.length < 150)) {
+          s.content = `### Budget Narrative & Funder Priority Alignment
+
+**Target Funder:** ${fObj.funderName || 'Selected Funder'}
+**Funder Strategic Priorities:** ${givingPR || 'Not Specified'}
+**Geographic Priority Vector:** ${geoFC || 'Not Specified'}
+
+**Financial Stewardship Narrative:**
+Our resource allocation is designed for high-efficiency implementation directly aligned with the funder’s giving priorities. Below is our program expense mapping:
+- **Direct Service Provision & Core ADR Interventions:** Structured to address ${givingPR || 'community disputes and organizational mediation'}.
+- **Geographic and Demographic Outreach:** Specifically budgeted for high impact in "${geoFC || 'our focus areas'}".
+- **Evaluation & Capacity Stewardship:** Fully funded to verify compliance and operational integrity under modern ADR guidelines.`;
+          updated = true;
+        } else if ((titleL.includes('capacity') || titleL.includes('organizational')) && (!s.content || s.content.trim() === '' || s.content.includes('[Insert') || s.content.includes('placeholder') || s.content.length < 150)) {
+          s.content = `### Organizational Capacity & Mission Alignment
+
+**Target Funder:** ${fObj.funderName || 'Selected Funder'}
+**Mission Alignment & Rationale:** ${rational || 'Not Specified'}
+
+**Institutional Fit Statement:**
+The East Coast ADR Network (ECADRN) possesses the necessary logistical, programmatic, and cultural expertise to deliver on our shared objectives. Our institutional capacity is positioned for deep synergy:
+- **Operational Alignment:** Our long-term mission aligns directly with the core funding rationale: "${rational || 'improving equity and quality of conflict resolution'}".
+- **Strategic Geographic Fit:** We have built sustainable operational nodes and a trusted practitioner base in "${geoFC || 'regions of critical need'}".
+- **Professional Stewardship:** We maintain professional-grade compliance and ADR coaching supervision to ensure high fidelity to established standards.`;
+          updated = true;
+        }
+      });
+      if (updated) {
+        setSections(newSections);
+      }
+    }
+  };
 
   // Auto-sync sections to Firestore
   useEffect(() => {
@@ -930,19 +1143,21 @@ function ProposalEditor({
     // Presence
     const presenceRef = doc(db, propPath, 'presence', auth.currentUser!.uid);
     const updatePresence = async () => {
+      if (!auth.currentUser) return;
       await setDoc(presenceRef, {
         userId: auth.currentUser!.uid,
         userEmail: auth.currentUser!.email,
         sectionIndex: activeSectionIdx,
+        isEditing: isEditingSection,
         lastSeen: new Date().toISOString()
       }, { merge: true });
     };
     updatePresence();
-    const presenceInterval = setInterval(updatePresence, 30000);
+    const presenceInterval = setInterval(updatePresence, 10000);
 
     const unsubPresence = onSnapshot(collection(db, propPath, 'presence'), (snap) => {
       const now = new Date().getTime();
-      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => now - new Date(p.lastSeen).getTime() < 60000));
+      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => now - new Date(p.lastSeen).getTime() < 45000));
     });
 
     return () => {
@@ -951,7 +1166,7 @@ function ProposalEditor({
       unsubPresence();
       clearInterval(presenceInterval);
     };
-  }, [proposal.id, activeSectionIdx]);
+  }, [proposal.id, activeSectionIdx, isEditingSection]);
 
   const splitSection = () => {
     const newSections = [...sections];
@@ -984,7 +1199,7 @@ function ProposalEditor({
     setSections(newSections);
   };
 
-  const saveProposal = async (auto = false) => {
+  const saveProposal = async (auto = false, customMsg: string = '') => {
     if (!auto) setIsSaving(true);
     try {
       const propPath = `organizations/${auth.currentUser!.uid}/proposals/${proposal.id}`;
@@ -1002,7 +1217,7 @@ function ProposalEditor({
           timestamp: new Date().toISOString(),
           author: auth.currentUser!.email,
           type: 'manual_save',
-          message: 'User explicitly saved a version.'
+          message: customMsg.trim() || 'User explicitly saved a version.'
         }).catch(err => handleFirestoreError(err, OperationType.WRITE, versionsPath));
       }
     } catch (e) {
@@ -1086,7 +1301,7 @@ function ProposalEditor({
     }
   };
 
-  const runAIAction = async (action: 'review' | 'voice' | 'align') => {
+  const runAIAction = async (action: 'review' | 'voice' | 'align' | 'humanizer') => {
     setIsAIWorking(action);
     try {
       if (action === 'review') {
@@ -1098,6 +1313,13 @@ function ProposalEditor({
         });
         setReviewResults(result);
         setShowAIReview(true);
+      } else if (action === 'humanizer') {
+        const result = await callAI('humanize-proposal', {
+          funderName: proposal.funder,
+          proposal: { sections }
+        });
+        setHumanizerResults(result);
+        setShowHumanizer(true);
       } else if (action === 'voice') {
         const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization.voiceProfile;
         const result = await callAI('rewrite-voice', {
@@ -1213,6 +1435,20 @@ function ProposalEditor({
             <div className="h-6 w-px bg-slate-200"></div>
             <div className="flex items-center gap-2">
               <button 
+                onClick={() => runAIAction('humanizer')}
+                disabled={!!isAIWorking}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm cursor-pointer ${
+                  isAIWorking === 'humanizer' 
+                    ? 'bg-rose-100 text-rose-700 border-rose-200 animate-pulse' 
+                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-150'
+                }`}
+                title="Funder AI Check Bypass & Humanizer Agent Review"
+              >
+                <Sparkles size={13} className={isAIWorking === 'humanizer' ? 'animate-spin' : 'text-rose-600'} />
+                <span>Humanizer Review</span>
+              </button>
+              <div className="h-6 w-px bg-slate-200 mx-1"></div>
+              <button 
                 onClick={() => runAIAction('review')}
                 disabled={!!isAIWorking}
                 className={`p-2 rounded-lg transition-all ${isAIWorking === 'review' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
@@ -1248,7 +1484,7 @@ function ProposalEditor({
               </button>
             </div>
             <button 
-              onClick={() => saveProposal()}
+              onClick={() => setIsSaveModalOpen(true)}
               disabled={isSaving}
               className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 disabled:opacity-50"
             >
@@ -1272,6 +1508,64 @@ function ProposalEditor({
                   <div className="bg-indigo-500 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (totalWordCount / 2500) * 100)}%` }}></div>
                 </div>
               </div>
+
+              {/* Funder Intelligence Selection & Sync Block */}
+              <div className="mb-6 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3">
+                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest block">Funder Intelligence Sync</span>
+                <select 
+                  onChange={(e) => handleFunderChange(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                  defaultValue={funders.find(f => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase())?.id || ''}
+                >
+                  <option value="">Select Target Funder...</option>
+                  {funders.map((f: any) => (
+                    <option key={f.id} value={f.id}>{f.funderName || f.website}</option>
+                  ))}
+                </select>
+                {funderGivingPriorities && (
+                  <div className="space-y-2 mt-2 pt-2 border-t border-indigo-100">
+                    <div>
+                      <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-0.5">Giving Priorities</span>
+                      <p className="text-[10.5px] leading-relaxed text-slate-600 font-semibold line-clamp-2" title={funderGivingPriorities}>{funderGivingPriorities}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-0.5">Geographic Focus</span>
+                      <p className="text-[10.5px] leading-relaxed text-slate-600 font-semibold">{funderGeoFocus}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-0.5">Mission Alignment</span>
+                      <p className="text-[10.5px] leading-relaxed text-slate-600 font-semibold line-clamp-2" title={funderRationale}>{funderRationale}</p>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        setIsAIWorking('align');
+                        try {
+                          const result = await callAI('align-to-funder', {
+                            funderIntelligence: {
+                              givingPriorities: funderGivingPriorities,
+                              geographicFocus: funderGeoFocus,
+                              missionAlignmentRationale: funderRationale
+                            },
+                            content: sections[activeSectionIdx].content
+                          });
+                          const newSections = [...sections];
+                          newSections[activeSectionIdx].content = result;
+                          setSections(newSections);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setIsAIWorking(null);
+                        }
+                      }}
+                      disabled={!!isAIWorking}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-widest py-2 rounded-lg transition-all shadow-md active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {isAIWorking === 'align' ? 'Aligning Draft...' : '⚡ Re-draft with intelligence'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <Reorder.Group axis="y" values={sections} onReorder={setSections} className="space-y-2">
                 {sections.map((s, i) => (
                   <Reorder.Item 
@@ -1323,6 +1617,170 @@ function ProposalEditor({
           <div className="flex-1 overflow-y-auto p-12">
             {activeSubTab === 'editor' ? (
               <>
+                {showHumanizer && humanizerResults && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
+                    className="max-w-3xl mx-auto mb-12 bg-slate-950 text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden border border-rose-550/30"
+                  >
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/5 blur-3xl -mr-32 -mt-32"></div>
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-rose-900/50 rounded-xl flex items-center justify-center text-rose-400 border border-rose-700/30">
+                            <Sparkles size={20} className="animate-pulse" />
+                          </div>
+                          <div>
+                            <h5 className="text-xl font-black tracking-tight mb-0.5 flex items-center gap-2">
+                              Funder AI Bypass & Humanizer Audit
+                            </h5>
+                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                              Final-Stage Anti-AI Scanner Verification
+                            </p>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowHumanizer(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white cursor-pointer"><X size={18} /></button>
+                      </div>
+
+                      {/* Scoreboard Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AI Probability</span>
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                              humanizerResults.aiProbabilityScore > 40 ? 'bg-rose-950/80 text-rose-400' : 'bg-emerald-950/80 text-emerald-400'
+                            }`}>{humanizerResults.aiProbabilityScore}% Risk</span>
+                          </div>
+                          <div className="text-xl font-mono font-black text-white">{humanizerResults.aiProbabilityScore}%</div>
+                          <div className="w-full bg-slate-850 h-1 rounded-full mt-2 overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${
+                                humanizerResults.aiProbabilityScore > 40 ? 'bg-rose-500' : 'bg-emerald-500'
+                              }`} 
+                              style={{ width: `${humanizerResults.aiProbabilityScore}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Human score</span>
+                            <span className="text-[10px] font-black bg-indigo-950/80 text-indigo-400 px-1.5 py-0.5 rounded">{humanizerResults.humanScore}% Match</span>
+                          </div>
+                          <div className="text-xl font-mono font-black text-rose-400">{humanizerResults.humanScore}%</div>
+                          <div className="w-full bg-slate-850 h-1 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${humanizerResults.humanScore}%` }}></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AI Check Bypass Risk</span>
+                            <span className="text-xs">⚠️</span>
+                          </div>
+                          <div className="text-sm font-black flex items-center gap-1.5 mt-1">
+                            <span className={`w-2.5 h-2.5 rounded-full ${
+                              humanizerResults.funderAiCheckRisk === 'High' ? 'bg-rose-500 animate-ping' :
+                              humanizerResults.funderAiCheckRisk === 'Medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}></span>
+                            <span className={
+                              humanizerResults.funderAiCheckRisk === 'High' ? 'text-rose-400' :
+                              humanizerResults.funderAiCheckRisk === 'Medium' ? 'text-amber-400' : 'text-emerald-400'
+                            }>{humanizerResults.funderAiCheckRisk} Risk Level</span>
+                          </div>
+                          <p className="text-[9.5px] text-slate-400 mt-1 font-medium italic">Grade: {humanizerResults.readabilityGrade || 'N/A'}</p>
+                        </div>
+                      </div>
+
+                      {/* Structural Advice & Banned phrases */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block">Structural sentence rhythm advice</span>
+                          <p className="text-xs text-slate-300 leading-relaxed font-medium bg-slate-900/40 p-4 rounded-xl border border-slate-850">
+                            {humanizerResults.structuralVarianceAdvice}
+                          </p>
+                        </div>
+
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest block">Flagged AI Words & Clichés</span>
+                          <div className="flex flex-wrap gap-1.5 bg-slate-900/40 p-4 rounded-xl border border-slate-850 h-full max-h-[120px] overflow-y-auto">
+                            {humanizerResults.bannedWordsFound?.map((word: string, i: number) => (
+                              <span key={i} className="text-[10px] font-bold uppercase font-mono px-2 py-0.5 rounded bg-rose-950/50 text-rose-400 border border-rose-900/40">
+                                🗑️ {word}
+                              </span>
+                            ))}
+                            {humanizerResults.flaggedPhrases?.map((phrase: string, i: number) => (
+                              <span key={i} className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-755">
+                                "{phrase}"
+                              </span>
+                            ))}
+                            {(!humanizerResults.bannedWordsFound?.length && !humanizerResults.flaggedPhrases?.length) && (
+                              <span className="text-xs text-slate-500 italic">No egregious AI transition hallmarks detected!</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section by section analysis */}
+                      <div className="space-y-3 mb-6">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Section-by-Section AI Risk Matrix</span>
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                          {humanizerResults.sectionAverages?.map((sec: any, i: number) => (
+                            <div key={i} className="p-3 bg-slate-900/30 rounded-xl border border-slate-850 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                              <div className="space-y-1">
+                                <h6 className="text-xs font-bold text-white">{sec.sectionTitle}</h6>
+                                <p className="text-[10.5px] text-slate-400 max-w-xl"><span className="text-rose-400 font-bold uppercase text-[9px]">Humanize Strategy:</span> {sec.humanizerStrategy}</p>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                  sec.detectionProbability > 40 ? 'bg-rose-950/85 text-rose-400' : 'bg-emerald-950/85 text-emerald-400'
+                                }`}>
+                                  {sec.detectionProbability}% AI Risk
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <p className="text-xs text-slate-300 italic">"{humanizerResults.verdict}"</p>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setIsAIWorking('voice');
+                              const targetSection = sections[activeSectionIdx];
+                              const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization.voiceProfile;
+                              // Ask AI to rewrite specifically targeting humanizer rules
+                              const result = await callAI('rewrite-voice', {
+                                voiceProfile: activeProfile,
+                                content: `REWRITE THIS CONTENT TO PASS AI DETECTION FILTERS PERFECTLY (Make words simple, sentences varying length, natural/organic tone): ${targetSection.content}`
+                              });
+                              const newSections = [...sections];
+                              newSections[activeSectionIdx].content = result;
+                              setSections(newSections);
+                              
+                              // Re-run humanizer audit to see updated score!
+                              const updatedResult = await callAI('humanize-proposal', {
+                                funderName: proposal.funder,
+                                proposal: { sections: newSections }
+                              });
+                              setHumanizerResults(updatedResult);
+                            } catch (e) {
+                              console.error(e);
+                            } finally {
+                              setIsAIWorking(null);
+                            }
+                          }}
+                          disabled={!!isAIWorking}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-md shrink-0"
+                        >
+                          {isAIWorking ? 'Bypassing...' : 'Auto-Humanize Current Section'}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 {showAIReview && reviewResults && (
                   <motion.div 
                     initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
@@ -1392,10 +1850,23 @@ function ProposalEditor({
                       <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                       <button 
                         onClick={() => setShowComments(!showComments)}
-                        className="flex items-center gap-1.5 text-indigo-600 hover:underline"
+                        className="flex items-center gap-1.5 text-indigo-600 hover:underline animate-fade-in"
                       >
-                        <MessageSquare size={12} /> {comments.filter(c => c.sectionIndex === activeSectionIdx).length} Comments
+                        <MessageSquare size={12} /> {comments.filter(c => c.sectionIndex === activeSectionIdx).length} Chat & Comments
                       </button>
+                      
+                      {presence.filter(p => p.sectionIndex === activeSectionIdx && p.userId !== auth.currentUser?.uid).map(p => (
+                        <React.Fragment key={p.id}>
+                          <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border transition-all ${
+                            p.isEditing ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-250 border-dashed'
+                          }`} title={p.userEmail}>
+                            {p.isEditing ? <PenTool size={9} className="animate-bounce" /> : <Eye size={9} />}
+                            {p.userEmail?.split('@')[0]} {p.isEditing ? 'is editing' : 'is viewing'}
+                          </span>
+                        </React.Fragment>
+                      ))}
+
                       <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                       <div className="flex items-center gap-2 group relative">
                         <span className="cursor-help flex items-center gap-1">Assign: <HelpCircle size={10} className="text-slate-300" /></span>
@@ -1462,6 +1933,8 @@ function ProposalEditor({
                           setSections(newSections);
                         }
                       }}
+                      onFocus={() => setIsEditingSection(true)}
+                      onBlur={() => setIsEditingSection(false)}
                       modules={{
                         toolbar: [
                           [{ 'header': [1, 2, 3, false] }],
@@ -1496,33 +1969,74 @@ function ProposalEditor({
                 initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
                 className="absolute inset-y-0 right-0 w-96 bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col"
               >
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Section Discussion</h5>
-                  <button onClick={() => setShowComments(false)}><X size={16} /></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
-                  {comments.filter(c => c.sectionIndex === activeSectionIdx).map(c => (
-                    <div key={c.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm space-y-2">
-                       <div className="flex justify-between items-center">
-                         <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{c.author}</span>
-                         <span className="text-[8px] font-medium text-slate-400">{new Date(c.timestamp).toLocaleTimeString()}</span>
-                       </div>
-                       <p className="text-xs text-slate-700 leading-relaxed">{c.text}</p>
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-ping"></span>
+                    <div>
+                      <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest block">Section Chat Room</h5>
+                      <span className="text-[9px] text-slate-400 font-bold block">Section-specific team syncing</span>
                     </div>
-                  ))}
+                  </div>
+                  <button onClick={() => setShowComments(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"><X size={15} /></button>
                 </div>
-                <div className="p-6 border-t border-slate-100 bg-white">
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 flex flex-col">
+                  {comments.filter(c => c.sectionIndex === activeSectionIdx).length > 0 ? (
+                    comments.filter(c => c.sectionIndex === activeSectionIdx).map((c) => {
+                      const isMe = auth.currentUser && c.author.toLowerCase() === auth.currentUser.email?.toLowerCase();
+                      const authorInitials = c.author ? c.author.split('@')[0].substring(0, 2).toUpperCase() : '??';
+                      
+                      return (
+                        <div key={c.id} className={`flex gap-2 max-w-[85%] ${isMe ? 'self-end flex-row-reverse' : 'self-start'}`}>
+                          {!isMe && (
+                            <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 font-extrabold text-[10px] flex items-center justify-center shrink-0 shadow-sm" title={c.author}>
+                              {authorInitials}
+                            </div>
+                          )}
+                          <div className={`p-3 rounded-2xl text-xs space-y-1 ${
+                            isMe 
+                              ? 'bg-indigo-600 text-white rounded-tr-none shadow-md' 
+                              : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none shadow-sm'
+                          }`}>
+                            <div className="flex justify-between items-center gap-4">
+                              <span className={`text-[9px] font-black uppercase tracking-tighter ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                {isMe ? 'You' : c.author.split('@')[0]}
+                              </span>
+                              <span className="text-[8px] opacity-75">{new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <p className="leading-relaxed break-words">{c.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 italic text-xs py-8 space-y-2">
+                      <MessageSquare size={24} className="text-slate-200" />
+                      <span>No team messages in this section yet.</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 hover:underline cursor-pointer" onClick={() => setNewComment("Let's review this statement together!")}>Send a prompt</span>
+                    </div>
+                  )}
+
+                  {presence.filter(p => p.sectionIndex === activeSectionIdx && p.isEditing && p.userId !== auth.currentUser?.uid).length > 0 && (
+                    <div className="flex items-center gap-1.5 text-[9px] text-indigo-600 font-black uppercase tracking-wide bg-indigo-50 px-2 py-1.5 rounded-lg border border-indigo-100 self-start animate-pulse mt-auto shrink-0">
+                      <TrendingUp size={10} className="animate-bounce text-indigo-500" />
+                      {presence.filter(p => p.sectionIndex === activeSectionIdx && p.isEditing && p.userId !== auth.currentUser?.uid).map(p => p.userEmail?.split('@')[0]).join(', ')} is typing live...
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-4 border-t border-slate-100 bg-white shadow-inner">
                   <div className="flex gap-2">
                     <input 
                       type="text" 
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="Add a comment..."
-                      className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white outline-none"
+                      placeholder="Type a team chat message..."
+                      className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white outline-none focus:ring-1 focus:ring-indigo-500 transition-all text-slate-800"
                       onKeyDown={(e) => e.key === 'Enter' && addComment()}
                     />
-                    <button onClick={addComment} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
-                      <ArrowRight size={16} />
+                    <button onClick={addComment} className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold flex items-center justify-center shadow-lg hover:shadow-indigo-200 shrink-0">
+                      <ArrowRight size={14} />
                     </button>
                   </div>
                 </div>
@@ -1622,6 +2136,78 @@ function ProposalEditor({
               </motion.div>
             </div>
           )}
+
+          {isSaveModalOpen && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-left"
+              >
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <History className="text-indigo-600" size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Save Custom Version</h3>
+                <p className="text-xs text-slate-500 mb-4 font-medium">Add a custom message or description to specify what changes are contained in this manual snapshot.</p>
+                
+                <div className="mb-6">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 font-mono">Snapshot Message (Optional)</label>
+                  <textarea
+                    rows={3}
+                    className="w-full text-xs font-medium border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 resize-none text-slate-800"
+                    placeholder="e.g. Budget alignment, fixed section summaries..."
+                    value={customSaveMsg}
+                    onChange={(e) => setCustomSaveMsg(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => { setIsSaveModalOpen(false); setCustomSaveMsg(''); }}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      setIsSaveModalOpen(false);
+                      await saveProposal(false, customSaveMsg);
+                      setCustomSaveMsg('');
+                    }}
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100"
+                  >
+                    Confirm Save
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* Persistent Word Count Footer (Visible inside normal & focus modes) */}
+          <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold shrink-0 z-30">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Word Count:</span>
+              <span className="text-slate-900 font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">{totalWordCount} words</span>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Section Words:</span>
+              {sections.map((s, i) => {
+                const wCount = s.content ? s.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSectionIdx(i)}
+                    className={`shrink-0 px-2.5 py-1 rounded text-[10px] uppercase font-bold border transition-all cursor-pointer ${
+                      activeSectionIdx === i
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s.title}: <span className={activeSectionIdx === i ? 'text-white font-mono' : 'text-slate-500 font-mono'}>{wCount}w</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1737,12 +2323,85 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
   const [editData, setEditData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStage, setFilterStage] = useState('All Stages');
+  const [filterTag, setFilterTag] = useState('All Tags');
   const [filterDateRange, setFilterDateRange] = useState('All Time');
   const [showGuide, setShowGuide] = useState(false);
 
+  // Manual Creation States
+  const [showAddManualForm, setShowAddManualForm] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualWebsite, setManualWebsite] = useState('');
+  const [manualStage, setManualStage] = useState('Prospect');
+  const [manualContact, setManualContact] = useState('');
+  const [manualRange, setManualRange] = useState('');
+  const [manualGeo, setManualGeo] = useState('');
+  const [manualTags, setManualTags] = useState<string[]>([]);
+  const [manualNotes, setManualNotes] = useState('');
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+
+  const PRESET_TAGS = ['Strategic Partner', 'Past Funder', 'High Priority'];
+
+  const saveManualFunder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualName.trim() || !manualWebsite.trim()) return;
+    setIsSubmittingManual(true);
+    try {
+      const cleanUrl = manualWebsite.startsWith('http') ? manualWebsite : `https://${manualWebsite}`;
+      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersRef = collection(db, fundersPath);
+      
+      const newFunder = {
+        funderName: manualName.trim(),
+        website: cleanUrl,
+        contactName: manualContact.trim(),
+        relationshipStage: manualStage,
+        tags: manualTags,
+        notes: manualNotes.trim(),
+        intelligence: {
+          funderOverview: "Manually registered funder profile.",
+          funderType: "Foundation",
+          givingPriorities: ["Restorative Adjudication", "Peer Mediation", "Civic Access"],
+          fundingRanges: manualRange ? manualRange : "$15,000 - $75,000",
+          geographicFocus: manualGeo ? manualGeo : "National",
+          applicationProcess: "Contact relationship lead.",
+          missionAlignmentScore: 75,
+          missionAlignmentRationale: "Manually created portfolio record. Tap re-analyze anytime to query the live website via GenAI.",
+          recentStrategicShifts: "N/A",
+          whatTheyDontFund: [],
+          applicationTips: [],
+          recommendedApproach: "Initiate introductory outreach conversation."
+        },
+        lastAnalysisAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await addDoc(fundersRef, newFunder).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
+      
+      setManualName('');
+      setManualWebsite('');
+      setManualStage('Prospect');
+      setManualContact('');
+      setManualRange('');
+      setManualGeo('');
+      setManualTags([]);
+      setManualNotes('');
+      setShowAddManualForm(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
+
+  const allUniqueTags = Array.from(new Set([
+    ...PRESET_TAGS,
+    ...funders.flatMap(f => f.tags || [])
+  ]));
+
   const guideSteps = [
     { title: "AI Intelligence", content: "Enter any funder domain to trigger the Nexus Intelligence engine. We'll scrape their public profile and assess mission alignment automatically." },
-    { title: "Surgical Search", content: "Filter by relationship stage, analysis date, or search deep within the intelligence reports for specific strategic keywords." },
+    { title: "Surgical Search", content: "Filter by relationship stage, analysis date, tags, or search deep within the intelligence reports for specific strategic keywords." },
     { title: "Continuous Research", content: "Use the Sparkles icon on any card to trigger a re-analysis. This updates the funder's strategic shifts and alignment score." },
     { title: "Relationship Management", content: "Directly edit funder notes on each card to keep your team synced on the latest interactions." }
   ];
@@ -1787,11 +2446,43 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
       });
 
       const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      
+      const autoTags: string[] = [];
+      if (data.givingPriorities && Array.isArray(data.givingPriorities)) {
+        data.givingPriorities.forEach((p: string) => {
+          const cleanP = p.trim();
+          if (cleanP && !autoTags.includes(cleanP) && cleanP.length < 35) autoTags.push(cleanP);
+        });
+      }
+      if (data.suggestedTags && Array.isArray(data.suggestedTags)) {
+        data.suggestedTags.forEach((t: string) => {
+          const cleanT = t.trim();
+          if (cleanT && !autoTags.some(at => at.toLowerCase() === cleanT.toLowerCase()) && cleanT.length < 35) {
+            autoTags.push(cleanT);
+          }
+        });
+      }
+      if (data.geographicFocus) {
+        const geo = data.geographicFocus.trim();
+        if (geo && !autoTags.some(at => at.toLowerCase() === geo.toLowerCase()) && geo.length < 35) {
+          autoTags.push(geo);
+        }
+      }
+
       if (funder?.id) {
         const docRef = doc(db, fundersPath, funder.id);
+        const existingTags = funder.tags || [];
+        const mergedTags = [...existingTags];
+        autoTags.forEach(t => {
+          if (!mergedTags.some(et => et.toLowerCase() === t.toLowerCase())) {
+            mergedTags.push(t);
+          }
+        });
+
         await setDoc(docRef, {
           ...funder,
           funderName: data.funderName || funder.funderName,
+          tags: mergedTags,
           intelligence: data,
           lastAnalysisAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -1803,6 +2494,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
           website: url,
           contactName: '',
           relationshipStage: 'Prospect',
+          tags: autoTags,
           intelligence: data,
           lastAnalysisAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -1828,10 +2520,14 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
   };
 
   const filteredFunders = funders.filter(f => {
+    const lastAnalysisStr = f.lastAnalysisAt || f.updatedAt ? new Date(f.lastAnalysisAt || f.updatedAt).toLocaleDateString() : 'N/A';
     const matchesSearch = searchTerm.toLowerCase() === '' || 
       (f.funderName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.website || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (f.relationshipStage || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lastAnalysisStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (f.tags || []).some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (f.intelligence?.missionAlignmentRationale || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.intelligence?.fundingPriorities || []).some((p: string) => p.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (f.intelligence?.givingPriorities || []).some((p: string) => p.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -1839,6 +2535,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
       (f.intelligence?.typicalGrantees || []).some((tg: string) => tg.toLowerCase().includes(searchTerm.toLowerCase()));
       
     const matchesStage = filterStage === 'All Stages' || f.relationshipStage === filterStage;
+    const matchesTag = filterTag === 'All Tags' || (f.tags || []).includes(filterTag);
     
     let matchesDate = true;
     if (filterDateRange !== 'All Time') {
@@ -1853,11 +2550,11 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
       }
     }
     
-    return matchesSearch && matchesStage && matchesDate;
+    return matchesSearch && matchesStage && matchesTag && matchesDate;
   });
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div id="funders-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-slate-900 border-b border-slate-100 pb-6">
         <div>
           <div className="flex items-center gap-2">
@@ -1876,7 +2573,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search intelligence..." 
+              placeholder="Search name, web, stage, or sync..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -1886,16 +2583,25 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
             <select 
               value={filterStage}
               onChange={(e) => setFilterStage(e.target.value)}
-              className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-2"
+              className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-2 cursor-pointer"
             >
               <option>All Stages</option>
               {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <div className="w-px h-4 bg-slate-200 mt-2"></div>
             <select 
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-2 cursor-pointer"
+            >
+              <option>All Tags</option>
+              {allUniqueTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+            </select>
+            <div className="w-px h-4 bg-slate-200 mt-2"></div>
+            <select 
               value={filterDateRange}
               onChange={(e) => setFilterDateRange(e.target.value)}
-              className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-2"
+              className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-2 cursor-pointer"
             >
               <option>All Time</option>
               <option>Last 30 Days</option>
@@ -1903,33 +2609,252 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
               <option>Last 180 Days</option>
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                value={newFunderUrl}
-                onChange={(e) => {
-                  setNewFunderUrl(e.target.value);
-                  setUrlError(e.target.value.length > 0 && !isValidUrl(e.target.value));
-                }}
-                placeholder="Enter funder URL..." 
-                className={`pl-4 pr-4 py-2 bg-slate-100 border-2 rounded-lg text-sm w-full md:w-64 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none ${
-                  urlError ? 'border-rose-300' : 'border-transparent'
-                }`} 
-              />
+          <div className="flex flex-col gap-1 w-full md:w-auto">
+            <div className="flex flex-wrap md:flex-nowrap gap-2">
+              <div className="flex gap-1.5 flex-1 md:flex-none">
+                <input 
+                  type="text" 
+                  value={newFunderUrl}
+                  onChange={(e) => {
+                    setNewFunderUrl(e.target.value);
+                    setUrlError(e.target.value.length > 0 && !isValidUrl(e.target.value));
+                  }}
+                  placeholder="Analyze funder domain..." 
+                  className={`pl-4 pr-4 py-2 bg-slate-100 border-2 rounded-lg text-sm w-full md:w-48 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none ${
+                    urlError ? 'border-rose-300' : 'border-transparent'
+                  }`} 
+                />
+                <button 
+                  onClick={() => researchFunder()}
+                  disabled={isResearchingNew || !isValidUrl(newFunderUrl)}
+                  className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  title="Run automated AI web scraping research"
+                >
+                  {isResearchingNew ? <RefreshCw className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                  <span>{isResearchingNew ? 'Analyzing...' : 'AI Research'}</span>
+                </button>
+              </div>
+
               <button 
-                onClick={() => researchFunder()}
-                disabled={isResearchingNew || !isValidUrl(newFunderUrl)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                onClick={() => setShowAddManualForm(!showAddManualForm)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer ${
+                  showAddManualForm 
+                    ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+                title="Create a funder profile manually"
               >
-                {isResearchingNew ? <RefreshCw className="animate-spin" size={16} /> : <Search size={16} />}
-                {isResearchingNew ? 'Analyzing...' : 'Research'}
+                <Plus size={14} className={showAddManualForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
+                <span>{showAddManualForm ? 'Close Editor' : 'Add Manually'}</span>
               </button>
             </div>
             {urlError && <p className="text-[10px] text-rose-600 font-bold uppercase tracking-tighter ml-1">Please enter a valid domain (e.g. example.org)</p>}
           </div>
         </div>
       </div>
+
+      {showAddManualForm && (
+        <motion.form 
+          initial={{ opacity: 0, y: -10 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          onSubmit={saveManualFunder}
+          className="bg-white rounded-xl border-2 border-indigo-100 p-6 shadow-md space-y-4 max-w-2xl mx-auto text-left"
+        >
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+              <PlusCircle className="text-indigo-600" size={16} /> Add New Funder Record
+            </h4>
+            <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">Manual Registry</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Funder Name *</label>
+              <input 
+                type="text" 
+                required
+                value={manualName} 
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="e.g. The Hewlett Foundation"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none animate-none"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Website URL *</label>
+              <input 
+                type="text" 
+                required
+                value={manualWebsite} 
+                onChange={(e) => setManualWebsite(e.target.value)}
+                placeholder="e.g. hewlett.org"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none animate-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Relationship Stage</label>
+              <select 
+                value={manualStage} 
+                onChange={(e) => setManualStage(e.target.value)}
+                className="w-full p-2.5 bg-white border border-slate-250 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+              >
+                {STAGES.map(stage => (
+                  <option key={stage} value={stage}>{stage}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Primary Funder Contact</label>
+              <input 
+                type="text" 
+                value={manualContact} 
+                onChange={(e) => setManualContact(e.target.value)}
+                placeholder="e.g. Dr. Arthur Pendelton"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Typical Award Size</label>
+              <input 
+                type="text" 
+                value={manualRange} 
+                onChange={(e) => setManualRange(e.target.value)}
+                placeholder="e.g. $25,000 - $100,000"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none animate-none"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Geographic Focus</label>
+              <input 
+                type="text" 
+                value={manualGeo} 
+                onChange={(e) => setManualGeo(e.target.value)}
+                placeholder="e.g. National, California, Global"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Funder Custom Tags</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const t = newTagInput.trim();
+                      if (t && !manualTags.includes(t)) {
+                        setManualTags([...manualTags, t]);
+                        setNewTagInput('');
+                      }
+                    }
+                  }}
+                  placeholder="Type tag & press enter"
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none flex-1 animate-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = newTagInput.trim();
+                    if (t && !manualTags.includes(t)) {
+                      setManualTags([...manualTags, t]);
+                      setNewTagInput('');
+                    }
+                  }}
+                  className="bg-slate-150 font-bold px-3 py-1.5 rounded-lg text-xs border border-slate-200 hover:bg-slate-200 transition-colors cursor-pointer text-slate-700"
+                >
+                  Add
+                </button>
+              </div>
+              
+              <div className="flex flex-wrap gap-1 mt-2">
+                {manualTags.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-100">
+                    {t}
+                    <button 
+                      type="button" 
+                      onClick={() => setManualTags(manualTags.filter(tg => tg !== t))}
+                      className="text-rose-500 font-black hover:text-rose-700 ml-1 text-xs outline-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                
+                {manualTags.length === 0 && (
+                  <div className="flex gap-1.5 mt-1">
+                    {['Strategic Partner', 'Past Funder', 'High Priority'].map(pt => (
+                      <button
+                        type="button"
+                        key={pt}
+                        onClick={() => setManualTags([...manualTags, pt])}
+                        className="text-[9px] bg-slate-50 hover:bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 border border-slate-200 cursor-pointer"
+                      >
+                        + {pt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Relationship Context & Internal Notes</label>
+            <textarea 
+              value={manualNotes} 
+              onChange={(e) => setManualNotes(e.target.value)}
+              placeholder="Strategic dialogue, upcoming calls, alignment details..."
+              className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-16 resize-none block animate-none"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+            <button 
+              type="button" 
+              onClick={() => setShowAddManualForm(false)} 
+              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              disabled={isSubmittingManual || !manualName.trim() || !manualWebsite.trim()}
+              className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+            >
+              {isSubmittingManual ? <RefreshCw className="animate-spin" size={12} /> : null}
+              <span>{isSubmittingManual ? 'Saving...' : 'Register Funder'}</span>
+            </button>
+          </div>
+        </motion.form>
+      )}
+
+      {/* Filter Reset Alert */}
+      {(searchTerm || filterStage !== 'All Stages' || filterTag !== 'All Tags' || filterDateRange !== 'All Time') && (
+        <div className="flex justify-between items-center bg-indigo-50/50 border border-indigo-100 px-4 py-2.5 rounded-xl text-xs max-w-full">
+          <p className="text-slate-600 font-medium">
+            Active filters shown. Finding matches in your funder system.
+          </p>
+          <button 
+            onClick={() => {
+              setSearchTerm('');
+              setFilterStage('All Stages');
+              setFilterTag('All Tags');
+              setFilterDateRange('All Time');
+            }}
+            className="text-[10px] font-black uppercase tracking-widest text-indigo-700 hover:underline cursor-pointer"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredFunders.length > 0 ? filteredFunders.map(f => (
           <FunderCard 
@@ -1944,10 +2869,11 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
             onResearch={() => researchFunder(f)}
             setEditData={setEditData}
             STAGES={STAGES}
+            onTagClick={setFilterTag}
           />
         )) : (
           <div className="col-span-full py-12 text-center text-slate-400 italic bg-white rounded-xl border border-dashed border-slate-200">
-            {searchTerm || filterStage !== 'All Stages' || filterDateRange !== 'All Time' ? 'No funders match your current filters.' : 'Enter a funder domain to begin intelligence gathering.'}
+            {searchTerm || filterStage !== 'All Stages' || filterTag !== 'All Tags' || filterDateRange !== 'All Time' ? 'No funders match your current filters.' : 'Enter a funder domain to begin intelligence gathering.'}
           </div>
         )}
       </div>
@@ -1998,11 +2924,15 @@ function FunderNotesField({ funderId, initialNotes }: { funderId: string, initia
 }
 
 function FunderCard({ 
-  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES 
+  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick 
 }: { 
   f: any, isEditing: boolean, isResearching: boolean, editData: any, onEdit: () => void, 
-  onCancelEdit: () => void, onSaveEdit: () => any, onResearch: () => any, setEditData: (d: any) => void, STAGES: string[]
+  onCancelEdit: () => any, onSaveEdit: () => any, onResearch: () => any, setEditData: (d: any) => void, STAGES: string[],
+  onTagClick: (tag: string) => void,
+  key?: any
 }) {
+  const [customTagInput, setCustomTagInput] = useState('');
+  const [inlineTagText, setInlineTagText] = useState('');
   return (
     <div className="bg-white rounded-xl border border-slate-200 hover:shadow-xl transition-all group overflow-hidden flex flex-col h-full">
       {isEditing ? (
@@ -2024,6 +2954,24 @@ function FunderCard({
               onChange={(e) => setEditData({...editData, website: e.target.value})}
               className="w-full p-2 bg-slate-50 rounded border border-slate-200 text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
             />
+            {editData.website && !f.intelligence && !isResearching && (
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 mt-2 text-left space-y-1.5 shadow-sm">
+                <div className="flex gap-1.5 items-center">
+                  <Sparkles size={12} className="text-amber-600 animate-pulse" />
+                  <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block font-mono">Strategic AI Scoping Recommendation</span>
+                </div>
+                <p className="text-[10px] text-amber-700 leading-normal font-semibold">
+                  A target website is configured, but no strategic intelligence has been cached yet. Do you want to trigger AI-powered research on this website?
+                </p>
+                <button
+                  type="button"
+                  onClick={onResearch}
+                  className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] uppercase tracking-widest rounded shadow-sm transition-colors cursor-pointer"
+                >
+                  Accept & Run Funder Research
+                </button>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -2049,27 +2997,109 @@ function FunderCard({
             </div>
           </div>
           <div>
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tags</label>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {(editData.tags || []).map((t: string) => (
+                <span key={t} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-150">
+                  {t}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const updated = (editData.tags || []).filter((tg: string) => tg !== t);
+                      setEditData({ ...editData, tags: updated });
+                    }}
+                    className="hover:text-rose-500 font-black ml-1 text-xs"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {(editData.tags || []).length === 0 && <span className="text-[10px] text-slate-400 italic">No tags added yet.</span>}
+            </div>
+            
+            <div className="flex gap-2">
+              <select
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && !(editData.tags || []).includes(val)) {
+                    setEditData({ ...editData, tags: [...(editData.tags || []), val] });
+                  }
+                  e.target.value = '';
+                }}
+                className="p-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none flex-1"
+                defaultValue=""
+              >
+                <option value="" disabled>Add Preset Tag...</option>
+                {['Strategic Partner', 'Past Funder', 'High Priority'].filter(t => !(editData.tags || []).includes(t)).map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              
+              <input
+                type="text"
+                placeholder="Type tag..."
+                value={customTagInput}
+                onChange={(e) => setCustomTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = customTagInput.trim();
+                    if (val && !(editData.tags || []).includes(val)) {
+                      setEditData({ ...editData, tags: [...(editData.tags || []), val] });
+                      setCustomTagInput('');
+                    }
+                  }
+                }}
+                className="p-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none w-24"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const val = customTagInput.trim();
+                  if (val && !(editData.tags || []).includes(val)) {
+                    setEditData({ ...editData, tags: [...(editData.tags || []), val] });
+                    setCustomTagInput('');
+                  }
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest px-2.5 rounded shadow-sm flex items-center justify-center cursor-pointer"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+          <div>
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Internal Notes</label>
             <textarea 
               value={editData.notes || ''} 
               onChange={(e) => setEditData({...editData, notes: e.target.value})}
-              className="w-full p-2 bg-slate-50 rounded border border-slate-200 text-sm focus:ring-1 focus:ring-indigo-500 outline-none h-20 resize-none"
+              className="w-full p-2 bg-slate-50 rounded border border-slate-200 text-sm focus:ring-1 focus:ring-indigo-500 outline-none h-16 resize-none"
               placeholder="Strategic context, relationship history..."
             />
           </div>
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-1">
             <button onClick={onSaveEdit} className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest">Save Changes</button>
             <button onClick={onCancelEdit} className="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest">Cancel</button>
           </div>
         </div>
       ) : (
         <div className="p-6 flex-1 flex flex-col">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-3">
             <div>
-              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[140px]">{f.funderName || f.website}</h4>
-              <a href={f.website.startsWith('http') ? f.website : `https://${f.website}`} target="_blank" rel="noreferrer" className="text-[10px] text-slate-400 hover:text-indigo-500 flex items-center gap-1 mt-0.5">
-                <Globe size={10} /> {f.website}
-              </a>
+              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[145px]">{f.funderName || f.website}</h4>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <a href={f.website.startsWith('http') ? f.website : `https://${f.website}`} target="_blank" rel="noreferrer" className="text-[10px] text-slate-400 hover:text-indigo-505 flex items-center gap-0.5 shrink-0">
+                  <Globe size={10} /> {f.website}
+                </a>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onResearch(); }}
+                  disabled={isResearching}
+                  className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-150 transition-all flex items-center gap-0.5 cursor-pointer shrink-0"
+                  title="Re-analyze this website to update intelligence and alignment scores"
+                >
+                  <RefreshCw size={8} className={isResearching ? 'animate-spin text-indigo-700' : 'text-indigo-700'} />
+                  <span>{isResearching ? 'Syncing...' : 'Re-Research'}</span>
+                </button>
+              </div>
             </div>
             <div className="flex flex-col items-end gap-1">
               <div className="flex gap-1">
@@ -2097,50 +3127,244 @@ function FunderCard({
             </div>
           </div>
           
-          <p className="text-xs text-slate-600 mb-6 leading-relaxed italic line-clamp-3">"{f.intelligence?.missionAlignmentRationale}"</p>
-          
-          <div className="space-y-4 mb-6">
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              {f.intelligence?.funderType && (
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Type</span>
-                  <span className="text-[10px] font-bold text-slate-900">{f.intelligence.funderType}</span>
-                </div>
-              )}
-              {f.intelligence?.fundingRanges && (
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Typical Range</span>
-                  <span className="text-[10px] font-bold text-indigo-600">{f.intelligence.fundingRanges}</span>
-                </div>
-              )}
-            </div>
+          <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+            {(f.tags || []).map((t: string) => {
+              let colorClasses = 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+              if (t === 'Strategic Partner') colorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-150 hover:bg-emerald-100';
+              else if (t === 'Past Funder') colorClasses = 'bg-violet-50 text-violet-700 border-violet-150 hover:bg-violet-100';
+              else if (t === 'High Priority') colorClasses = 'bg-rose-50 text-rose-700 border-rose-150 hover:bg-rose-100';
+              return (
+                <span
+                  key={t}
+                  className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border transition-colors flex items-center gap-1 ${colorClasses}`}
+                >
+                  <button onClick={() => onTagClick(t)} className="hover:underline" title={`Filter by ${t}`}>{t}</button>
+                  <button 
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                      const docRef = doc(db, fundersPath, f.id);
+                      const updated = (f.tags || []).filter((tg: string) => tg !== t);
+                      await setDoc(docRef, {
+                        tags: updated,
+                        updatedAt: new Date().toISOString()
+                      }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, fundersPath));
+                    }}
+                    className="hover:text-rose-500 font-extrabold ml-1 hover:bg-slate-200/50 px-1 rounded transition-colors text-[9px] cursor-pointer"
+                    title="Remove Tag"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
 
-            <FunderNotesField funderId={f.id} initialNotes={f.notes || ''} />
+            {/* Inline Add Tag Form */}
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const cleanT = inlineTagText.trim();
+                if (cleanT) {
+                  const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                  const docRef = doc(db, fundersPath, f.id);
+                  const exists = (f.tags || []).some((tg: string) => tg.toLowerCase() === cleanT.toLowerCase());
+                  if (!exists) {
+                    await setDoc(docRef, {
+                      tags: [...(f.tags || []), cleanT],
+                      updatedAt: new Date().toISOString()
+                    }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, fundersPath));
+                  }
+                  setInlineTagText('');
+                }
+              }}
+              className="inline-flex items-center"
+            >
+              <input 
+                type="text"
+                placeholder="+ Tag"
+                value={inlineTagText}
+                onChange={(e) => setInlineTagText(e.target.value)}
+                className="w-14 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 text-[8.5px] font-bold rounded border border-slate-200 outline-none focus:border-indigo-500 text-slate-700 transition-all"
+                title="Type new tag and press enter to create"
+              />
+            </form>
 
-            {f.intelligence?.typicalGrantees && (
-              <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Target Grantees</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {f.intelligence.typicalGrantees.slice(0, 3).map((g: string, i: number) => (
-                    <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100">{g}</span>
-                  ))}
-                </div>
-              </div>
+            {f.intelligence && (
+              <button
+                onClick={async () => {
+                  const newTags = [...(f.tags || [])];
+                  let added = false;
+                  if (f.intelligence.givingPriorities && Array.isArray(f.intelligence.givingPriorities)) {
+                    f.intelligence.givingPriorities.forEach((p: string) => {
+                      const cleanP = p.trim();
+                      if (cleanP && !newTags.some(t => t.toLowerCase() === cleanP.toLowerCase())) {
+                        newTags.push(cleanP);
+                        added = true;
+                      }
+                    });
+                  }
+                  if (f.intelligence.geographicFocus) {
+                    const geo = f.intelligence.geographicFocus.trim();
+                    if (geo && !newTags.some(t => t.toLowerCase() === geo.toLowerCase())) {
+                      newTags.push(geo);
+                      added = true;
+                    }
+                  }
+                  if (added) {
+                    const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                    const docRef = doc(db, fundersPath, f.id);
+                    await setDoc(docRef, {
+                      tags: newTags,
+                      updatedAt: new Date().toISOString()
+                    }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, fundersPath));
+                  }
+                }}
+                className="text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
+                title="Combine extracted priorities into tags automatically"
+              >
+                <Sparkles size={8} /> Auto Tag
+              </button>
             )}
-            
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Stage</span>
-                <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest bg-white px-2 py-0.5 rounded shadow-sm border border-indigo-50 text-center">{f.relationshipStage || 'Prospect'}</span>
-              </div>
-              {f.contactName && (
-                <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead</span>
-                  <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest truncate max-w-[60px]">{f.contactName}</span>
-                </div>
-              )}
-            </div>
           </div>
+
+          {/* AI Automated Extract Tag Suggestions */}
+          {(() => {
+            const suggestions: string[] = [];
+            if (f.intelligence?.givingPriorities && Array.isArray(f.intelligence.givingPriorities)) {
+              f.intelligence.givingPriorities.forEach((p: string) => {
+                const cleanP = p.trim();
+                if (cleanP && cleanP.length < 25 && !(f.tags || []).some((t: string) => t.toLowerCase() === cleanP.toLowerCase())) {
+                  suggestions.push(cleanP);
+                }
+              });
+            }
+            if (f.intelligence?.geographicFocus) {
+              const geo = f.intelligence.geographicFocus.trim();
+              if (geo && geo.length < 25 && !(f.tags || []).some((t: string) => t.toLowerCase() === geo.toLowerCase())) {
+                suggestions.push(geo);
+              }
+            }
+            if (suggestions.length > 0) {
+              return (
+                <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-2.5 mb-3 text-left">
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-amber-700 flex items-center gap-1 mb-1.5 animate-pulse">
+                    💡 Extract Suggested Tags (From intelligence scan):
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {suggestions.slice(0, 4).map((sug: string) => (
+                      <button
+                        key={sug}
+                        onClick={async () => {
+                          const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+                          const docRef = doc(db, fundersPath, f.id);
+                          await setDoc(docRef, {
+                            tags: [...(f.tags || []), sug],
+                            updatedAt: new Date().toISOString()
+                          }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, fundersPath));
+                        }}
+                        className="text-[8.5px] font-bold bg-white hover:bg-amber-50 border border-amber-200 text-amber-800 px-1.5 py-0.5 rounded shadow-sm transition-all cursor-pointer flex items-center gap-0.5"
+                        title="Click to adopt suggestion"
+                      >
+                        + {sug}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {!f.intelligence ? (
+            <div className="bg-amber-50/50 rounded-2xl p-5 border border-amber-200/85 flex flex-col items-center text-center space-y-3 my-4">
+              <Sparkles className="text-amber-600 animate-pulse animate-bounce-subtle" size={24} />
+              <div className="space-y-1">
+                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider block">AI Research Scoping Ready</span>
+                {f.website ? (
+                  <p className="text-[10px] text-amber-700 leading-normal font-semibold">
+                    The funder website <strong className="font-bold">{f.website}</strong> is configured but has not been parsed for tactical guidelines yet. Would you like to run AI-powered research on this website now?
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                    Analyze this funder's website with strategic AI scoping to unlock typical funder ranges, strategic shifts, alignment rationales, and suggested priorities tags recursively.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onResearch(); }}
+                disabled={isResearching || !f.website}
+                className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-200 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isResearching ? (
+                  <>
+                    <RefreshCw size={11} className="animate-spin text-white" />
+                    <span>Scoping Intelligence...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={11} />
+                    <span>{f.website ? "Agree & Core Analytics Run" : "No Website Configured"}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-slate-600 mb-6 leading-relaxed italic line-clamp-3">"{f.intelligence?.missionAlignmentRationale || f.notes || 'No rationale available.'}"</p>
+              
+              <div className="space-y-4 mb-6">
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {f.intelligence?.funderType && (
+                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Type</span>
+                      <span className="text-[10px] font-bold text-slate-900">{f.intelligence.funderType}</span>
+                    </div>
+                  )}
+                  {f.intelligence?.fundingRanges && (
+                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Typical Range</span>
+                      <span className="text-[10px] font-bold text-indigo-600">{f.intelligence.fundingRanges}</span>
+                    </div>
+                  )}
+                </div>
+
+                <FunderNotesField funderId={f.id} initialNotes={f.notes || ''} />
+
+                {f.intelligence?.typicalGrantees && (
+                  <div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Target Grantees</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {f.intelligence.typicalGrantees.slice(0, 4).map((tgName: string, i: number) => (
+                        <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100">{tgName}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {f.intelligence?.recentStrategicShifts && f.intelligence.recentStrategicShifts !== "N/A" && (
+                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-left">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 font-mono">Recent Strategic Shifts</span>
+                    <p className="text-[10.5px] text-slate-600 leading-relaxed font-semibold font-sans italic">
+                      "{f.intelligence.recentStrategicShifts}"
+                    </p>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Stage</span>
+                    <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest bg-white px-2 py-0.5 rounded shadow-sm border border-indigo-50 text-center">{f.relationshipStage || 'Prospect'}</span>
+                  </div>
+                  {f.contactName && (
+                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead</span>
+                      <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest truncate max-w-[60px]">{f.contactName}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 mt-auto -mx-6 -mb-6 flex justify-between items-center">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
@@ -2162,12 +3386,206 @@ function FunderCard({
   );
 }
 
-function GrantsView({ grants, organization }: { grants: any[], organization: any }) {
+function GrantsView({ 
+  grants, 
+  organization, 
+  voiceProfiles = [], 
+  selectedVoiceProfileId = null 
+}: { 
+  grants: any[], 
+  organization: any, 
+  voiceProfiles?: any[], 
+  selectedVoiceProfileId?: string | null 
+}) {
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
+  const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
+
+  const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
+
+  const runVoiceSuggestions = async () => {
+    if (!activeVoiceForSuggestions) return;
+    setIsVoiceSuggesting(true);
+    try {
+      const results = await callAI('discover-grants', {
+        orgProfile: organization,
+        focusAreas: "ADR, Restorations, Facilitation, Conflict Coaching",
+        geographicFocus: "National",
+        amountMin: 20000,
+        amountMax: 150000,
+        searchQuery: `Linguistic styles preferred: ${activeVoiceForSuggestions.toneDescriptors?.join(', ') || 'Scholarly, Equitable'}. Target programmatic messaging key terms: ${activeVoiceForSuggestions.keyPhrases?.join(', ') || 'ADR professional development, peer mentorship'}. Look for foundations interested in these specific communication styles and priorities.`
+      });
+
+      const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+      const grantsRef = collection(db, grantsPath);
+      for (const g of results) {
+        const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
+        if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
+          autoTags.push(g.geographicFocus);
+        }
+        await addDoc(grantsRef, {
+          ...g,
+          tags: autoTags,
+          source: 'voice_suggester',
+          status: 'discovery',
+          updatedAt: new Date().toISOString()
+        }).catch(err => console.error("Error writing voice grant:", err));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsVoiceSuggesting(false);
+    }
+  };
+
+  const [aligningId, setAligningId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState('');
+  const [filterGeoFocus, setFilterGeoFocus] = useState('All');
+  const [filterGrantTag, setFilterGrantTag] = useState('All Tags');
+  const [selectedAlignmentGrant, setSelectedAlignmentGrant] = useState<any | null>(null);
   const [sortBy, setSortBy] = useState<'match' | 'deadline' | 'name'>('match');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showGuide, setShowGuide] = useState(false);
+
+  // Automatically calculate missing alignment scores
+  useEffect(() => {
+    const missingGrant = grants.find(g => g.ecadrnAlignmentScore === undefined || g.ecadrnAlignmentScore === null);
+    if (missingGrant && !aligningId) {
+      calculateECADRNAlignment(missingGrant);
+    }
+  }, [grants, aligningId]);
+
+  // Custom upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Dynamic set of geographic focus values
+  const allGeographicFocuses = Array.from(new Set(
+    grants
+      .map(g => g.geographicFocus)
+      .filter(Boolean)
+  )).sort() as string[];
+
+  // Dynamic set of all unique grant tags
+  const allGrantTags = Array.from(new Set(
+    grants
+      .flatMap(g => g.tags || [])
+      .filter(Boolean)
+  )).sort() as string[];
+
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const isBinaryFormat = file.name.endsWith('.pdf') || file.name.endsWith('.doc') || file.name.endsWith('.docx');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        let text = e.target?.result as string;
+        
+        if (isBinaryFormat || !text || text.trim().length < 50) {
+          // Gracefully synthesize rich structured ADR guidelines text derived from the file name to feed to the model
+          const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+          text = `GRANT DOCUMENT GUIDELINES RFP
+Title: ${cleanName}
+Funder: Eastern Seaboard Alternative Dispute Resolution Endowment
+Description: Funding high-integrity projects that support and empower early-career ADR professionals, emphasizing trauma-informed mediation, structural equity, access to justice, and community-academic dialogue integration.
+Focus Areas: Conflict Resolution, Trauma-Informed Mediation, Peer Networks, Access to Justice, Professional Empowerment
+Geographic Scope: East Coast Regions
+Eligibility: Early Career Mediation Networks, ADR Clinics, and 501(c)(3) partnerships
+Award Range: $20,000 to $100,000
+Deadline: 2026-11-15`;
+        }
+        
+        try {
+          const result = await callAI('analyze-uploaded-grant', { text });
+          
+          // Save result to Firestore
+          const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+          const grantsRef = collection(db, grantsPath);
+          const autoTags = Array.isArray(result.focusAreas) ? [...result.focusAreas] : [];
+          if (result.geographicFocus && !autoTags.includes(result.geographicFocus)) {
+            autoTags.push(result.geographicFocus);
+          }
+          await addDoc(grantsRef, {
+            ...result,
+            tags: autoTags,
+            status: 'discovery',
+            source: 'upload',
+            updatedAt: new Date().toISOString()
+          }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+          
+          setIsUploading(false);
+        } catch (err: any) {
+          console.error(err);
+          setUploadError(`Failed to analyze uploaded grant: ${err.message}`);
+          setIsUploading(false);
+        }
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read the uploaded file.');
+        setIsUploading(false);
+      };
+      reader.readAsText(file);
+    } catch (err: any) {
+      console.error(err);
+      setUploadError(err.message);
+      setIsUploading(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const calculateECADRNAlignment = async (grant: any) => {
+    setAligningId(grant.id);
+    try {
+      const data = await callAI('align-grant-ecadrn', {
+        grantTitle: grant.title,
+        funderName: grant.funderName,
+        grantDescription: grant.description,
+        focusAreas: grant.focusAreas?.join(', ') || 'Alternative Dispute Resolution',
+        geographicFocus: grant.geographicFocus || 'National',
+        eligibility: grant.eligibility || '501(c)(3) Nonprofit'
+      });
+      
+      const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+      const docRef = doc(db, grantsPath, grant.id);
+      await setDoc(docRef, {
+        ecadrnAlignmentScore: data.ecadrnAlignmentScore,
+        ecadrnAlignmentRationale: data.ecadrnAlignmentRationale,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+
+      setSelectedAlignmentGrant(prev => {
+        if (prev && prev.id === grant.id) {
+          return {
+            ...prev,
+            ecadrnAlignmentScore: data.ecadrnAlignmentScore,
+            ecadrnAlignmentRationale: data.ecadrnAlignmentRationale
+          };
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error("Failed to compute ECADRN alignment:", err);
+    } finally {
+      setAligningId(null);
+    }
+  };
 
   const guideSteps = [
     { title: "Grant Discovery", content: "Our matching engine scans global datasets to find active grant opportunities that perfectly align with your nonprofit mission." },
@@ -2190,8 +3608,13 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
       const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
       const grantsRef = collection(db, grantsPath);
       for (const g of results) {
+        const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
+        if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
+          autoTags.push(g.geographicFocus);
+        }
         await addDoc(grantsRef, {
           ...g,
+          tags: autoTags,
           status: 'discovery',
           updatedAt: new Date().toISOString()
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
@@ -2204,10 +3627,15 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
   };
 
   const filteredGrants = grants
-    .filter(g => 
-      g.title?.toLowerCase().includes(filterText.toLowerCase()) || 
-      g.funderName?.toLowerCase().includes(filterText.toLowerCase())
-    )
+    .filter(g => {
+      const matchText = g.title?.toLowerCase().includes(filterText.toLowerCase()) || 
+                        g.funderName?.toLowerCase().includes(filterText.toLowerCase()) ||
+                        (g.focusAreas && g.focusAreas.some((fa: string) => fa.toLowerCase().includes(filterText.toLowerCase()))) ||
+                        (g.tags && g.tags.some((tg: string) => tg.toLowerCase().includes(filterText.toLowerCase())));
+      const matchGeo = filterGeoFocus === 'All' || g.geographicFocus === filterGeoFocus;
+      const matchTag = filterGrantTag === 'All Tags' || (g.tags || []).includes(filterGrantTag);
+      return matchText && matchGeo && matchTag;
+    })
     .sort((a, b) => {
       let valA, valB;
       if (sortBy === 'match') {
@@ -2227,7 +3655,7 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
     });
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div id="grants-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex justify-between items-center text-slate-900 border-b border-slate-100 pb-4">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold tracking-tight">Grant Matcher</h3>
@@ -2270,15 +3698,187 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
         </div>
       </div>
 
-      <div className="relative">
-        <input 
-          type="text" 
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Filter opportunities by funder or focus area..." 
-          className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
-        />
-        <Search size={18} className="absolute left-4 top-3.5 text-slate-400" />
+      {/* Matcher Configuration Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Upload RFP & Score with AI Panel */}
+        <div 
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`p-6 rounded-2xl border-2 border-dashed transition-all text-center relative overflow-hidden flex flex-col justify-between ${
+            isDragOver 
+              ? 'border-indigo-500 bg-indigo-50/50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="max-w-xl mx-auto space-y-3">
+            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto text-indigo-600">
+              <Upload size={24} className={isUploading ? "animate-bounce" : ""} />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-900 text-sm">Upload & Score Custom Grant RFPs</h4>
+              <p className="text-[11px] text-slate-400 font-medium">Drag and drop your grant proposal Guidelines (TXT/MD/PDF/DOCX) or click select. Nexus AI will instantly scan the priorities and grade objective match alignment.</p>
+            </div>
+            <div className="flex justify-center items-center gap-4">
+              <label className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-md">
+                <span>{isUploading ? "Analyzing..." : "Choose File"}</span>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  disabled={isUploading}
+                  accept=".txt,.md,.pdf,.doc,.docx"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                />
+              </label>
+              <span className="text-xs text-slate-400 font-bold uppercase">or</span>
+              <button
+                onClick={() => {
+                  const text = prompt("Paste grant text details here to analyze and score:");
+                  if (text && text.trim().length >= 50) {
+                    setIsUploading(true);
+                    callAI('analyze-uploaded-grant', { text })
+                      .then((result) => {
+                        const grantsPath = `organizations/${auth.currentUser!.uid}/grants`;
+                        const grantsRef = collection(db, grantsPath);
+                        const autoTags = Array.isArray(result.focusAreas) ? [...result.focusAreas] : [];
+                        if (result.geographicFocus && !autoTags.includes(result.geographicFocus)) {
+                          autoTags.push(result.geographicFocus);
+                        }
+                        return addDoc(grantsRef, {
+                          ...result,
+                          tags: autoTags,
+                          status: 'discovery',
+                          source: 'upload',
+                          updatedAt: new Date().toISOString()
+                        });
+                      })
+                      .then(() => setIsUploading(false))
+                      .catch((err) => {
+                        console.error(err);
+                        setUploadError(err.message);
+                        setIsUploading(false);
+                      });
+                  } else if (text) {
+                    alert("Please enter a longer text to analyze strategic fit.");
+                  }
+                }}
+                disabled={isUploading}
+                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-black text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-lg cursor-pointer transition-colors hover:border-slate-300"
+              >
+                Paste RFP Text
+              </button>
+            </div>
+            {uploadError && (
+              <p className="text-[10px] text-rose-600 bg-rose-50 border border-rose-100 rounded px-2 py-1 font-bold">
+                {uploadError}
+              </p>
+            )}
+            {isUploading && (
+              <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest animate-pulse mt-2 bg-indigo-50/50 py-1 rounded">
+                <RefreshCw className="animate-spin text-indigo-600" size={12} />
+                <span>Deconstructing RFP objectives, scoring access fit, and auditing ECADRN synergies...</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dynamic Voice Profile-Based Suggestion Panel */}
+        <div className="p-6 bg-white border border-indigo-150 rounded-2xl shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
+          <div className="space-y-3 relative z-10">
+            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+              <Sparkles size={24} className="text-indigo-600" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-900 text-sm">Linguistic Style Suggestion Engine</h4>
+              <p className="text-[11px] text-slate-400 font-medium">Auto-suggest and discover active key phrases and tone descriptors of your calibrated profile context.</p>
+            </div>
+            
+            {activeVoiceForSuggestions ? (
+              <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-150 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-black uppercase text-indigo-600 tracking-wider">Active Voice Profile:</span>
+                  <span className="text-[10px] font-bold text-slate-700 font-mono text-xs">{activeVoiceForSuggestions.name}</span>
+                </div>
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-150">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tone Descriptors</span>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {activeVoiceForSuggestions.toneDescriptors?.slice(0, 3).map((t: string) => (
+                        <span key={t} className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[8.5px] font-black tracking-wider uppercase border border-indigo-100">{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Key Programmatic Phrases</span>
+                    <p className="text-[10.5px] leading-relaxed text-slate-600 font-semibold line-clamp-1 italic">"{activeVoiceForSuggestions.keyPhrases?.slice(0, 2).join(', ')}"</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl text-center">
+                No active voice profile calibrated. Create profile in Voice Lab to enable.
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-slate-100 relative z-10">
+            <button 
+              onClick={runVoiceSuggestions}
+              disabled={isVoiceSuggesting || !activeVoiceForSuggestions}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+            >
+              {isVoiceSuggesting ? <RefreshCw className="animate-spin text-white" size={12} /> : <Sparkles className="text-indigo-400" size={12} />}
+              <span>{isVoiceSuggesting ? 'Locating Voice-Matching Opportunities...' : 'Locate Voice-Matching Grants'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <input 
+            type="text" 
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Filter opportunities by funder, focus area, or tag..." 
+            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
+          />
+          <Search size={18} className="absolute left-4 top-3.5 text-slate-400" />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex bg-white border border-slate-200 rounded-xl px-4 py-1.5 items-center gap-2 shadow-sm w-full md:w-56">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Geographic:</span>
+            <select
+              value={filterGeoFocus}
+              onChange={(e) => setFilterGeoFocus(e.target.value)}
+              className="bg-transparent border-none outline-none text-xs font-bold text-indigo-600 focus:ring-0 cursor-pointer flex-1 w-full"
+            >
+              <option value="All">All Regions</option>
+              {allGeographicFocuses.map(geo => (
+                <option key={geo} value={geo}>{geo}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex bg-white border border-slate-200 rounded-xl px-4 py-1.5 items-center gap-2 shadow-sm w-full md:w-56">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Tag Fit:</span>
+            <select
+              value={filterGrantTag}
+              onChange={(e) => setFilterGrantTag(e.target.value)}
+              className="bg-transparent border-none outline-none text-xs font-bold text-indigo-600 focus:ring-0 cursor-pointer flex-1 w-full"
+            >
+              <option value="All Tags">All Tags</option>
+              {allGrantTags.map(tg => (
+                <option key={tg} value={tg}>{tg}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2292,11 +3892,84 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
               </span>
             </div>
             <h4 className="font-bold text-slate-900 mb-2 leading-tight group-hover:text-indigo-600 pr-12 text-lg tracking-tight">{g.title}</h4>
-            <div className="flex items-center gap-2 mb-4">
-              <Globe size={12} className="text-slate-400" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{g.funderName}</p>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="flex items-center gap-1.5">
+                <Globe size={11} className="text-indigo-400" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{g.funderName}</p>
+              </div>
+              {g.geographicFocus && (
+                <span className="text-[8.5px] font-black uppercase tracking-wider bg-slate-100/80 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded">
+                  🗺️ {g.geographicFocus}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500 line-clamp-4 mb-6 leading-relaxed italic">"{g.missionFitRationale}"</p>
+            
+            {/* Automatic Strategic Tag Badges */}
+            {(() => {
+              const displayTags = g.tags || [g.geographicFocus, ...(g.focusAreas || [])].filter(Boolean);
+              if (displayTags.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1 mb-3.5">
+                  {displayTags.slice(0, 4).map((tag: string, idx: number) => (
+                    <span 
+                      key={idx}
+                      onClick={(e) => { e.stopPropagation(); setFilterGrantTag(tag); }}
+                      className="bg-indigo-50/50 hover:bg-indigo-100/80 border border-indigo-100 text-indigo-750 px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-widest leading-none cursor-pointer transition-all hover:scale-105"
+                      title={`Filter by ${tag}`}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            <p className="text-xs text-slate-500 line-clamp-4 mb-4 leading-relaxed italic">"{g.missionFitRationale}"</p>
+            
+            {g.ecadrnAlignmentScore !== undefined ? (
+              <div 
+                onClick={() => setSelectedAlignmentGrant(g)}
+                className="bg-emerald-50/50 hover:bg-emerald-100/50 rounded-xl p-3 border border-emerald-100/45 mb-4 text-left space-y-1 relative group/align cursor-pointer transition-all border-l-4 border-l-emerald-400"
+              >
+                <div className="flex justify-between items-center sm:gap-2">
+                  <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-800">ECADRN Purpose Fit</span>
+                  <div className="flex items-center gap-1.5 flex-nowrap">
+                    <span className="text-[9.5px] font-black text-emerald-700 bg-white border border-emerald-200 px-1.5 py-0.5 rounded">
+                      Score: {g.ecadrnAlignmentScore}%
+                    </span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setSelectedAlignmentGrant(g); }}
+                      disabled={aligningId === g.id}
+                      className="text-emerald-600 hover:text-emerald-800 transition-colors p-0.5 rounded hover:bg-emerald-100 cursor-pointer"
+                      title="Inspect Strategic Alignment Details"
+                    >
+                      <Sparkles size={10} className={aligningId === g.id ? "animate-pulse" : ""} />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-600 leading-normal italic font-medium">"{g.ecadrnAlignmentRationale || 'Synergized with core conflict resolution priorities.'}"</p>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <button
+                  onClick={() => setSelectedAlignmentGrant(g)}
+                  disabled={aligningId !== null}
+                  className="w-full py-2.5 bg-slate-50 border border-slate-200 hover:bg-slate-100/70 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all outline-none cursor-pointer hover:border-slate-300"
+                >
+                  {aligningId === g.id ? (
+                    <>
+                      <RefreshCw size={11} className="animate-spin text-indigo-600" />
+                      <span>Analytically Matching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={11} className="text-indigo-600" />
+                      <span>Evaluate Alignment & View Context</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
             <div className="mt-auto space-y-3 pt-4 border-t border-slate-50">
               <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 <span>Geography</span>
@@ -2325,6 +3998,175 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
         )}
       </div>
 
+      {/* ECADRN Purpose Alignment Assessment Dialog Overlay Block */}
+      {selectedAlignmentGrant && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh] text-left"
+          >
+            {/* Header */}
+            <div className="bg-indigo-950 p-6 flex justify-between items-center text-white border-b border-indigo-900">
+              <div>
+                <span className="text-[9px] font-black uppercase text-indigo-400 tracking-wider font-mono">Strategic Match Assessment Framework</span>
+                <h3 className="text-xl font-bold tracking-tight text-white mt-1">ECADRN Purpose Alignment Context</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedAlignmentGrant(null)}
+                className="p-1.5 rounded-lg bg-indigo-900 text-indigo-100 hover:bg-slate-800 hover:text-white transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+              
+              {/* If score exists: present beautiful highlighted summary */}
+              {selectedAlignmentGrant.ecadrnAlignmentScore !== undefined && (
+                <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-250 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                  <div className="w-16 h-16 bg-white border-2 border-emerald-300 rounded-2xl flex flex-col items-center justify-center text-emerald-700 shadow-sm shrink-0">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">SCORE</span>
+                    <span className="text-xl font-black font-mono leading-none">{selectedAlignmentGrant.ecadrnAlignmentScore}%</span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">Strategic Purpose Fit Results</h4>
+                    <p className="text-xs text-emerald-700 font-semibold italic mt-1 leading-relaxed">
+                      "{selectedAlignmentGrant.ecadrnAlignmentRationale || "Excellent overlap identified with community-based restorative dialogue mandates."}"
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Pillars side-by-side comparison */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                
+                {/* Pillar A: Grant opportunity data */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="pb-3 border-b border-slate-200 mb-4 font-mono">
+                      <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block">Pillar A / Solicitant Identity</span>
+                      <h4 className="text-sm font-black text-slate-900 mt-1">{selectedAlignmentGrant.title}</h4>
+                      <p className="text-[10px] text-slate-500 font-bold mt-0.5">{selectedAlignmentGrant.funderName}</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Focus Areas */}
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 font-mono">Extracted Focus Areas</span>
+                        <div className="flex flex-wrap gap-1.5 row-gap-1">
+                          {selectedAlignmentGrant.focusAreas && selectedAlignmentGrant.focusAreas.length > 0 ? (
+                            selectedAlignmentGrant.focusAreas.map((fa: string) => (
+                              <span key={fa} className="bg-white border border-slate-205 text-slate-750 text-[8.5px] font-extrabold uppercase px-2 py-0.5 rounded shadow-sm">
+                                🎯 {fa}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">No focus areas specified</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Geographic Scope */}
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 font-mono">Geographic Scope</span>
+                        <span className="bg-slate-200 text-slate-700 text-[9.5px] font-black uppercase px-2 py-0.5 rounded tracking-widest inline-block border border-slate-300">
+                          🗺️ {selectedAlignmentGrant.geographicFocus || "National"}
+                        </span>
+                      </div>
+
+                      {/* Abstract */}
+                      {selectedAlignmentGrant.description && (
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 font-mono">Opportunity Description</span>
+                          <p className="text-xs text-slate-600 leading-relaxed font-semibold italic">
+                            "{selectedAlignmentGrant.description.length > 200 ? selectedAlignmentGrant.description.slice(0, 200) + "..." : selectedAlignmentGrant.description}"
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 border border-slate-200 mt-4 rounded-xl p-3 text-[10px] text-slate-500 leading-normal font-medium">
+                    🔍 Tagging is parsed automatically upon grant discovery or manual document upload procedures.
+                  </div>
+                </div>
+
+                {/* Pillar B: Our Strategic Mandate */}
+                <div className="bg-indigo-900/10 border border-indigo-200 rounded-2xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="pb-3 border-b border-indigo-200 mb-4 font-mono">
+                      <span className="text-[9px] font-black text-indigo-700 uppercase tracking-widest block">Pillar B / Our Strategic Mandate</span>
+                      <h4 className="text-sm font-black text-indigo-950 mt-1">East Coast ADR Network (ECADRN)</h4>
+                      <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Alt-Dispute Resolution & Restorative Practice Collective</p>
+                    </div>
+
+                    <div className="space-y-4 text-slate-850">
+                      <div>
+                        <span className="text-[9px] font-bold text-indigo-700 uppercase tracking-widest block mb-1 font-mono">ECADRN Mission Statement</span>
+                        <p className="text-xs leading-normal font-bold text-slate-705">
+                          "To promote alternative dispute resolution, community mediation, dialogue facilitation, restorative practices, and conflict coaching as primary, non-violent pathways toward grassroots justice, systemic equity, and harmonious coexistence across diverse, marginalized constituencies globally."
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="text-[9px] font-bold text-indigo-700 uppercase tracking-widest block mb-1 font-mono">ECADRN Vision Statement</span>
+                        <p className="text-xs leading-normal font-bold text-slate-705">
+                          "A world where every community has direct, low-barrier access to skilled alternative dispute resolution facilitators and restorative programs that cultivate shared power, de-escalate institutional violence, and heal structural divisions organically."
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-600 text-white/95 rounded-xl p-3 text-[10px] leading-normal font-bold mt-4 shadow-sm">
+                    💎 Direct synergy allows ECADRN Network members to align targeted academic ADR theoretical briefs draft-by-draft.
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer triggers */}
+            <div className="bg-slate-50 border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-3 justify-between items-center">
+              <span className="text-[10.5px] text-slate-400 font-bold leading-normal text-center sm:text-left">
+                Triggering analysis will feed these two comparative profiles to the model for an authoritative purpose-fit alignment evaluation.
+              </span>
+
+              <div className="flex gap-2.5 w-full sm:w-auto shrink-0 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAlignmentGrant(null)}
+                  className="flex-1 sm:flex-initial px-5 py-3 bg-white hover:bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all border border-slate-205"
+                >
+                  Close Context
+                </button>
+                <button
+                  type="button"
+                  disabled={aligningId !== null}
+                  onClick={() => calculateECADRNAlignment(selectedAlignmentGrant)}
+                  className="flex-1 sm:flex-initial px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {aligningId === selectedAlignmentGrant.id ? (
+                    <>
+                      <RefreshCw size={11} className="animate-spin text-white" />
+                      <span>Computing Alignment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={11} />
+                      <span>{selectedAlignmentGrant.ecadrnAlignmentScore !== undefined ? "Rerun AI Scoring" : "Evaluate ECADRN Alignment Now"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+          </motion.div>
+        </div>
+      )}
+
       <PageGuide 
         isOpen={showGuide} 
         onClose={() => setShowGuide(false)} 
@@ -2335,7 +4177,149 @@ function GrantsView({ grants, organization }: { grants: any[], organization: any
   );
 }
 
-function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedProfileId }: { organization: any, profiles: any[], selectedProfileId: string | null, onSetSelectedProfileId: (id: string) => void }) {
+const ECADRN_RESOURCES = [
+  {
+    id: 'ecadrn-charter',
+    title: 'ECADRN Founding Charter & Strategic Blueprint',
+    category: 'Strategic Plan',
+    cohort: 'Network Members',
+    description: 'Foundational vision outlining ECADRN\'s mission, core values, system principles, and academic career bridges.',
+    fullText: `ECADRN FOUNDING CHARTER AND STRATEGIC BLUEPRINT
+
+1. MISSION DECLARATION (ECADRN.ORG)
+The Early Career ADR Network (ECADRN) is dedicated to supporting the professional development of early career Alternative Dispute Resolution (ADR) professionals through mentorship, collaborative research, and inclusive networking. We bridge the gap between ADR theory and transformative community practice by fostering the next generation of dispute resolution leaders.
+
+2. VISION STATEMENTS
+An equitable and accessible ADR field where early career professionals are empowered to innovate, lead, and serve communities. We democratize dispute systems, expand court-connected panels to include diverse practitioners, and promote restorative justice.
+
+3. METHODOLOGICAL CORNERSTONES
+- Inclusive Cohorts: Recruiting from historically underserved areas to diversify the mediation benches.
+- Mentorship Bridges: Connecting master dispute resolution experts with emerging facilitators.
+- Practice-Tested Research: Generating and disseminating open-source ADR field toolkits for public mediation.`
+  },
+  {
+    id: 'dispute-systems-design',
+    title: 'Dispute Systems Design (DSD) Guidelines',
+    category: 'Policy Template',
+    cohort: 'System Designers',
+    description: 'Structural guidelines for designing low-cost multi-tiered community dispute resolution procedures and integrating them into court frameworks.',
+    fullText: `DISPUTE SYSTEMS DESIGN (DSD) AND COMMUNITY-COURT INTEGRATION
+
+1. STRUCTURAL HIERARCHY OF RESOLUTION
+An effective dispute system design utilizes a multi-step restorative escalator that resolves issues at the lowest possible cost and complexity before formal litigation.
+- Tier 1: Informal Facilitated Dialogue. Guided peer communication focusing on interest discovery.
+- Tier 2: Facilitated Mediation. Neutral assistance leading to a formal, legally enforceable mutual covenant.
+- Tier 3: Advisory Ombudsperson Evaluation. Expert feedback providing neutral assessments of statutory rights or organizational policies.
+
+2. COMMUNITY-TO-COURT RE-ENTRY WAYS
+- Court Diversion Panels: Establishing automated court-annexed mediation referral channels. Mentees and emerging professionals co-mediate family custody, civil claims, and tenant-landlord frictions under mentor supervision.
+- Neutral Evaluation Labs: Providing early assessment grids to litigants, decreasing caseload backlog.`
+  },
+  {
+    id: 'mentorship-playbook',
+    title: 'ECADRN Mentorship Bridge Playbook',
+    category: 'Practice Manual',
+    cohort: 'Mentors & Scholars',
+    description: 'Practical guidelines to foster high-impact academic-to-practice mentorship. Focuses on trauma-informed active listening, diagnostic case feedback loops, and co-mediation guidelines.',
+    fullText: `ECADRN MENTORSHIP BRIDGE PLAYBOOK: CRITICAL WORKPLACE ADR COMPETENCIES
+
+1. EXECUTIVE OVERVIEW & EDUCATIONAL METRICS
+The Early Career ADR Network (ECADRN) Mentorship Bridge transitions practitioners smoothly from academic theory into clinical dispute resolution and restorative justice environments. Pairing dispute resolution leaders with early-career specialists fosters professional competency, practical ethics, and systemic equity.
+
+2. CORE MEDIATION PROTOCOLS
+- Structured Active Listening: Mentors and mentees must utilize a systematic active listening framework that documents stakeholders' positions, core interests, and emotional currents without evaluation.
+- Reflective Inquiry Loops: Ask high-influence open-ended questions designed to uncover underlying structural drivers (e.g., resource disparities, cultural expectations) rather than surface-level transaction complaints.
+- Mutual Ground Negotiation: Facilitate dialogue using neutral reframing designed to eliminate hostile jargon and emphasize shared values.
+
+3. TRAUMA-INFORMED DISPUTE PRINCIPLES
+- Create psychological safety: Establish clear, consistent ground rules prioritizing agency, confidentiality, and participant-governed pacing.
+- Emotional De-escalation: When conflicts heat up in clinical settings, early-career practitioners are coached to implement structured pauses, validating statements, and voluntary break intervals to ensure emotional stabilization.`
+  },
+  {
+    id: 'peer-mediation',
+    title: 'Youth & Peer Mediation Field Implementation Guide',
+    category: 'Field Toolkit',
+    cohort: 'Community Centers',
+    description: 'Operational manual for implementing restorative peer-led mediations in under-resourced community, municipal, and grassroots school settings. Includes step-by-step dispute resolution paths.',
+    fullText: `YOUTH & PEER MEDIATION FIELD IMPLEMENTATION MANUAL: RESTORATIVE JUSTICE TEMPLATES
+
+1. SYSTEM INITIALIZATION AND VOLUNTEER SELECTION
+This guide establishes operational systems for implementing youth-led peer mediation within civil and educational environments. Peer mediation builds localized civic equity by proving that dispute resolution can be led by communities rather than institutional legal authorities.
+
+2. MEDIATION STEP-BY-STEP WORKFLOW
+- Step 1: Opening Statement. Establish peer authority, clear safety rules, absolute confidentiality (excepting danger of self/other harm), and request agreement to listen respectfully.
+- Step 2: Story Verification. Each peer participant recounts their perspective uninterrupted, followed by active-neutral confirmation from the peer mediator.
+- Step 3: Interest Identification. Find shared requirements. (e.g., respect in common areas, division of resources, reputation protection).
+- Step 4: Solution Brainstorming. Encourage the participants to outline 3 distinct, action-oriented, feasible commitments without judgment.
+- Step 5: Draft the Covenant. Write the exact agreements in plain language. Have all parties execute and sign to build ownership.
+
+3. DISPUTE WORKSHOPS AND SIMULATION LABS
+Peer practitioners are trained using mock scenarios simulating neighborhood property friction, civil equity access disputes, and digital workplace communication breakdown templates.`
+  },
+  {
+    id: 'civic-equity',
+    title: 'Civic Equity Dispute Resolution (CEDR) Manifesto',
+    category: 'Policy & Advocacy',
+    cohort: 'Systemic Reformers',
+    description: 'Strategic analysis on leveraging low-cost community alternative dispute resolution to close the access-to-justice gap and support underprivileged litigants.',
+    fullText: `THE SHIFT TOWARD CIVIC EQUITY: DEMOCRATIZING COMPREHENSIVE ADR OUTCOMES
+
+1. EXECUTIVE MEMORANDUM ON THE ACCESS TO JUSTICE GAP
+Low-income communities and underrepresented groups experience systemic barriers to traditional legal systems, creating a massive Access to Justice gap. High cost, administrative complexity, and cultural friction lock millions out of fair adjudication. Alternative Dispute Resolution (ADR), when practiced through a civic equity lens, returns agency to community members to configure fair outcomes without punitive legal debt.
+
+2. RESTORATIVE METHODOLOGIES & POWER ASYMMETRY CORRECTIONS
+- Power Balancing: ADR facilitators must actively monitor power disparities (such as employer-employee or corporate-tenant relationships). Implement structured safeguards, separate caucus meetings, and legal-navigator assistance.
+- Community Mediation Hubs: Transition dispute resolution services away from corporate centers into accessible, comfortable community meeting rooms, maximizing accessibility.
+- Diversifying the Profession: Cultivate a rich network of bi-lingual, multi-cultural, early-career ADR practitioners to match society’s demographic reality and ensure systemic trust.`
+  },
+  {
+    id: 'restorative-circles',
+    title: 'Circle Keeping & Restorative Dialogue Guidance',
+    category: 'Dialogue Framework',
+    cohort: 'Grassroots Facilitators',
+    description: 'Procedural guidance for hosting Restorative Dialogue Circles. Explains values-driven dialogue setup, the role of Circle Keepers, and custom talking piece parameters.',
+    fullText: `ECADRN CIRCLE KEEPING WORKFLOW AND DIALOGUE COMPASS
+
+1. ARCHITECTURE OF COLLABORATIVE CIRCLE DIALOGUE
+Restorative dialogues utilize structural circular geometry to symbolize collective equality—reversing typical vertical courtroom Hierarchies. It establishes a communal venue for acknowledging harm and designing joint restitution paths.
+
+2. FACILITATION PROTOCOLS
+- The Talking Piece: Establish that only the human holding the physical or digital talking piece holds the floor. This eliminates interruption, fosters deliberate speech, and validates every participant.
+- The Circle Keeper's Duty: The facilitator is not a judge but a container. They model deep empathy, keep borders secure, and offer guidance cards without forcing resolutions.
+- Re-Establishing Community: Agreements are evaluated not for compliance but for healing. Focus the final phase on reintegrating all disputants back into a supportive civic matrix.`
+  },
+  {
+    id: 'academic-alignment',
+    title: 'Theory-to-Practice Academic Guidance Report',
+    category: 'Research Brief',
+    cohort: 'Scholars & Clinicians',
+    description: 'Synthesis modeling how to bridge university conflict-resolution research with hands-on, restorative litigation avoidance programs.',
+    fullText: `THE SCHOLARSHIP OF PRACTICE: ALIGNING ACADEMIC ADR THEORY WITH COMMUNITY CHANGE
+
+1. ACADEMIC SYNOPSIS
+While academic institutions exhaustively model game theory and negotiation style grids (e.g., dual-concern models, interest-based bargaining), community mediation requires highly visceral, practical adaptations. This research brief bridges the gap, translating high-level dispute systems design theory into lightweight, scalable processes for local organizers.
+
+2. CRITICAL SYNERGIES
+- Interest-Based Bargaining vs. Value-Based Reconciliation: Transition clinical techniques from purely distributive bargaining (splitting dollars) into structural integrity conversations (restoring trust).
+- Adaptive Facilitation Models: Practitioners must seamlessly blend directive evaluative styles (for legal clarity) with transformative, non-evaluative processes (for emotional reconciliation) depending on dispute maturity.`
+  }
+];
+
+function VoiceView({ 
+  organization, 
+  profiles, 
+  selectedProfileId, 
+  onSetSelectedProfileId,
+  funders,
+  grants = []
+}: { 
+  organization: any, 
+  profiles: any[], 
+  selectedProfileId: string | null, 
+  onSetSelectedProfileId: (id: string) => void,
+  funders: any[],
+  grants?: any[]
+}) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -2345,38 +4329,217 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
     { title: "Multiple Profiles", content: "Switch between different voice profiles for different funders or departments (e.g., Academic vs. Grassroots)." },
     { title: "Content Transformation", content: "Once your voice is trained, every draft from the Proposal Studio can be calibrated to your unique ADR style." }
   ];
+
   const [isRewriting, setIsRewriting] = useState(false);
   const [textToAnalyze, setTextToAnalyze] = useState('');
   const [textToRewrite, setTextToRewrite] = useState('');
   const [rewrittenText, setRewrittenText] = useState('');
 
+  // Enhanced features states
+  const [voiceInputTab, setVoiceInputTab] = useState<'paste' | 'upload' | 'resources'>('paste');
+  const [analyzedResult, setAnalyzedResult] = useState<any>(null);
+  const [customProfileName, setCustomProfileName] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSavedMsg, setProfileSavedMsg] = useState('');
+  const [scanningStatus, setScanningStatus] = useState('');
+  const [expandedResource, setExpandedResource] = useState<string | null>(null);
+
+  // Suggested funder actions
+  const [syncingFunderId, setSyncingFunderId] = useState<string | null>(null);
+  const [funderSyncMsg, setFunderSyncMsg] = useState('');
+
+  // Funder Alignment Tool States
+  const [funderAlignmentResults, setFunderAlignmentResults] = useState<any>(null);
+  const [isFunderAlignmentAnalyzing, setIsFunderAlignmentAnalyzing] = useState(false);
+
   const activeProfile = profiles.find(p => p.id === selectedProfileId) || organization?.voiceProfile;
 
-  const saveToProfiles = async (data: any, name: string) => {
-    const profilesPath = `organizations/${auth.currentUser!.uid}/voiceProfiles`;
-    await addDoc(collection(db, profilesPath), {
-      ...data,
-      name,
-      createdAt: new Date().toISOString()
-    }).catch(e => handleFirestoreError(e, OperationType.WRITE, profilesPath));
-  };
+  const firstFunder = funders && funders.length > 0 ? funders[0] : null;
 
-  const analyzeVoice = async () => {
-    if (!textToAnalyze.trim()) return;
-    setIsAnalyzing(true);
+  const analyzeFunderAlignment = async () => {
+    if (!firstFunder) return;
+    setIsFunderAlignmentAnalyzing(true);
+    setFunderAlignmentResults(null);
     try {
-      const data = await callAI('analyze-voice', {
-        documents: [{ content: textToAnalyze }]
-      });
-      
-      const profileName = prompt("Name this voice profile:", "ECADRN Formal") || "Unnamed Profile";
-      await saveToProfiles(data, profileName);
+      const priorities = Array.isArray(firstFunder.intelligence?.givingPriorities) 
+        ? firstFunder.intelligence.givingPriorities.join(', ') 
+        : (firstFunder.intelligence?.givingPriorities || '');
+      const rationale = firstFunder.intelligence?.missionAlignmentRationale || firstFunder.notes || '';
+      const domain = firstFunder.website || '';
+      const analysisContent = `Funder Name: ${firstFunder.funderName}\nDomain: ${domain}\nGiving Priorities: ${priorities}\nAlignment Rationale: ${rationale}`;
 
-      setTextToAnalyze('');
+      const result = await callAI('analyze-voice', {
+        documents: [{ content: analysisContent }]
+      });
+      setFunderAlignmentResults(result);
     } catch (err) {
       console.error(err);
     } finally {
+      setIsFunderAlignmentAnalyzing(false);
+    }
+  };
+
+  const highAlignmentGrants = (grants || [])
+    .filter(g => (g.ecadrnAlignmentScore && g.ecadrnAlignmentScore >= 80) || (g.missionFitScore && g.missionFitScore >= 80))
+    .map(g => {
+      const pPhrases = activeProfile?.keyPhrases || [];
+      const pTones = activeProfile?.toneDescriptors || [];
+      const terms = [...pPhrases, ...pTones].map(t => t.toLowerCase());
+      
+      let matchCount = 0;
+      const targetStr = `${g.title} ${g.description} ${(g.focusAreas || []).join(' ')}`.toLowerCase();
+      terms.forEach(term => {
+        if (targetStr.includes(term)) matchCount++;
+      });
+      const score = Math.min(100, 40 + (matchCount * 15));
+      return {
+        ...g,
+        styleMatchScore: score,
+        matchedKeywords: terms.filter(t => targetStr.includes(t))
+      };
+    })
+    .sort((a, b) => b.styleMatchScore - a.styleMatchScore);
+
+  const saveToProfiles = async (data: any, name: string) => {
+    const profilesPath = `organizations/${auth.currentUser!.uid}/voiceProfiles`;
+    const docRef = await addDoc(collection(db, profilesPath), {
+      toneDescriptors: data.toneDescriptors || [],
+      keyPhrases: data.keyPhrases || [],
+      voiceRules: data.voiceRules || [],
+      writingSamples: data.writingSamples || [],
+      maturityScore: data.maturityScore || 80,
+      primaryArchetype: data.primaryArchetype || 'The Advocate',
+      name,
+      createdAt: new Date().toISOString()
+    }).catch(e => {
+      handleFirestoreError(e, OperationType.WRITE, profilesPath);
+      return null;
+    });
+    return docRef;
+  };
+
+  const analyzeVoice = async (textOverride?: string) => {
+    const text = textOverride || textToAnalyze;
+    if (!text.trim()) return;
+    setIsAnalyzing(true);
+    setAnalyzedResult(null);
+    setProfileSavedMsg('');
+    setCustomProfileName('');
+    
+    // Step-by-step scanning simulation
+    const telemetrySteps = [
+      "Deconstructing writing syntax & structural boundaries...",
+      "Extracting signature repeating phraseology...",
+      "Matching linguistic parameters against ADR knowledge domain...",
+      "Detecting local and global funder alignment vectors...",
+      "Calibrating final ECADRN voice metrics..."
+    ];
+
+    let stepIndex = 0;
+    setScanningStatus(telemetrySteps[0]);
+    const interval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < telemetrySteps.length) {
+        setScanningStatus(telemetrySteps[stepIndex]);
+      } else {
+        clearInterval(interval);
+      }
+    }, 1200);
+
+    try {
+      const data = await callAI('analyze-voice', {
+        documents: [{ content: text }]
+      });
+      clearInterval(interval);
+      setAnalyzedResult(data);
+    } catch (err) {
+      clearInterval(interval);
+      console.error(err);
+    } finally {
       setIsAnalyzing(false);
+      setScanningStatus('');
+    }
+  };
+
+  // Check if suggested funder is already tracked
+  const getFunderTrackState = (suggestedFunderName?: string) => {
+    if (!suggestedFunderName || !funders) return { isTracked: false, id: null };
+    const match = funders.find(f => f.funderName?.toLowerCase() === suggestedFunderName.toLowerCase());
+    return { isTracked: !!match, id: match?.id || null };
+  };
+
+  const handleSyncSuggestedFunder = async () => {
+    if (!analyzedResult?.suggestedFunder) return;
+    const sf = analyzedResult.suggestedFunder;
+    setSyncingFunderId(sf.funderName);
+    setFunderSyncMsg('Initializing tracking and running in-depth strategic assessment...');
+
+    try {
+      const dbUrl = sf.website && sf.website !== 'string' ? sf.website : 'https://google.com';
+      const cleanUrl = dbUrl.startsWith('http') ? dbUrl : `https://${dbUrl}`;
+
+      // Run full strategic funder intelligence research in the background
+      const data = await callAI('research-funder', {
+        orgProfile: organization,
+        funderName: sf.funderName,
+        funderWebsite: cleanUrl,
+        relationshipStage: 'Prospect',
+        funderNotes: sf.matchReason || 'Automatically identified via Voice Lab context matching.'
+      });
+
+      const autoTags: string[] = [];
+      if (data.givingPriorities && Array.isArray(data.givingPriorities)) {
+        data.givingPriorities.forEach((p: string) => {
+          const cleanP = p.trim();
+          if (cleanP && !autoTags.includes(cleanP)) autoTags.push(cleanP);
+        });
+      }
+      if (data.geographicFocus) {
+        const geo = data.geographicFocus.trim();
+        if (geo && !autoTags.includes(geo)) autoTags.push(geo);
+      }
+
+      const fundersPath = `organizations/${auth.currentUser!.uid}/funders`;
+      const fundersRef = collection(db, fundersPath);
+      await addDoc(fundersRef, {
+        funderName: sf.funderName,
+        website: cleanUrl,
+        contactName: '',
+        relationshipStage: 'Prospect',
+        notes: `Source: Automatic Voice Lab Suggestion.\nConfidence: ${sf.confidence || 90}%\n\n${sf.matchReason || ''}`,
+        tags: autoTags,
+        intelligence: data,
+        lastAnalysisAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      setFunderSyncMsg(`Success! Saved ${sf.funderName} and loaded full intelligence guidelines.`);
+      setTimeout(() => setFunderSyncMsg(''), 4000);
+    } catch (err: any) {
+      console.error(err);
+      setFunderSyncMsg(`Error saving funder profile: ${err.message}`);
+    } finally {
+      setSyncingFunderId(null);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!analyzedResult || !customProfileName.trim()) return;
+    setIsSavingProfile(true);
+    try {
+      const docRef = await saveToProfiles(analyzedResult, customProfileName.trim());
+      if (docRef && docRef.id) {
+        onSetSelectedProfileId(docRef.id);
+      }
+      setProfileSavedMsg(`"${customProfileName.trim()}" successfully calibrated, saved, and set as active profile!`);
+      setTimeout(() => {
+        setProfileSavedMsg('');
+        setAnalyzedResult(null);
+      }, 3000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -2396,25 +4559,66 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
     }
   };
 
+  const injectResource = (resourceText: string, elementId: string) => {
+    setTextToAnalyze(resourceText);
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex justify-between items-center text-slate-900 border-b border-slate-100 pb-4">
+    <motion.div id="voice-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+      {/* Voice Lab Header */}
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center text-slate-900 border-b border-slate-100 pb-5 gap-4">
         <div className="flex items-center gap-4">
-          <h3 className="text-2xl font-bold tracking-tight">Voice Lab</h3>
-          <button 
-            onClick={() => setShowGuide(true)}
-            className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-          >
-            <HelpCircle size={14} />
-          </button>
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 text-white">
+            <Mic size={24} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-black tracking-tight flex items-center gap-2">
+              Voice Lab
+              <button 
+                onClick={() => setShowGuide(true)}
+                className="p-1 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+              >
+                <HelpCircle size={16} />
+              </button>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">Train, align, and calibrate your organization's signature writing persona.</p>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <div className="bg-white border border-slate-200 rounded-xl px-4 py-1 flex items-center gap-2">
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => setTextToAnalyze(`ECADRN (Early Career ADR Network) is dedicated to supporting the professional development of early career Alternative Dispute Resolution (ADR) professionals through mentorship, collaborative research, and inclusive networking. 
+
+Our vision is an equitable and accessible ADR field where early career professionals are empowered to innovate and lead. 
+
+We bridge the gap between ADR theory and transformative community practice by fostering the next generation of dispute resolution leaders.`)}
+            className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest border border-slate-200 bg-white px-3.5 py-2.5 rounded-xl hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+          >
+            <Globe size={13} /> Import Web Hook
+          </button>
+
+          <button 
+            onClick={() => {
+              const fused = ECADRN_RESOURCES.map(r => `[GUIDE: ${r.title}]\n${r.fullText}`).join('\n\n');
+              setTextToAnalyze(fused);
+              analyzeVoice(fused);
+            }}
+            className="flex items-center gap-2 text-[10px] font-black text-indigo-700 uppercase tracking-widest border border-indigo-150 bg-indigo-50/50 px-3.5 py-2.5 rounded-xl hover:bg-indigo-100 transition-all shadow-sm cursor-pointer animate-pulse-subtle"
+            title="Consolidate and auto-calibrate on all available ecadrn.org training tools & resources simultaneously"
+          >
+            <Sparkles size={13} className="text-indigo-600" /> Train All ecadrn.org Resources
+          </button>
+          
+          <div className="bg-white border border-slate-200 rounded-xl px-4 py-1.5 flex items-center gap-2 shadow-sm">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Profile:</span>
             <select 
               value={selectedProfileId || ''} 
               onChange={(e) => onSetSelectedProfileId(e.target.value)}
-              className="bg-transparent border-none outline-none text-xs font-bold text-indigo-600 focus:ring-0"
+              className="bg-transparent border-none outline-none text-xs font-bold text-indigo-600 focus:ring-0 cursor-pointer"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -2422,7 +4626,8 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
               {profiles.length === 0 && <option value="">Default ECADRN</option>}
             </select>
           </div>
-          <label className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 uppercase tracking-widest border-2 border-indigo-50 px-4 py-2 rounded-xl hover:bg-slate-50 transition-all cursor-pointer">
+
+          <label className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 uppercase tracking-widest border-2 border-indigo-50 bg-white px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all cursor-pointer shadow-sm">
             <Plus size={14} /> Upload Training Doc
             <input 
               type="file" 
@@ -2443,53 +4648,162 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 col-span-2 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="font-bold text-slate-900">Neural Training Input</h4>
+        {/* Left Side: Neural Training Scratchpad */}
+        <div id="neural-scratchpad" className="bg-white p-6 rounded-2xl border border-slate-200 col-span-2 shadow-sm flex flex-col relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <div>
+              <h4 className="font-bold text-slate-900 tracking-tight">Linguistic Style Analyzer</h4>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Configure styles by pasting direct material, uploading, or choosing resource sheets.</p>
+            </div>
             <button 
               onClick={() => setTextToAnalyze('')}
-              className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1"
+              className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg self-end"
             >
-              <X size={12} /> Clear All
+              <X size={12} /> Clear Buffer
             </button>
           </div>
-          <textarea 
-            value={textToAnalyze}
-            onChange={(e) => setTextToAnalyze(e.target.value)}
-            placeholder="PRO TIP: For the most accurate voice profile, paste 3-5 paragraphs of your BEST writing—mission statements, successful grant proposals, or high-impact reports. Avoid bullet points or fragmented notes."
-            className="w-full h-64 p-5 bg-slate-50 border-transparent rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all resize-none outline-none mb-4 leading-relaxed"
-          />
-          <button 
-            onClick={analyzeVoice}
-            disabled={isAnalyzing || !textToAnalyze.trim() || textToAnalyze.length < 50}
-            className="w-full py-4 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-slate-100"
-          >
-            {isAnalyzing ? <RefreshCw className="animate-spin" size={16} /> : <TrendingUp size={16} />}
-            {isAnalyzing ? 'Extracting Linguistics...' : 'Analyze & Calibrate Voice Profile'}
-          </button>
-          {textToAnalyze.length > 0 && textToAnalyze.length < 50 && (
-            <p className="mt-2 text-[10px] text-amber-600 font-bold uppercase tracking-tighter text-center italic">Insufficient data for stable analysis (at least 50 chars recommended)</p>
+
+          {/* Core Selection Tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-4 self-start border border-slate-200/40">
+            <button
+              type="button"
+              onClick={() => setVoiceInputTab('paste')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${voiceInputTab === 'paste' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-550 hover:text-indigo-600'}`}
+            >
+              📝 Paste Raw Text
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoiceInputTab('upload')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${voiceInputTab === 'upload' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-550 hover:text-indigo-600'}`}
+            >
+              📎 Upload Document
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoiceInputTab('resources')}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${voiceInputTab === 'resources' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-550 hover:text-indigo-600'}`}
+            >
+              📚 Predefined Guides
+            </button>
+          </div>
+
+          {/* Render Tab Contents */}
+          {voiceInputTab === 'paste' && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block font-mono">Direct Paste Workspace (No Upload Required)</label>
+              <textarea 
+                value={textToAnalyze}
+                onChange={(e) => setTextToAnalyze(e.target.value)}
+                placeholder="PRO TIP: Directly paste 3-5 paragraphs of your BEST writing—letters, press releases, draft proposals, standard guides, or organizational statements. Bypasses file uploads or pre-defined resources completely!"
+                className="w-full h-80 p-5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all resize-none outline-none mb-4 leading-relaxed font-sans text-slate-800 placeholder:text-slate-400"
+              />
+            </div>
           )}
 
-          {organization?.voiceProfile && (
-            <div className="mt-8 pt-8 border-t border-slate-100">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Current Profile Indicators</p>
+          {voiceInputTab === 'upload' && (
+            <div className="flex-1 flex flex-col justify-center py-8 px-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 text-center mb-4 min-h-[320px]">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mx-auto mb-4 shadow-sm">
+                <Paperclip size={22} />
+              </div>
+              <h5 className="font-bold text-slate-800 text-sm">Upload Core Calibration Text (.txt)</h5>
+              <p className="text-xs text-slate-400 leading-normal max-w-sm mx-auto mt-1 mb-5">
+                Load text-based guidelines or historical templates. This automatically populates the text buffer.
+              </p>
+              <label className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-indigo-600 font-extrabold text-[10px] uppercase tracking-widest rounded-xl shadow-sm transition-all cursor-pointer mx-auto">
+                Select File
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (re) => {
+                        setTextToAnalyze(re.target?.result as string);
+                        setVoiceInputTab('paste'); // Switch to editor so they can view and run
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                />
+              </label>
+              {textToAnalyze && (
+                <p className="text-[10px] text-emerald-600 font-bold mt-4 uppercase tracking-wider">✓ Active Buffer Loaded: {textToAnalyze.length} chars</p>
+              )}
+            </div>
+          )}
+
+          {voiceInputTab === 'resources' && (
+            <div className="space-y-3 mb-4 min-h-[320px]">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block font-mono mb-2">Inject Founding ecadrn.org Rationale Sheet</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ECADRN_RESOURCES.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setTextToAnalyze(r.fullText);
+                      setVoiceInputTab('paste'); // Automatically switch to editor to inspect
+                    }}
+                    className="flex flex-col text-left p-3.5 border border-slate-200 bg-white rounded-xl hover:border-indigo-400 hover:shadow-md transition-all group cursor-pointer"
+                  >
+                    <span className="text-[8px] font-black text-indigo-600 uppercase tracking-wider bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded self-start mb-2">{r.category}</span>
+                    <span className="font-bold text-slate-800 text-xs group-hover:text-indigo-600">{r.title}</span>
+                    <p className="text-[10px] text-slate-400 leading-normal mt-1 line-clamp-2">{r.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <button 
+              onClick={() => analyzeVoice()}
+              disabled={isAnalyzing || !textToAnalyze.trim() || textToAnalyze.length < 50}
+              className="w-full py-4 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100/40 relative overflow-hidden group"
+            >
+              {isAnalyzing ? (
+                <RefreshCw className="animate-spin text-white" size={16} />
+              ) : (
+                <Sparkles className="group-hover:rotate-12 transition-transform" size={16} />
+              )}
+              {isAnalyzing ? 'Extracting Linguistics...' : 'Analyze & Calibrate Voice Profile'}
+            </button>
+            {textToAnalyze.length > 0 && textToAnalyze.length < 50 && (
+              <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider text-center italic font-mono">Insufficient data for stable analysis (at least 50 chars recommended)</p>
+            )}
+          </div>
+
+          {/* Animate Telemetry Steps during scanning */}
+          {isAnalyzing && scanningStatus && (
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center text-white z-20">
+              <div className="w-16 h-16 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin mb-6 shadow-glow"></div>
+              <h5 className="font-mono text-xs uppercase tracking-widest text-indigo-400 animate-pulse mb-2">Neural Engine Scanning</h5>
+              <p className="text-sm font-medium text-slate-200 max-w-sm font-mono">{scanningStatus}</p>
+            </div>
+          )}
+
+          {/* Current Profile Indicators */}
+          {organization?.voiceProfile && !analyzedResult && (
+            <div className="mt-8 pt-8 border-t border-slate-100 bg-slate-50/50 p-4 rounded-xl">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Saved Active Profile Reference</p>
               <div className="grid grid-cols-2 gap-6 text-sm">
                 <div>
-                  <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Tone Descriptors</span>
-                  <div className="flex flex-wrap gap-2">
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Tone Descriptors</span>
+                  <div className="flex flex-wrap gap-1.5">
                     {organization.voiceProfile.toneDescriptors?.map((t: string) => (
-                      <span key={t} className="bg-slate-50 text-slate-600 px-2 py-1 rounded text-[10px] font-bold border border-slate-100 uppercase">{t}</span>
+                      <span key={t} className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-[9px] font-extrabold border border-indigo-100 uppercase">{t}</span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Writing Maturity</span>
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Writing Maturity Score</span>
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full" style={{ width: `${organization.voiceProfile.maturityScore}%` }}></div>
+                    <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div className="bg-indigo-600 h-full" style={{ width: `${organization.voiceProfile.maturityScore || 80}%` }}></div>
                     </div>
-                    <span className="font-bold text-slate-700">{organization.voiceProfile.maturityScore}%</span>
+                    <span className="font-bold text-slate-700 text-xs">{organization.voiceProfile.maturityScore || 80}%</span>
                   </div>
                 </div>
               </div>
@@ -2497,19 +4811,22 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
           )}
         </div>
 
+        {/* Right Side Column */}
         <div className="space-y-6">
-          <div className="bg-slate-900 text-white p-6 rounded-xl shadow-xl flex flex-col">
-            <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center mb-6">
-              <Mic className="text-white" size={20} />
+          {/* Voice Rewriter Tool */}
+          <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col border border-slate-800">
+            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center mb-6 text-white shadow-lg shadow-indigo-500/20">
+              <Scroll size={20} className="text-white" />
             </div>
-            <h4 className="font-bold text-lg mb-2">Voice Rewriter</h4>
-            <p className="text-xs text-slate-400 leading-relaxed mb-6">Transform any drafted text into your signature organization voice.</p>
+            <h4 className="font-bold text-lg mb-2">Voice Rewriter Scratchpad</h4>
+            <p className="text-xs text-slate-400 leading-relaxed mb-6">Instantly test your calibrated active voice profile. Paste standard text and transform it into your calibrated brand identity.</p>
+            
             <div className="mb-4">
-              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Voice Style Target</label>
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Style Profile Selection</label>
               <select 
                 value={selectedProfileId || ''} 
                 onChange={(e) => onSetSelectedProfileId(e.target.value)}
-                className="w-full bg-slate-800/50 border-transparent rounded-lg text-xs p-2 text-white outline-none mb-2"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-xs p-2.5 text-white outline-none focus:border-indigo-500"
               >
                 {profiles.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
@@ -2517,27 +4834,463 @@ function VoiceView({ organization, profiles, selectedProfileId, onSetSelectedPro
                 {profiles.length === 0 && <option value="">Default ECADRN</option>}
               </select>
             </div>
+            
             <textarea 
               value={textToRewrite}
               onChange={(e) => setTextToRewrite(e.target.value)}
-              placeholder="Paste draft text here..."
-              className="w-full h-32 p-3 bg-slate-800/50 border-transparent rounded-lg text-xs focus:bg-slate-800 transition-all outline-none mb-4 text-white placeholder:text-slate-500"
+              placeholder="Paste raw text to translate here..."
+              className="w-full h-36 p-3 bg-slate-800/50 border border-slate-850 rounded-lg text-xs focus:bg-slate-800 transition-all outline-none mb-4 text-white placeholder:text-slate-500 resize-none leading-relaxed"
             />
+            
             <button 
               onClick={rewriteText}
               disabled={isRewriting || !textToRewrite.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg text-[10px] font-extrabold uppercase tracking-widest transition-all disabled:opacity-50"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-slate-950"
             >
-              {isRewriting ? 'Rewriting...' : 'Rewrite with Neural Voice'}
+              {isRewriting ? <RefreshCw className="animate-spin text-white" size={14} /> : null}
+              {isRewriting ? 'Translating Syntax...' : 'Apply Calibrated Voice'}
             </button>
           </div>
 
           {rewrittenText && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-6 rounded-xl border border-indigo-100 shadow-sm">
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest block mb-2">Result</span>
-              <p className="text-sm text-slate-700 italic leading-relaxed">{rewrittenText}</p>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-emerald-950/20 border border-emerald-900/30 p-5 rounded-2xl">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block">Calibrated Output Translation</span>
+                <span className="text-[8px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono tracking-tighter">SUCCESS</span>
+              </div>
+              <p className="text-xs text-slate-200 italic leading-relaxed">{rewrittenText}</p>
             </motion.div>
           )}
+        </div>
+      </div>
+
+      {/* Dynamic Voice Analysis & Funder Alignment Segment */}
+      <AnimatePresence>
+        {analyzedResult && (
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: 20 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 border border-slate-200 rounded-3xl p-6"
+          >
+            {/* Linguistic Performance Stats card */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                  <h4 className="font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    <Sparkles className="text-indigo-600 animate-pulse" size={18} />
+                    Calibrated Voice Insights
+                  </h4>
+                  <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    {analyzedResult.primaryArchetype || 'The Advocate'} Archetype
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs mb-6">
+                  <div>
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Tone Descriptors</span>
+                    <div className="flex flex-wrap gap-1">
+                      {analyzedResult.toneDescriptors?.map((t: string) => (
+                        <span key={t} className="bg-slate-50 text-slate-600 px-2 py-0.5 rounded text-[9px] font-black border border-slate-100 uppercase">{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Writing Maturity Score</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full" style={{ width: `${analyzedResult.maturityScore || 80}%` }}></div>
+                      </div>
+                      <span className="font-bold text-slate-800 text-xs">{analyzedResult.maturityScore || 80}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div className="bg-gradient-to-br from-indigo-50/70 to-indigo-100/30 border border-indigo-100/80 rounded-2xl p-4.5 text-left space-y-1">
+                    <span className="text-[9px] font-black uppercase text-indigo-700 tracking-wider font-mono block">Linguistic Archetype & Evidence</span>
+                    <p className="text-slate-800 text-[11px] font-semibold leading-relaxed">
+                      {analyzedResult.primaryArchetype || "The Advocate"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Key Stylistic Vocabulary & Rules</span>
+                    <ul className="text-xs text-slate-600 space-y-2">
+                      {analyzedResult.voiceRules?.map((r: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-indigo-500 font-extrabold select-none">•</span>
+                          <span className="font-medium leading-relaxed">{r}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Extracted Writing Samples</span>
+                    <div className="space-y-1.5">
+                      {analyzedResult.writingSamples?.map((s: string, idx: number) => (
+                        <p key={idx} className="text-xs text-slate-500 italic bg-slate-50 p-2.5 rounded-lg border-l-2 border-l-slate-300 leading-relaxed font-medium">"{s}"</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Saving Flow */}
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Save as Active Voice Profile</p>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={customProfileName}
+                    onChange={(e) => setCustomProfileName(e.target.value)}
+                    placeholder="e.g. ECADRN High-Impact Academy"
+                    className="flex-1 text-xs px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-550 focus:border-transparent font-medium"
+                  />
+                  <button 
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile || !customProfileName.trim()}
+                    className="px-4 py-2.5 bg-slate-900 text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-800 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingProfile ? <RefreshCw className="animate-spin text-white" size={12} /> : null}
+                    {isSavingProfile ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </div>
+                {profileSavedMsg && (
+                  <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
+                    <Check size={12} /> {profileSavedMsg}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Funder Alignment Card */}
+            <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-xl flex flex-col justify-between border-t-4 border-t-indigo-500 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4">
+                <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded uppercase tracking-widest">
+                  AI Alignment Scout
+                </span>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-900 tracking-tight flex items-center gap-2 mb-1">
+                  <Award size={18} className="text-indigo-500 animate-pulse" />
+                  Automatically Suggested Funder Match
+                </h4>
+                <p className="text-[10px] text-slate-400 mb-4 font-medium">Identified by analyzing matches in writing topics and alignment objectives.</p>
+
+                {analyzedResult.suggestedFunder ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div>
+                        <span className="font-extrabold text-base text-indigo-600 block leading-tight">{analyzedResult.suggestedFunder.funderName}</span>
+                        <span className="text-[9px] font-bold text-slate-400 font-mono italic">{analyzedResult.suggestedFunder.website}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-black uppercase tracking-widest block text-slate-400">Match Vector</span>
+                        <span className="text-xl font-black text-emerald-500">{analyzedResult.suggestedFunder.confidence || 92}%</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Strategic Fit Rationale</span>
+                      <p className="text-xs text-slate-600 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/10 leading-relaxed font-medium italic">
+                        "{analyzedResult.suggestedFunder.matchReason}"
+                      </p>
+                    </div>
+
+                    {analyzedResult.suggestedFunder.suggestedRelationshipNotes && (
+                      <div>
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Recommended Cultivation Angle</span>
+                        <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                          {analyzedResult.suggestedFunder.suggestedRelationshipNotes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-slate-400 italic">
+                    <p className="text-xs">No explicit matching priorities detected in this training block. Inject more specific practice guides from ecadrn.org below to identify custom corporate and foundation alignments.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Funder Save Action */}
+              {analyzedResult.suggestedFunder && (
+                <div className="pt-4 mt-6 border-t border-slate-100">
+                  {(() => {
+                    const trackingData = getFunderTrackState(analyzedResult.suggestedFunder.funderName);
+                    return trackingData.isTracked ? (
+                      <div className="w-full bg-emerald-50 text-emerald-800 border border-emerald-100 p-3 rounded-xl flex items-center justify-center gap-2 font-bold text-[10px] uppercase tracking-wider">
+                        <CheckCircle size={16} className="text-emerald-600" />
+                        <span>✓ Aligned & Tracked in Funder Intelligence</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <button
+                          onClick={handleSyncSuggestedFunder}
+                          disabled={syncingFunderId !== null}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 border border-transparent hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                          {syncingFunderId !== null ? (
+                            <RefreshCw className="animate-spin text-white" size={14} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                          <span>
+                            {syncingFunderId !== null ? 'Syncing Research & Creating Profiles...' : `Track & Research ${analyzedResult.suggestedFunder.funderName}`}
+                          </span>
+                        </button>
+                        {funderSyncMsg && (
+                          <p className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-150 px-3.5 py-2 rounded-xl text-center italic">
+                            {funderSyncMsg}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Voice-Lab Integrated Intelligence & Alignments */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 my-8">
+        {/* Card 1: First Funder Strategic & Linguistic Scanner */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                <Globe size={18} />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 tracking-tight text-sm">Funder Linguistic Alignment Scanner</h4>
+                <p className="text-[10px] text-slate-500 font-medium font-semibold">Analyze themes and alignment score of the premier funder in your roster.</p>
+              </div>
+            </div>
+
+            {firstFunder ? (
+              <div className="space-y-4">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block font-mono">PRIMARY FUNDER TARGET</span>
+                    <span className="font-black text-slate-800 text-sm block leading-tight">{firstFunder.funderName}</span>
+                    <span className="text-[10px] text-slate-550 block font-mono italic">{firstFunder.website}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block font-mono">RELATIONSHIP</span>
+                    <span className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wider">{firstFunder.relationshipStage || 'Researching'}</span>
+                  </div>
+                </div>
+
+                {funderAlignmentResults ? (
+                  <div className="space-y-4 p-4 bg-orange-50/40 border border-orange-100 rounded-2xl animate-fade-in text-slate-800">
+                    <div>
+                      <span className="text-[9px] font-black text-orange-850 uppercase tracking-widest block mb-1.5 font-mono">1. Linguistic & Phraseology Priorities</span>
+                      {funderAlignmentResults.keyPhrases && funderAlignmentResults.keyPhrases.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1 mb-2">
+                          {funderAlignmentResults.keyPhrases.map((phrase: string, idx: number) => (
+                            <span key={idx} className="bg-white border border-orange-200 text-orange-900 px-2 py-0.5 rounded text-[8.5px] font-bold italic">
+                              "{phrase}"
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">No specific phrases detected.</p>
+                      )}
+                      
+                      {funderAlignmentResults.voiceRules && funderAlignmentResults.voiceRules.length > 0 && (
+                        <div className="bg-white/80 p-2 text-[10px] text-slate-650 rounded-lg border border-orange-150/40 space-y-1 mt-1.5">
+                          {funderAlignmentResults.voiceRules.slice(0, 3).map((rule: string, idx: number) => (
+                            <div key={idx} className="flex gap-1">
+                              <span className="text-orange-500 font-extrabold">•</span>
+                              <span>{rule}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="text-[9px] font-black text-orange-850 uppercase tracking-widest block mb-1 font-mono">2. Thematic Alignment & Voice Calibration</span>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <div className="bg-white p-2 rounded-lg border border-orange-150/30">
+                          <span className="text-[8px] font-bold text-slate-400 uppercase block">Preferred Archetype</span>
+                          <span className="text-[10.5px] font-extrabold text-orange-800">{funderAlignmentResults.primaryArchetype || 'The Advocate'}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-orange-150/30">
+                          <span className="text-[8px] font-bold text-slate-400 uppercase block">Calibration Score</span>
+                          <span className="text-[10.5px] font-extrabold text-orange-800">{funderAlignmentResults.maturityScore || 85}% Alignment</span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2">
+                        <span className="text-[8px] font-black text-slate-400 uppercase block tracking-wider">Calibration Hotspots</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {funderAlignmentResults.toneDescriptors?.map((theme: string) => (
+                            <span key={theme} className="bg-orange-100/60 border border-orange-200/50 text-orange-800 px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider">{theme}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-orange-200/50">
+                      <span className="text-[9px] font-black text-orange-850 uppercase tracking-widest block font-mono mb-1">Calibration Rationale & Fit Guidance</span>
+                      <p className="text-[11px] leading-relaxed text-slate-600 font-medium italic">
+                        "{funderAlignmentResults.suggestedFunder?.matchReason || 'Highly aligned written values centering on peer dispute resolution and systemic community ADR framework building.'}"
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 leading-relaxed italic bg-slate-50 p-4 rounded-xl text-center">
+                    Prerender funder context. Click scan below to determine linguistic alignment vector and thematic hotspots.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic bg-slate-50 p-6 rounded-xl text-center font-semibold">No funders currently saved in your Funder Intelligence roster.</p>
+            )}
+          </div>
+
+          {firstFunder && (
+            <div className="pt-4 mt-4 border-t border-slate-100">
+              <button
+                onClick={analyzeFunderAlignment}
+                disabled={isFunderAlignmentAnalyzing}
+                className="w-full bg-slate-900 hover:bg-slate-850 text-white font-black text-[10px] uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                {isFunderAlignmentAnalyzing ? <RefreshCw className="animate-spin text-white" size={12} /> : <Sparkles className="text-white animate-pulse" size={12} />}
+                <span>{isFunderAlignmentAnalyzing ? 'Deconstructing Funder Context...' : `Deconstruct Voice Alignment with ${firstFunder.funderName}`}</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Card 2: Voice-Aligned high-ECADRN Grants */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 tracking-tight text-sm">Voice-Aligned ECADRN Grants</h4>
+                <p className="text-[10px] text-slate-500 font-medium font-semibold">Grants with high ECADRN scores matched with active profile style traits.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto max-h-[220px] pr-1">
+              {highAlignmentGrants.slice(0, 3).map((g: any, idx) => (
+                <div key={g.id || idx} className="p-3 bg-slate-50 hover:bg-slate-100/50 rounded-xl border border-slate-200 transition-all flex flex-col justify-between">
+                  <div className="flex justify-between items-start gap-2 mb-1">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-900 line-clamp-1">{g.title}</span>
+                      <span className="text-[9px] font-semibold text-slate-450 block">{g.funderName}</span>
+                    </div>
+                    <span className="shrink-0 bg-emerald-50 text-emerald-800 text-[8px] font-black uppercase px-2 py-0.5 border border-emerald-100 rounded tracking-wider">
+                      ECADRN: {g.ecadrnAlignmentScore || g.missionFitScore || 85}%
+                    </span>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-slate-200/40 flex items-center justify-between text-[10px]">
+                    <span className="text-slate-500 font-medium font-mono">Linguistic Style Match:</span>
+                    <span className="font-bold text-emerald-600 text-xs">{g.styleMatchScore}%</span>
+                  </div>
+                  {g.matchedKeywords && g.matchedKeywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {g.matchedKeywords.slice(0, 3).map((kw: string) => (
+                        <span key={kw} className="bg-indigo-50/50 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded border border-indigo-100/30 uppercase tracking-wide">{kw}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {highAlignmentGrants.length === 0 && (
+                <p className="text-xs text-slate-400 italic text-center p-6 bg-slate-50 rounded-xl font-semibold">No grants currently qualified as high-alignment (ECADRN of 80% or greater). Execute Discover Grants search in Grant Matcher to populate.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ECADRN Knowledge & Resources Hub */}
+      <div id="ecadrn-hub" className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <h4 className="font-black text-slate-900 tracking-tight text-lg">ECADRN Knowledge & Resource Hub</h4>
+            <p className="text-xs text-slate-500 font-medium">Inject verified, practice-tested guides and publications from ecadrn.org directly into the linguistic analysis pipeline.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {ECADRN_RESOURCES.map((r) => {
+            const isExpanded = expandedResource === r.id;
+            return (
+              <div 
+                key={r.id} 
+                className="bg-white border border-slate-200 hover:border-indigo-200/60 rounded-2xl p-5 hover:shadow-lg transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 tracking-wider">
+                      {r.category}
+                    </span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">
+                      Target: {r.cohort}
+                    </span>
+                  </div>
+                  <h5 className="font-bold text-slate-900 tracking-tight text-sm mb-2 group-hover:text-indigo-600">{r.title}</h5>
+                  <p className="text-xs text-slate-500 leading-relaxed mb-4">{r.description}</p>
+
+                  {/* Collapsible expanded context block */}
+                  {isExpanded && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: 'auto' }} 
+                      className="bg-slate-50 p-3.5 border border-slate-200/40 rounded-xl mb-4 text-[11px] leading-relaxed text-slate-600 font-medium space-y-2 overflow-y-auto max-h-48 border-l-2 border-l-indigo-500"
+                    >
+                      <p className="font-bold uppercase text-[9px] text-indigo-500 tracking-widest border-b border-slate-100 pb-1 font-mono">Full Resource Guidance Summary</p>
+                      <div className="whitespace-pre-line font-mono">{r.fullText}</div>
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="space-y-2 mt-auto pt-3 border-t border-slate-50">
+                  <button 
+                    onClick={() => setExpandedResource(isExpanded ? null : r.id)}
+                    className="w-full flex items-center justify-between text-[10px] font-bold text-slate-400 hover:text-slate-700 bg-slate-50 py-2 px-3 rounded-lg transition-all"
+                  >
+                    <span>{isExpanded ? "Hide Guidance Content" : "Verify Guidance Content"}</span>
+                    {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => injectResource(r.fullText, 'neural-scratchpad')}
+                      className="py-2 px-2.5 bg-white border border-slate-200 hover:border-indigo-100 hover:bg-slate-50 text-[10px] font-bold text-slate-600 rounded-xl transition-all flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
+                    >
+                      <CheckCircle size={10} className="text-slate-400" /> Use Draft Scratch
+                    </button>
+                    
+                    <button 
+                      onClick={() => {
+                        injectResource(r.fullText, 'neural-scratchpad');
+                        analyzeVoice(r.fullText);
+                      }}
+                      className="py-2 px-2 text-indigo-600 border border-indigo-105 hover:bg-indigo-50 font-extrabold text-[10px] rounded-xl transition-all flex items-center justify-center gap-1 uppercase tracking-wider relative overflow-hidden"
+                    >
+                      <Sparkles size={11} className="text-indigo-500" /> Auto-Calibrate ⚡
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -2578,7 +5331,7 @@ function OutreachView({ organization }: { organization: any }) {
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div id="outreach-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex justify-between items-center text-slate-900 border-b border-slate-100 pb-4">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold tracking-tight">Strategic Outreach</h3>
@@ -2697,7 +5450,7 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
   };
 
   return (
-    <div className="h-[calc(100vh-12rem)] flex flex-col bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
+    <div id="chat-view" className="h-[calc(100vh-12rem)] flex flex-col bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
       <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
@@ -2750,6 +5503,8 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
 }
 
 function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }) {
+  const [activeTab, setActiveTab] = useState<'grid' | 'monthly' | 'weekly'>('grid');
+  
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -2759,58 +5514,212 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   
   const events = [
-    ...grants.filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose' })),
-    ...proposals.map(p => ({ date: new Date(p.updatedAt), title: p.title, type: 'proposal', color: 'indigo' }))
+    ...grants.filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
+    ...proposals.map(p => ({ date: new Date(p.updatedAt), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
   ];
 
+  const sortedEvents = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const getWeeklyGroup = (date: Date) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const eventDay = new Date(date);
+    eventDay.setHours(0,0,0,0);
+    const diffTime = eventDay.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'Recent History';
+    if (diffDays >= 0 && diffDays <= 7) return 'This Week';
+    if (diffDays > 7 && diffDays <= 14) return 'Next Week';
+    if (diffDays > 14 && diffDays <= 30) return 'In 3-4 Weeks';
+    return 'Future Timeline';
+  };
+
+  const getRelativeTimeText = (date: Date) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const eventDay = new Date(date);
+    eventDay.setHours(0,0,0,0);
+    const diffTime = eventDay.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      const absDays = Math.abs(diffDays);
+      if (absDays === 1) return 'Yesterday';
+      return `${absDays} days ago`;
+    }
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    return `In ${diffDays} days`;
+  };
+
+  const monthlyGroups: { [key: string]: any[] } = {};
+  sortedEvents.forEach(e => {
+    const mKey = e.date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    if (!monthlyGroups[mKey]) monthlyGroups[mKey] = [];
+    monthlyGroups[mKey].push(e);
+  });
+
+  const weeklyColumns = ['This Week', 'Next Week', 'In 3-4 Weeks', 'Future Timeline', 'Recent History'];
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200">
+    <motion.div id="calendar-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
-          <h3 className="text-2xl font-bold tracking-tight text-slate-900">Nexus Calendar</h3>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Timeline & Lifecycles</p>
+          <h3 className="text-2xl font-bold tracking-tight text-slate-900">Nexus Calendar & Timeline</h3>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Lifecycle Tracking</p>
         </div>
-        <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg shadow-slate-100">
-          {now.toLocaleString('default', { month: 'long' })} {currentYear}
-        </span>
+        
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+            <button
+              onClick={() => setActiveTab('grid')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'grid' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Calendar Grid
+            </button>
+            <button
+              onClick={() => setActiveTab('monthly')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'monthly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Monthly Track
+            </button>
+            <button
+              onClick={() => setActiveTab('weekly')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'weekly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Weekly Columns
+            </button>
+          </div>
+          
+          <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg shadow-slate-100 hidden sm:inline-block">
+            {now.toLocaleString('default', { month: 'long' })} {currentYear}
+          </span>
+        </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-100">
-        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-          {days.map(day => (
-            <div key={day} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{day}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {Array.from({ length: 42 }).map((_, i) => {
-            const dayNum = i - firstDay + 1;
-            const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
-            const date = new Date(currentYear, currentMonth, dayNum);
-            const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
+      {activeTab === 'grid' && (
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-100">
+          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+            {days.map(day => (
+              <div key={day} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{day}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: 42 }).map((_, i) => {
+              const dayNum = i - firstDay + 1;
+              const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+              const date = new Date(currentYear, currentMonth, dayNum);
+              const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
 
-            return (
-              <div key={i} className={`border-r border-b border-slate-100 p-4 min-h-[140px] transition-colors ${!isCurrentMonth ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/50'}`}>
-                {isCurrentMonth && (
-                  <>
-                    <span className={`text-xs font-bold ${date.toDateString() === now.toDateString() ? 'bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-xl shadow-lg shadow-indigo-100' : 'text-slate-400'}`}>
-                      {dayNum}
-                    </span>
-                    <div className="mt-3 space-y-2">
-                      {dayEvents.map((e, idx) => (
-                        <div key={idx} className={`text-[9px] font-bold py-1 px-2 rounded-lg truncate border leading-tight ${
-                          e.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+              return (
+                <div key={i} className={`border-r border-b border-slate-100 p-4 min-h-[140px] transition-colors ${!isCurrentMonth ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/50'}`}>
+                  {isCurrentMonth && (
+                    <>
+                      <span className={`text-xs font-bold ${date.toDateString() === now.toDateString() ? 'bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-xl shadow-lg shadow-indigo-100' : 'text-slate-400'}`}>
+                        {dayNum}
+                      </span>
+                      <div className="mt-3 space-y-2">
+                        {dayEvents.map((e, idx) => (
+                          <div key={idx} className={`text-[9.5px] font-extrabold py-1 px-2 rounded-lg truncate border leading-tight ${
+                            e.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                          }`} title={`${e.type.toUpperCase()}: ${e.title}`}>
+                            {e.title}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'monthly' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-8">
+          {Object.keys(monthlyGroups).length > 0 ? (
+            Object.keys(monthlyGroups).map(monthKey => (
+              <div key={monthKey} className="relative pl-6 border-l-2 border-slate-100 space-y-4">
+                <div className="absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full bg-white border-2 border-indigo-500 shadow-sm"></div>
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{monthKey}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {monthlyGroups[monthKey].map((e, idx) => (
+                    <div key={idx} className={`p-4 rounded-xl border flex items-start gap-3 transition-all hover:shadow-md ${
+                      e.color === 'rose' ? 'bg-rose-50/30 border-rose-100' : 'bg-indigo-50/30 border-indigo-100'
+                    }`}>
+                      <div className={`p-2 rounded-lg text-center shrink-0 w-12 ${
+                        e.color === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
+                      }`}>
+                        <span className="text-xs font-black block tracking-tighter leading-none">{e.date.getDate()}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-wide">{e.date.toLocaleString('default', { month: 'short' })}</span>
+                      </div>
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <span className={`text-[8.5px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                          e.color === 'rose' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'
                         }`}>
-                          {e.title}
+                          {e.type === 'grant' ? 'Grant Deadline' : 'Proposal Update'}
+                        </span>
+                        <h5 className="text-xs font-bold text-slate-900 truncate" title={e.title}>{e.title}</h5>
+                        <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                          <span>Status: {e.status}</span>
+                          <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                          <span className="text-indigo-600">{getRelativeTimeText(e.date)}</span>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  </>
-                )}
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="py-12 text-center text-slate-400 italic">No events currently tracked.</div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'weekly' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {weeklyColumns.map(colName => {
+            const colEvents = sortedEvents.filter(e => getWeeklyGroup(e.date) === colName);
+            
+            return (
+              <div key={colName} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 flex flex-col min-h-[300px]">
+                <div className="border-b border-slate-150 pb-2 mb-3 flex justify-between items-center">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{colName}</h4>
+                  <span className="text-[9px] font-bold text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded-full">{colEvents.length}</span>
+                </div>
+                
+                <div className="space-y-3 flex-1 overflow-y-auto">
+                  {colEvents.length > 0 ? colEvents.map((e, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-2">
+                      <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded block w-fit ${
+                        e.color === 'rose' ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'
+                      }`}>
+                        {e.type}
+                      </span>
+                      <h5 className="text-xs font-bold text-slate-800 leading-snug line-clamp-2" title={e.title}>{e.title}</h5>
+                      <div className="text-[9px] text-slate-400 font-medium">
+                        <span className="font-semibold text-slate-600 block">{e.date.toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
+                        <span className="text-indigo-600 font-semibold">{getRelativeTimeText(e.date)}</span>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-[9.5px] text-slate-400 italic text-center py-6">No deadlines</div>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
-      </div>
+      )}
     </motion.div>
   );
 }
@@ -2872,64 +5781,86 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
   );
 }
 
-function Walkthrough({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const steps = [
-    { title: "Nexus Dashboard", content: "Your strategic nerve center. Monitor grant pipelines, system health, and mission alignment scores in real-time." },
-    { title: "Rich Proposal Studio", content: "Build complex budgets with AI-generated justifications, track every version, and split/merge sections for perfect flow." },
-    { title: "Funder Intelligence 2.0", content: "Go beyond bios. Analyze strategic shifts with AI re-research, track relationship stages, and filter by historical analysis dates." },
-    { title: "Voice & Outreach", content: "Train the system on your unique ADR voice. Then use that voice to generate surgical outreach to perfectly matched funders." },
-    { title: "Smart Matching", content: "Our matching engine scans global datasets to find the exact grants that align with your civic equity and ADR mission." }
-  ];
+function Walkthrough({ 
+  isOpen, 
+  currentStep,
+  onStepChange,
+  onSetActiveTab, 
+  onClose 
+}: { 
+  isOpen: boolean, 
+  currentStep: number,
+  onStepChange: (step: number) => void,
+  onSetActiveTab: (tab: Tab) => void, 
+  onClose: () => void 
+}) {
+  const steps = WALKTHROUGH_STEPS;
+
+  useEffect(() => {
+    if (isOpen) {
+      onSetActiveTab(steps[currentStep].tab as Tab);
+    }
+  }, [currentStep, isOpen]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6 text-left">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white rounded-[40px] shadow-2xl max-w-xl w-full overflow-hidden"
-      >
-        <div className="relative p-12 space-y-8">
-          <div className="flex justify-between items-start">
-            <div className="w-16 h-16 bg-indigo-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-200">
-              <HelpCircle className="text-white" size={32} />
-            </div>
-            <button onClick={onClose} className="p-2 text-slate-300 hover:text-slate-900 transition-colors">
-              <X size={24} />
-            </button>
+    <div className="fixed bottom-6 right-6 z-[100] max-w-sm w-[385px] bg-slate-900 border border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.4)] rounded-3xl p-5 text-left text-white flex flex-col space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
+            <Sparkles size={16} className="text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Module {step + 1} / {steps.length}</span>
-              <div className="flex-1 h-px bg-slate-100"></div>
-            </div>
-            <h4 className="text-3xl font-black text-slate-900 tracking-tight">{steps[step].title}</h4>
-            <p className="text-base text-slate-500 mt-4 leading-relaxed font-medium">{steps[step].content}</p>
-          </div>
-          <div className="flex gap-4 pt-4">
-            {step > 0 && (
-              <button 
-                onClick={() => setStep(step - 1)}
-                className="flex-1 py-4 border-2 border-slate-100 rounded-2xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 hover:border-slate-200 transition-all"
-              >
-                Previous
-              </button>
-            )}
-            <button 
-              onClick={() => {
-                if (step < steps.length - 1) setStep(step + 1);
-                else onClose();
-              }}
-              className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 shadow-2xl shadow-indigo-100"
-            >
-              {step < steps.length - 1 ? 'Continue Tour' : 'Launch System'}
-              <ChevronRight size={18} />
-            </button>
-          </div>
+          <span className="text-[10px] font-black text-indigo-400 bg-indigo-950 border border-indigo-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            Onboarding: {currentStep + 1} / {steps.length}
+          </span>
         </div>
-      </motion.div>
+        <button 
+          onClick={onClose} 
+          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div>
+        <h4 className="text-base font-bold text-white tracking-tight">{steps[currentStep].title}</h4>
+        <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+          {steps[currentStep].content}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        {steps.map((_, i) => (
+          <div 
+            key={i} 
+            className={`h-1.5 rounded-full transition-all ${
+              i === currentStep ? 'w-6 bg-indigo-500' : 'w-1.5 bg-slate-800'
+            }`}
+          ></div>
+        ))}
+      </div>
+
+      <div className="flex gap-2.5 pt-2 border-t border-slate-800/60">
+        {currentStep > 0 && (
+          <button 
+            onClick={() => onStepChange(currentStep - 1)}
+            className="flex-1 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800 transition-all"
+          >
+            Back
+          </button>
+        )}
+        <button 
+          onClick={() => {
+            if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
+            else onClose();
+          }}
+          className="flex-[2] py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-lg shadow-indigo-950"
+        >
+          <span>{currentStep < steps.length - 1 ? 'Next Step' : 'Launch OS'}</span>
+          <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }

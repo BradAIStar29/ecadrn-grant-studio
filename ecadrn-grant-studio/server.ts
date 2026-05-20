@@ -45,7 +45,7 @@ app.post("/api/ai/:action", async (req, res) => {
     };
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.5-flash",
       contents: [{ role: "user", parts: [{ text: promptText }] }],
       config,
     });
