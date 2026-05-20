@@ -84,6 +84,7 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON structure. No preamble. No m
   "typicalGrantees": ["string"],
   "fundingRanges": "string",
   "geographicFocus": "string",
+  "suggestedTags": ["string", "string"],
   "applicationProcess": "string",
   "missionAlignmentScore": number,
   "missionAlignmentRationale": "string",
@@ -131,6 +132,8 @@ OUTPUT FORMAT — Respond ONLY with a valid JSON array. No preamble. No markdown
     "eligibility": "string",
     "missionFitScore": number,
     "missionFitRationale": "string",
+    "ecadrnAlignmentScore": number,
+    "ecadrnAlignmentRationale": "string",
     "verified": true
   }
 ]`;
@@ -194,22 +197,41 @@ ${data.userMessage}
 Respond conversationally and helpfully.`;
 
     case "analyze-voice":
-      return `You are a linguist and brand analyst specializing in nonprofit organizational identity.
+      return `You are a linguist and brand analyst specializing in nonprofit educational/advocacy writing, organizational identity, foundation grantmaking, and ADR sector funding.
 
-TASK: Analyze the document(s) provided to extract a definitive writing voice profile.
+TASK: Analyze the provided document(s) to extract a definitive writing voice profile. You must provide highly granular and detailed insights for "voiceRules" and "primaryArchetype", citing specific examples or actual quotes from the analyzed text.
+
+Evaluate the text to automatically identify a strong strategic alignment or mention of a major global funder. Perfect alignments include:
+- JAMS Foundation (for peer mediation, youth conflict resolution, ADR practitioner development)
+- William and Flora Flora Hewlett Foundation (for conflict resolution research, access to justice, institutional and academic ADR/dialogue frameworks)
+- AAA-ICDR Foundation (for community mediation expansion, resolving court backlog, equity in ADR, international disputes)
+- Ford Foundation (for civic equity, systemic social justice, empowering low-income disputants)
+- State Justice Institute (for state court-mediation interfaces, collaborative dispute settlement protocols)
+- Open Society Foundations (for human rights, advocacy, grassroots mediation, legal empowerment)
+- Other high-fit local/global foundations if none of the above match.
 
 DOCUMENTS TO ANALYZE:
 ${data.documents.map((d: any, i: number) => `DOC ${i+1}:\n${d.content}`).join('\n\n')}
 
-OUTPUT FORMAT — Respond ONLY with this exact JSON structure:
+OUTPUT FORMAT — Respond ONLY with this exact JSON structure (strictly valid JSON, no markdown code fence wrappers, ready to parse):
 
 {
   "toneDescriptors": ["list", "of", "4-6", "adjectives"],
-  "keyPhrases": ["characteristic", "recurring", "phrases"],
-  "voiceRules": ["specific", "dos", "and", "donts", "about", "sentence", "structure", "and", "word", "choice"],
+  "keyPhrases": ["characteristic", "recurring", "phrases found"],
+  "voiceRules": [
+    "Granular DO rule with a quoted example from text (e.g., 'DO use active-voice action verbs to specify youth leadership, e.g. \"advocate for peer circles\"')",
+    "Granular DONT rule with a quoted example from text (e.g., 'DONT use clinical jargon without human context, e.g. \"avoiding sterile proceduralism\"')"
+  ],
   "writingSamples": ["3-4", "actual", "exemplary", "sentences", "from", "the", "text"],
   "maturityScore": number (1-100),
-  "primaryArchetype": "string (e.g. The Advocate, The Sage, The Neighbor)"
+  "primaryArchetype": "Detailed Archetype title and rationale (e.g., 'The Advocate: Centering trauma-informed youth leadership and restorative circles, as exemplified by our priority on community justice')",
+  "suggestedFunder": {
+    "funderName": "string",
+    "website": "string (e.g., jamsadr.com, hewlett.org, aaaicdrfoundation.org, fordfoundation.org, sji.gov, opensocietyfoundations.org)",
+    "matchReason": "string (comprehensive explanation detailing how this content aligns with their giving scope, priorities, or specific mentions)",
+    "confidence": number,
+    "suggestedRelationshipNotes": "string (actionable advice to engage them starting with this document context)"
+  }
 }`;
 
     case "rewrite-voice":
@@ -298,6 +320,106 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON structure (a list of items):
 [
   { "description": "string", "amount": number, "justification": "string" }
 ]`;
+
+    case "align-grant-ecadrn":
+      return `You are a specialist dispute resolution scholar and grants manager evaluating a funding opportunity against the core ethos of the Early Career ADR Network (ECADRN).
+
+FUNDER & GRANT DETAILS:
+Title: ${data.grantTitle}
+Funder Name: ${data.funderName}
+Description: ${data.grantDescription}
+Focus Areas: ${data.focusAreas}
+Geographic Scope: ${data.geographicFocus}
+Eligibility: ${data.eligibility}
+
+CORE ECADRN MISSION & VISION:
+- MISSION: Supported by practitioners, mentors, educators, and scholars from all corners of conflict resolution, ECADRN supports early-career ADR professionals. We cultivate structural equity, trauma-informed mediation methodologies, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+- VISION: An equitable and accessible ADR field where early career professionals lead, innovate, and bridge the wide gap between academic research and community restorative efforts.
+
+TASK:
+1. Objectively compare the grant description and priorities with ECADRN's mission/vision.
+2. Formulate a quantitative alignment score (0 to 100) expressing the depth of structural connection.
+3. Author a precise, professional 2-sentence strategic rationale explaining the synergy or specific pivot required.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON structure. No preamble. No markdown fences.
+{
+  "ecadrnAlignmentScore": number,
+  "ecadrnAlignmentRationale": "string"
+}`;
+
+    case "analyze-uploaded-grant":
+      return `You are a professional grants officer and ADR analyst at the Early Career ADR Network (ECADRN).
+      
+TASK: Read the uploaded grant document text or description below, extract its official parameters (title, funder name, description summary, focus areas, geographic scope, eligibility, and award range), assess its strategic fit against ECADRN, and output a detailed alignment score.
+
+ECADRN MISSION & VISION FOR REFERENCE:
+- MISSION: Supported by conflict resolution practitioners, mentors, educators, and scholars, ECADRN supports and empowers early-career ADR professionals. We focus on structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+- VISION: An equitable and accessible ADR field where early career professionals lead, innovate, and bridge the gap between academic research and community restorative efforts.
+
+UPLOADED GRANT DOCUMENT / TEXT:
+${data.text}
+
+REQUIREMENTS:
+- Extract or infer the grant title and funder name. If not explicitly found, use reasonable placeholders.
+- Provide a summary of the description. 
+- Map focus areas (as an array of strings).
+- Extract or infer geographic scope and eligibility.
+- Formulate a quantitative "ecadrnAlignmentScore" (0-100) and an "ecadrnAlignmentRationale" (2 sentences) explaining why this grant should or should not be pursued by ECADRN.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON structure (strictly valid JSON, no markdown code fence wrappers, ready to parse):
+{
+  "title": "string",
+  "funderName": "string",
+  "description": "string",
+  "focusAreas": ["string", "string"],
+  "geographicFocus": "string",
+  "eligibility": "string",
+  "amountMin": number,
+  "amountMax": number,
+  "missionFitScore": number,
+  "missionFitRationale": "string",
+  "ecadrnAlignmentScore": number,
+  "ecadrnAlignmentRationale": "string",
+  "deadline": "YYYY-MM-DD or null"
+}`;
+
+    case "humanize-proposal":
+      return `You are an elite academic editor, linguist, and grants humanizer specializing in bypassing AI-detection filters (such as GPTZero, Turnitin, Copyleaks) for professional nonprofit grant applications.
+
+TASK: Conduct a rigorous audit of the draft proposal below to find robotic styling, overly uniform syntax patterns, clichés, artificial transitional phrases, and make strategic adjustments to ensure it reads with genuine human flair, emotion, and pass-grade authenticity.
+
+PROPOSAL FOR AUDIT:
+${JSON.stringify(data.proposal)}
+
+FUNDER FOR ALIGNMENT:
+${data.funderName || "Target Funder"}
+
+AUDIT REQUIREMENTS:
+1. Estimate "aiProbabilityScore" (0-100) and its inverse, "humanScore".
+2. Flag overused AI terms (e.g., "delve", "testament", "tapestry", "moreover", "leverage", "robust", "demystify", "furthermore", "realm").
+3. Determine "funderAiCheckRisk" (Low, Medium, or High) based on how clinical and robotic the draft reads.
+4. Offer strategic advice on structural sentence-length variance (mixing short 5-6 word sentences with longer compound clauses) to read organically.
+5. Provide section-by-section metrics and specific humanization correction recommendations ("humanizerStrategy").
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON structure (strictly valid JSON, no markdown code fence wrappers, ready to parse):
+{
+  "aiProbabilityScore": number,
+  "humanScore": number,
+  "flaggedPhrases": ["string", "string"],
+  "bannedWordsFound": ["string", "string"],
+  "readabilityGrade": "string",
+  "funderAiCheckRisk": "Low" | "Medium" | "High",
+  "structuralVarianceAdvice": "string",
+  "sectionAverages": [
+    {
+      "sectionTitle": "string",
+      "detectionProbability": number,
+      "roboticPhrases": ["string"],
+      "humanizerStrategy": "string"
+    }
+  ],
+  "verdict": "string"
+}`;
 
     default:
       return "Invalid action";

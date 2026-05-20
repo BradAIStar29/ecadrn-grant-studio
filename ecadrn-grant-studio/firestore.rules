@@ -7,13 +7,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Primitive Definitions
+    // Phase 3: Primitive Definitions
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function isEcadrnUser() {
-      return isSignedIn() && request.auth.token.email.matches('.*@ecadrn\\.org$') && request.auth.token.email_verified == true;
     }
 
     function isValidId(id) {
@@ -29,14 +25,14 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isEcadrnUser() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isOrgMember(orgId) {
       return isOwner(orgId);
     }
 
-    // Entity Validations
+    // Phase 4: Entity Validations
     function isValidOrganization(data) {
       return data.keys().hasAll(['name', 'profileText', 'updatedAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
@@ -83,15 +79,23 @@ service cloud.firestore {
              data.timestamp is string;
     }
 
+    function isValidVoiceProfile(data) {
+      return data.keys().hasAll(['name', 'createdAt']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.createdAt is string;
+    }
+
     // Organizations
     match /organizations/{orgId} {
       allow get: if isOrgMember(orgId) && isValidId(orgId);
-      allow list: if isEcadrnUser() && isOrgMember(request.auth.uid);
+      allow list: if isSignedIn() && isOrgMember(request.auth.uid); // Users can only list their own org
+      
       allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
       allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt'])
       );
 
+      // Sub-collections
       match /funders/{funderId} {
         allow get: if isOrgMember(orgId) && isValidId(funderId);
         allow list: if isOrgMember(orgId);
@@ -102,8 +106,17 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(funderId);
       }
 
+      match /voiceProfiles/{profileId} {
+        allow list: if isOrgMember(orgId);
+        allow get: if isOrgMember(orgId) && isValidId(profileId);
+        allow create: if isOrgMember(orgId) && isValidId(profileId) && isValidVoiceProfile(incoming());
+        allow update: if isOrgMember(orgId) && isValidId(profileId) && isValidVoiceProfile(incoming());
+        allow delete: if isOrgMember(orgId) && isValidId(profileId);
+      }
+
       match /templates/{templateId} {
-        allow read: if isOrgMember(orgId) && isValidId(templateId);
+        allow list: if isOrgMember(orgId);
+        allow get: if isOrgMember(orgId) && isValidId(templateId);
         allow create: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming());
         allow update: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming()) && (
           incoming().createdAt == existing().createdAt
@@ -129,12 +142,14 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);
 
         match /comments/{commentId} {
-          allow read: if isOrgMember(orgId) && isValidId(commentId);
+          allow list: if isOrgMember(orgId);
+          allow get: if isOrgMember(orgId) && isValidId(commentId);
           allow write: if isOrgMember(orgId) && isValidId(commentId);
         }
 
         match /presence/{userId} {
-          allow read: if isOrgMember(orgId) && isValidId(userId);
+          allow list: if isOrgMember(orgId);
+          allow get: if isOrgMember(orgId) && isValidId(userId);
           allow write: if isOrgMember(orgId) && isOwner(userId) && isValidId(userId);
         }
       }
