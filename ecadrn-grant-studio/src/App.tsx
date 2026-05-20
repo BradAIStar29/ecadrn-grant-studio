@@ -156,6 +156,9 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [importedDocs, setImportedDocs] = useState<Array<{name: string; content: string; importedAt: string}>>(() => {
+    try { return JSON.parse(localStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
+  });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
 
   useEffect(() => {
@@ -570,11 +573,21 @@ CORE PROGRAMS:
           mode={drivePanel.mode}
           proposalToExport={drivePanel.proposal}
           onClose={() => setDrivePanel({ open: false, mode: 'import' })}
-          onImport={(content, fileName) => {
-            // Store imported content in localStorage for use in Voice Lab / Proposals
-            const existing = JSON.parse(localStorage.getItem('ecadrn_imported_docs') || '[]');
-            existing.unshift({ name: fileName, content, importedAt: new Date().toISOString() });
-            localStorage.setItem('ecadrn_imported_docs', JSON.stringify(existing.slice(0, 20)));
+          onImport={(docContent, fileName) => {
+            const newDoc = { name: fileName, content: docContent, importedAt: new Date().toISOString() };
+            setImportedDocs(prev => {
+              const updated = [newDoc, ...prev].slice(0, 20);
+              localStorage.setItem('ecadrn_imported_docs', JSON.stringify(updated));
+              return updated;
+            });
+            // Add a notification
+            const notifPath = `organizations/${user?.uid}/notifications`;
+            addDoc(collection(db, notifPath), {
+              message: `📄 Imported from Drive: "${fileName}"`,
+              timestamp: new Date().toISOString(),
+              userId: user?.uid,
+              read: false,
+            }).catch(() => {});
           }}
         />
         <Walkthrough 
@@ -1029,6 +1042,7 @@ function ProposalEditor({
   });
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDriveExport, setShowDriveExport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<any[]>([]);
   const [focusMode, setFocusMode] = useState(false);
@@ -1483,6 +1497,13 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 <Globe size={18} className={isAIWorking === 'align' ? 'animate-pulse' : ''} />
               </button>
             </div>
+            <button
+              onClick={() => setShowDriveExport(true)}
+              title="Export to Google Drive"
+              className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-blue-400 hover:text-blue-600 transition-colors"
+            >
+              <HardDrive size={14} /> Export to Drive
+            </button>
             <button 
               onClick={() => setIsSaveModalOpen(true)}
               disabled={isSaving}
@@ -2137,7 +2158,20 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
             </div>
           )}
 
-          {isSaveModalOpen && (
+                {showDriveExport && (
+        <GoogleDrivePanel
+          isOpen={showDriveExport}
+          mode="export"
+          proposalToExport={{
+            title: proposal.title,
+            funder: proposal.funder,
+            sections: sections,
+            budget: budget,
+          }}
+          onClose={() => setShowDriveExport(false)}
+        />
+      )}
+      {isSaveModalOpen && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
