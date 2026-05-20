@@ -9,33 +9,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   HardDrive, FolderOpen, FileText, RefreshCw, Upload,
   Download, X, Check, Search, AlertCircle, Loader, ExternalLink,
-  ChevronRight, Folder, Settings
+  Folder, Settings
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { GoogleAuthProvider, getAuth, linkWithPopup, reauthenticateWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.workers.dev';
 
-// ── Get Drive OAuth token ────────────────────────────────────────────────────
-async function getDriveToken(): Promise<string | null> {
-  try {
-    const user = auth.currentUser;
-    if (!user) return null;
-    // Check if the user has a Google credential with Drive scope
-    const provider = new GoogleAuthProvider();
-    provider.addScope(DRIVE_SCOPE);
-    // Try to get fresh token via silent re-auth
-    const result = await reauthenticateWithPopup(user, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    return credential?.accessToken || null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Types ────────────────────────────────────────────────────────────────────
-interface DriveFile {
+export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
@@ -43,12 +26,12 @@ interface DriveFile {
   webViewLink?: string;
 }
 
-interface DriveFolder {
+export interface DriveFolder {
   id: string;
   name: string;
 }
 
-interface Props {
+export interface Props {
   isOpen: boolean;
   onClose: () => void;
   mode: 'import' | 'export' | 'sync';
@@ -59,13 +42,34 @@ interface Props {
     sections: Array<{ title: string; content: string }>;
     budget?: any[];
   };
-  // Called when user selects a file to import
+  // Called when user selects a file to import (content = plain text)
   onImport?: (content: string, fileName: string) => void;
-  // For sync: auto-refresh folder ID stored in localStorage
+}
+
+// ── Session-scoped Drive token cache ─────────────────────────────────────────
+const DRIVE_TOKEN_KEY = 'ecadrn_drive_token';
+
+function saveDriveToken(token: string) {
+  sessionStorage.setItem(DRIVE_TOKEN_KEY, token);
+}
+
+function loadDriveToken(): string | null {
+  return sessionStorage.getItem(DRIVE_TOKEN_KEY);
+}
+
+// ── Helper: build auth headers (no Content-Type for GET) ─────────────────────
+async function buildHeaders(driveToken: string, includeContentType = true): Promise<Record<string, string>> {
+  const firebaseToken = await auth.currentUser?.getIdToken();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${firebaseToken || ''}`,
+    'X-Drive-Token': driveToken,
+  };
+  if (includeContentType) headers['Content-Type'] = 'application/json';
+  return headers;
 }
 
 export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExport, onImport }: Props) {
-  const [driveToken, setDriveToken] = useState<string | null>(null);
+  const [driveToken, setDriveToken] = useState<string | null>(() => loadDriveToken());
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
@@ -82,6 +86,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
   const [syncFolderName, setSyncFolderName] = useState(() => localStorage.getItem('ecadrn_sync_folder_name') || '');
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('ecadrn_last_synced') || '');
 
+  // ── Authorize Drive access ──────────────────────────────────────────────────
   const authorizeWithDrive = async () => {
     setIsAuthorizing(true);
     setError('');
@@ -94,9 +99,9 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setDriveToken(credential.accessToken);
-        sessionStorage.setItem('drive_token', credential.accessToken);
+        saveDriveToken(credential.accessToken);
       } else {
-        throw new Error('No access token returned');
+        throw new Error('No access token returned from Google');
       }
     } catch (e: any) {
       if (e.code !== 'auth/popup-closed-by-user') {
@@ -107,38 +112,25 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     }
   };
 
-  // Try to restore token from session
-  useEffect(() => {
-    const saved = sessionStorage.getItem('drive_token');
-    if (saved) setDriveToken(saved);
-  }, []);
-
-  const authFetch = useCallback(async (path: string, options: RequestInit = {}) => {
-    const firebaseToken = await auth.currentUser?.getIdToken();
-    return fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${firebaseToken}`,
-        'X-Drive-Token': driveToken || '',
-        ...((options.headers as Record<string, string>) || {}),
-      },
-    });
-  }, [driveToken]);
-
-  const loadFiles = useCallback(async () => {
+  // ── Load files ──────────────────────────────────────────────────────────────
+  const loadFiles = useCallback(async (overrideFolderId?: string) => {
     if (!driveToken) return;
     setIsLoading(true);
     setError('');
     try {
-      const res = await authFetch('/drive/files', {
+      const headers = await buildHeaders(driveToken, true);
+      const res = await fetch(`${API_BASE}/drive/files`, {
         method: 'POST',
+        headers,
         body: JSON.stringify({
-          folderId: selectedFolder || undefined,
+          folderId: overrideFolderId ?? (selectedFolder || undefined),
           query: searchQuery || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Failed to load files');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || 'Failed to load files');
+      }
       const data = await res.json();
       setFiles(data.files || []);
     } catch (e: any) {
@@ -146,37 +138,50 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     } finally {
       setIsLoading(false);
     }
-  }, [driveToken, selectedFolder, searchQuery, authFetch]);
+  }, [driveToken, selectedFolder, searchQuery]);
 
+  // ── Load folders ────────────────────────────────────────────────────────────
   const loadFolders = useCallback(async () => {
     if (!driveToken) return;
     try {
-      const res = await authFetch('/drive/folders', { method: 'GET' });
+      // GET request — no Content-Type header needed
+      const headers = await buildHeaders(driveToken, false);
+      const res = await fetch(`${API_BASE}/drive/folders`, { method: 'GET', headers });
       if (!res.ok) return;
       const data = await res.json();
       setFolders(data.folders || []);
-    } catch {}
-  }, [driveToken, authFetch]);
+    } catch {
+      // Silently fail — folder list is non-critical
+    }
+  }, [driveToken]);
 
+  // Load data when panel opens and Drive is authorized
   useEffect(() => {
     if (driveToken && isOpen) {
       loadFiles();
       loadFolders();
     }
-  }, [driveToken, isOpen, loadFiles, loadFolders]);
+  }, [driveToken, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Re-run loadFiles when folder or search changes
+  useEffect(() => {
+    if (driveToken && isOpen) loadFiles();
+  }, [selectedFolder]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Import a file ───────────────────────────────────────────────────────────
   const importFile = async (file: DriveFile) => {
     setIsImporting(true);
     setError('');
     try {
-      const firebaseToken = await auth.currentUser?.getIdToken();
+      const headers = await buildHeaders(driveToken!, false);
       const res = await fetch(`${API_BASE}/drive/file/${file.id}/content`, {
-        headers: {
-          Authorization: `Bearer ${firebaseToken}`,
-          'X-Drive-Token': driveToken || '',
-        },
+        method: 'GET',
+        headers,
       });
-      if (!res.ok) throw new Error('Failed to read file');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Read failed' }));
+        throw new Error(err.error || 'Failed to read file');
+      }
       const data = await res.json();
       onImport?.(data.content, file.name);
       setSuccess(`"${file.name}" imported successfully!`);
@@ -188,23 +193,29 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     }
   };
 
+  // ── Export proposal to Drive ────────────────────────────────────────────────
   const exportToDrive = async () => {
     if (!proposalToExport) return;
     setIsExporting(true);
     setError('');
     try {
-      const res = await authFetch('/drive/export', {
+      const headers = await buildHeaders(driveToken!, true);
+      const res = await fetch(`${API_BASE}/drive/export`, {
         method: 'POST',
+        headers,
         body: JSON.stringify({
           ...proposalToExport,
           folderId: exportFolderId || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Export failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Export failed' }));
+        throw new Error(err.error || 'Export to Drive failed');
+      }
       const data = await res.json();
-      setSuccess('Exported to Drive!');
+      setSuccess('Exported! Opening in Google Docs…');
       if (data.webViewLink) {
-        setTimeout(() => window.open(data.webViewLink, '_blank'), 500);
+        setTimeout(() => window.open(data.webViewLink, '_blank'), 800);
       }
       setTimeout(() => { setSuccess(''); onClose(); }, 3000);
     } catch (e: any) {
@@ -214,6 +225,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     }
   };
 
+  // ── Sync folder management ──────────────────────────────────────────────────
   const saveSyncFolder = (folderId: string, folderName: string) => {
     setSyncFolderId(folderId);
     setSyncFolderName(folderName);
@@ -226,7 +238,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
   const syncNow = async () => {
     if (!syncFolderId) return;
     setSelectedFolder(syncFolderId);
-    await loadFiles();
+    await loadFiles(syncFolderId);
     const now = new Date().toLocaleString();
     setLastSynced(now);
     localStorage.setItem('ecadrn_last_synced', now);
@@ -234,6 +246,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     setTimeout(() => setSuccess(''), 3000);
   };
 
+  // ── Utils ───────────────────────────────────────────────────────────────────
   const mimeIcon = (mimeType: string) => {
     if (mimeType.includes('document')) return '📄';
     if (mimeType.includes('spreadsheet')) return '📊';
@@ -241,6 +254,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     return '📄';
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
@@ -272,7 +286,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                   <p className="text-xs text-slate-500">ECADRN Drive Integration</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg">
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -281,16 +295,16 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
               {/* Status messages */}
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-xl text-sm">
-                  <AlertCircle size={16} /> {error}
+                  <AlertCircle size={16} className="flex-shrink-0" /> {error}
                 </div>
               )}
               {success && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-sm">
-                  <Check size={16} /> {success}
+                  <Check size={16} className="flex-shrink-0" /> {success}
                 </div>
               )}
 
-              {/* Auth step */}
+              {/* ── Auth Step ── */}
               {!driveToken ? (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -303,10 +317,10 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                   <button
                     onClick={authorizeWithDrive}
                     disabled={isAuthorizing}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
                     {isAuthorizing ? <Loader size={16} className="animate-spin" /> : <HardDrive size={16} />}
-                    {isAuthorizing ? 'Connecting...' : 'Connect Google Drive'}
+                    {isAuthorizing ? 'Connecting…' : 'Connect Google Drive'}
                   </button>
                 </div>
               ) : (
@@ -314,7 +328,6 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                   {/* ── IMPORT MODE ── */}
                   {mode === 'import' && (
                     <div className="space-y-4">
-                      {/* Search + folder filter */}
                       <div className="flex gap-2">
                         <div className="flex-1 relative">
                           <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
@@ -323,14 +336,14 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && loadFiles()}
-                            placeholder="Search your Drive..."
+                            placeholder="Search your Drive…"
                             className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                           />
                         </div>
                         <select
                           value={selectedFolder}
                           onChange={e => setSelectedFolder(e.target.value)}
-                          className="px-3 py-2 bg-slate-50 rounded-xl text-sm border-none outline-none focus:ring-2 focus:ring-blue-500"
+                          className="px-3 py-2 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">All folders</option>
                           {folders.map(f => (
@@ -338,14 +351,14 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                           ))}
                         </select>
                         <button
-                          onClick={loadFiles}
-                          className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                          onClick={() => loadFiles()}
+                          title="Refresh"
+                          className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
                         >
                           <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
                         </button>
                       </div>
 
-                      {/* File list */}
                       {isLoading ? (
                         <div className="flex items-center justify-center py-10">
                           <Loader size={24} className="animate-spin text-blue-500" />
@@ -366,7 +379,7 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                                   : 'border-slate-100 hover:border-slate-300 hover:bg-slate-50'
                               }`}
                             >
-                              <span className="text-xl">{mimeIcon(file.mimeType)}</span>
+                              <span className="text-xl flex-shrink-0">{mimeIcon(file.mimeType)}</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-900 truncate">{file.name}</p>
                                 <p className="text-xs text-slate-400">
@@ -379,12 +392,15 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                                   target="_blank"
                                   rel="noreferrer"
                                   onClick={e => e.stopPropagation()}
-                                  className="p-1 text-slate-300 hover:text-blue-500"
+                                  className="p-1 text-slate-300 hover:text-blue-500 transition-colors"
+                                  title="Open in Drive"
                                 >
                                   <ExternalLink size={14} />
                                 </a>
                               )}
-                              {selectedFile?.id === file.id && <Check size={16} className="text-blue-600 flex-shrink-0" />}
+                              {selectedFile?.id === file.id && (
+                                <Check size={16} className="text-blue-600 flex-shrink-0" />
+                              )}
                             </div>
                           ))}
                         </div>
@@ -396,10 +412,15 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                   {mode === 'export' && (
                     <div className="space-y-4">
                       <div className="p-4 bg-slate-50 rounded-xl">
-                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Exporting</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Exporting Proposal</p>
                         <p className="font-semibold text-slate-900">{proposalToExport?.title}</p>
                         <p className="text-sm text-slate-500">For: {proposalToExport?.funder}</p>
-                        <p className="text-xs text-slate-400 mt-1">{proposalToExport?.sections?.length} sections</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {proposalToExport?.sections?.length} sections
+                          {proposalToExport?.budget && proposalToExport.budget.length > 0
+                            ? ` + budget (${proposalToExport.budget.length} line items)`
+                            : ''}
+                        </p>
                       </div>
 
                       <div>
@@ -418,9 +439,9 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                         </select>
                       </div>
 
-                      <p className="text-xs text-slate-400">
+                      <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700">
                         The proposal will be created as a Google Doc in your Drive and opened automatically.
-                      </p>
+                      </div>
                     </div>
                   )}
 
@@ -429,21 +450,23 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                     <div className="space-y-4">
                       <div className="p-4 bg-blue-50 rounded-xl text-sm text-blue-800">
                         <p className="font-semibold mb-1">📁 Auto-Sync Grants Folder</p>
-                        <p>Select a folder in your ECADRN Drive to watch. Use "Sync Now" to pull the latest documents from it at any time.</p>
+                        <p>Pick a folder in your ECADRN Drive to watch. Tap "Sync Now" to pull the latest documents at any time.</p>
                       </div>
 
                       {syncFolderName && (
                         <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
-                          <Folder size={18} className="text-green-600" />
+                          <Folder size={18} className="text-green-600 flex-shrink-0" />
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-green-800">{syncFolderName}</p>
                             {lastSynced && <p className="text-xs text-green-600">Last synced: {lastSynced}</p>}
                           </div>
                           <button
                             onClick={syncNow}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg"
+                            disabled={isLoading}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                           >
-                            <RefreshCw size={12} /> Sync Now
+                            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                            {isLoading ? 'Syncing…' : 'Sync Now'}
                           </button>
                         </div>
                       )}
@@ -453,7 +476,9 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                           Select Grants Folder
                         </label>
                         {folders.length === 0 ? (
-                          <p className="text-sm text-slate-400">No folders found in your Drive.</p>
+                          <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+                            <Loader size={14} className="animate-spin" /> Loading folders…
+                          </div>
                         ) : (
                           <div className="space-y-1 max-h-60 overflow-y-auto">
                             {folders.map(f => (
@@ -475,19 +500,20 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                         )}
                       </div>
 
-                      {/* Show synced files */}
                       {syncFolderId && files.length > 0 && (
                         <div>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Files in Folder</p>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                            Files in Folder ({files.length})
+                          </p>
                           <div className="space-y-1">
                             {files.slice(0, 5).map(f => (
                               <div key={f.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
-                                <span>{mimeIcon(f.mimeType)}</span>
+                                <span className="flex-shrink-0">{mimeIcon(f.mimeType)}</span>
                                 <span className="text-xs text-slate-700 truncate flex-1">{f.name}</span>
                               </div>
                             ))}
                             {files.length > 5 && (
-                              <p className="text-xs text-slate-400 text-center">+{files.length - 5} more files</p>
+                              <p className="text-xs text-slate-400 text-center pt-1">+{files.length - 5} more files</p>
                             )}
                           </div>
                         </div>
@@ -500,30 +526,46 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
 
             {/* Footer actions */}
             {driveToken && (
-              <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
-                <button onClick={onClose} className="px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-100 rounded-xl">
-                  Cancel
+              <div className="p-4 border-t border-slate-100 flex justify-between items-center">
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem(DRIVE_TOKEN_KEY);
+                    setDriveToken(null);
+                    setFiles([]);
+                    setFolders([]);
+                  }}
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  Disconnect Drive
                 </button>
-                {mode === 'import' && selectedFile && (
+                <div className="flex gap-3">
                   <button
-                    onClick={() => importFile(selectedFile)}
-                    disabled={isImporting}
-                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50"
+                    onClick={onClose}
+                    className="px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-100 rounded-xl transition-colors"
                   >
-                    {isImporting ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
-                    {isImporting ? 'Importing...' : `Import "${selectedFile.name}"`}
+                    Cancel
                   </button>
-                )}
-                {mode === 'export' && (
-                  <button
-                    onClick={exportToDrive}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isExporting ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-                    {isExporting ? 'Exporting...' : 'Export to Drive'}
-                  </button>
-                )}
+                  {mode === 'import' && selectedFile && (
+                    <button
+                      onClick={() => importFile(selectedFile)}
+                      disabled={isImporting}
+                      className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {isImporting ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+                      {isImporting ? 'Importing…' : `Import "${selectedFile.name}"`}
+                    </button>
+                  )}
+                  {mode === 'export' && (
+                    <button
+                      onClick={exportToDrive}
+                      disabled={isExporting}
+                      className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {isExporting ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {isExporting ? 'Exporting…' : 'Export to Drive'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </motion.div>
