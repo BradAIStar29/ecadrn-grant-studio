@@ -2,37 +2,50 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
+
+    // ── 0. Global Safety Net ──────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Phase 3: Primitive Definitions
+    // ── Helper Functions ──────────────────────────────────────────────────────
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
+    function isEcadrnMember() {
+      return isSignedIn() &&
+             request.auth.token.email != null &&
+             request.auth.token.email.matches('.*@ecadrn\\.org');
     }
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isOrgMember(orgId) {
+    // Personal workspace: only the owner can access
+    function isPersonalOrgMember(orgId) {
       return isOwner(orgId);
     }
 
-    // Phase 4: Entity Validations
+    // Shared workspace: any verified @ecadrn.org member
+    function isSharedOrgMember(orgId) {
+      return orgId == 'ecadrn-shared' && isEcadrnMember();
+    }
+
+    // Either personal owner OR shared member
+    function isOrgMember(orgId) {
+      return isPersonalOrgMember(orgId) || isSharedOrgMember(orgId);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // ── Entity Validators ─────────────────────────────────────────────────────
     function isValidOrganization(data) {
       return data.keys().hasAll(['name', 'profileText', 'updatedAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
@@ -69,97 +82,122 @@ service cloud.firestore {
              data.createdAt is string;
     }
 
-    function isValidNotification(data) {
-      return data.keys().hasAll(['userId', 'type', 'message', 'read', 'timestamp']) &&
-             data.keys().size() >= 5 &&
-             data.userId == request.auth.uid &&
-             (data.type == 'comment' || data.type == 'assignment') &&
-             data.message is string && data.message.size() <= 1000 &&
-             data.read is bool &&
-             data.timestamp is string;
-    }
-
     function isValidVoiceProfile(data) {
       return data.keys().hasAll(['name', 'createdAt']) &&
              data.name is string && data.name.size() <= 200 &&
              data.createdAt is string;
     }
 
-    // Organizations
-    match /organizations/{orgId} {
-      allow get: if isOrgMember(orgId) && isValidId(orgId);
-      allow list: if isSignedIn() && isOrgMember(request.auth.uid); // Users can only list their own org
-      
-      allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
-      allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt'])
-      );
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'type', 'message', 'read', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             (data.type == 'comment' || data.type == 'assignment' || data.type == 'mention') &&
+             data.message is string && data.message.size() <= 1000 &&
+             data.read is bool &&
+             data.timestamp is string;
+    }
 
-      // Sub-collections
+    // ── Organizations ─────────────────────────────────────────────────────────
+    match /organizations/{orgId} {
+      allow get:    if isOrgMember(orgId) && isValidId(orgId);
+      allow list:   if isSignedIn() && (isOwner(request.auth.uid) || isEcadrnMember());
+      allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
+      allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) &&
+                       incoming().diff(existing()).affectedKeys()
+                         .hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt', 'members']);
+      allow delete: if false; // orgs are never deleted through the app
+
+      // ── Funders ─────────────────────────────────────────────────────────────
       match /funders/{funderId} {
-        allow get: if isOrgMember(orgId) && isValidId(funderId);
-        allow list: if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(funderId);
+        allow list:   if isOrgMember(orgId);
         allow create: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming());
-        allow update: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming()) && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['funderName', 'website', 'contactName', 'relationshipStage', 'notes', 'intelligence', 'lastAnalysisAt', 'updatedAt'])
-        );
+        allow update: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming()) &&
+                         incoming().diff(existing()).affectedKeys()
+                           .hasOnly(['funderName', 'website', 'contactName', 'relationshipStage',
+                                     'notes', 'intelligence', 'lastAnalysisAt', 'updatedAt']);
         allow delete: if isOrgMember(orgId) && isValidId(funderId);
       }
 
+      // ── Voice Profiles ───────────────────────────────────────────────────────
       match /voiceProfiles/{profileId} {
-        allow list: if isOrgMember(orgId);
-        allow get: if isOrgMember(orgId) && isValidId(profileId);
+        allow list:   if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(profileId);
         allow create: if isOrgMember(orgId) && isValidId(profileId) && isValidVoiceProfile(incoming());
         allow update: if isOrgMember(orgId) && isValidId(profileId) && isValidVoiceProfile(incoming());
         allow delete: if isOrgMember(orgId) && isValidId(profileId);
       }
 
+      // ── Templates ────────────────────────────────────────────────────────────
       match /templates/{templateId} {
-        allow list: if isOrgMember(orgId);
-        allow get: if isOrgMember(orgId) && isValidId(templateId);
+        allow list:   if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(templateId);
         allow create: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming());
-        allow update: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming()) && (
-          incoming().createdAt == existing().createdAt
-        );
+        allow update: if isOrgMember(orgId) && isValidId(templateId) && isValidTemplate(incoming()) &&
+                         incoming().createdAt == existing().createdAt;
         allow delete: if isOrgMember(orgId) && isValidId(templateId);
       }
 
+      // ── Grants ───────────────────────────────────────────────────────────────
       match /grants/{grantId} {
-        allow get: if isOrgMember(orgId) && isValidId(grantId);
-        allow list: if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(grantId);
+        allow list:   if isOrgMember(orgId);
         allow create: if isOrgMember(orgId) && isValidId(grantId) && isValidGrant(incoming());
         allow update: if isOrgMember(orgId) && isValidId(grantId) && isValidGrant(incoming());
         allow delete: if isOrgMember(orgId) && isValidId(grantId);
       }
 
+      // ── Proposals ────────────────────────────────────────────────────────────
       match /proposals/{proposalId} {
-        allow get: if isOrgMember(orgId) && isValidId(proposalId);
-        allow list: if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(proposalId);
+        allow list:   if isOrgMember(orgId);
         allow create: if isOrgMember(orgId) && isValidId(proposalId) && isValidProposal(incoming());
-        allow update: if isOrgMember(orgId) && isValidId(proposalId) && isValidProposal(incoming()) && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'status', 'sections', 'updatedAt', 'reviewResults', 'collaborators', 'budget'])
-        );
+        allow update: if isOrgMember(orgId) && isValidId(proposalId) && isValidProposal(incoming()) &&
+                         incoming().diff(existing()).affectedKeys()
+                           .hasOnly(['title', 'status', 'sections', 'updatedAt',
+                                     'reviewResults', 'collaborators', 'budget',
+                                     'createdBy', 'lastEditedBy', 'funder', 'assignee']);
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);
 
+        // Comments — any org member can read/write
         match /comments/{commentId} {
-          allow list: if isOrgMember(orgId);
-          allow get: if isOrgMember(orgId) && isValidId(commentId);
-          allow write: if isOrgMember(orgId) && isValidId(commentId);
+          allow list:   if isOrgMember(orgId);
+          allow get:    if isOrgMember(orgId) && isValidId(commentId);
+          allow create: if isOrgMember(orgId) && isValidId(commentId);
+          allow update: if isOrgMember(orgId) && isValidId(commentId) &&
+                           resource.data.userId == request.auth.uid; // only edit own comments
+          allow delete: if isOrgMember(orgId) && isValidId(commentId) &&
+                           resource.data.userId == request.auth.uid;
         }
 
+        // Presence — each user writes only their own slot
         match /presence/{userId} {
-          allow list: if isOrgMember(orgId);
-          allow get: if isOrgMember(orgId) && isValidId(userId);
-          allow write: if isOrgMember(orgId) && isOwner(userId) && isValidId(userId);
+          allow list:   if isOrgMember(orgId);
+          allow get:    if isOrgMember(orgId) && isValidId(userId);
+          allow write:  if isOrgMember(orgId) && isOwner(userId) && isValidId(userId);
+        }
+
+        // Versions — any member can read, but versions are append-only
+        match /versions/{versionId} {
+          allow list:   if isOrgMember(orgId);
+          allow get:    if isOrgMember(orgId) && isValidId(versionId);
+          allow create: if isOrgMember(orgId) && isValidId(versionId);
+          allow update: if false; // versions are immutable
+          allow delete: if false;
         }
       }
 
+      // ── Notifications — scoped to requesting user's UID ───────────────────
       match /notifications/{notificationId} {
-        allow get: if isOrgMember(orgId) && isValidId(notificationId) && resource.data.userId == request.auth.uid;
-        allow list: if isOrgMember(orgId) && resource.data.userId == request.auth.uid;
+        allow get:    if isOrgMember(orgId) && isValidId(notificationId) &&
+                         resource.data.userId == request.auth.uid;
+        allow list:   if isOrgMember(orgId);
         allow create: if isOrgMember(orgId) && isValidNotification(incoming());
-        allow update: if isOrgMember(orgId) && isValidId(notificationId) && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
-        allow delete: if isOrgMember(orgId) && isValidId(notificationId) && resource.data.userId == request.auth.uid;
+        allow update: if isOrgMember(orgId) && isValidId(notificationId) &&
+                         resource.data.userId == request.auth.uid &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if isOrgMember(orgId) && isValidId(notificationId) &&
+                         resource.data.userId == request.auth.uid;
       }
     }
   }
