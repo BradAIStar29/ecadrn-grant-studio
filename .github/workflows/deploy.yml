@@ -25,9 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: worker/package-lock.json
-
+          # no caching for worker job
+          
       - name: Install worker dependencies
         run: npm install
         working-directory: worker
@@ -64,6 +63,11 @@ jobs:
         with:
           workload_identity_provider: "projects/457031665165/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider"
           service_account: "github-deployer@ecadrn.iam.gserviceaccount.com"
+
+      - name: Set up Cloud SDK (NO AUTH)
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+              install_components: "beta"
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
