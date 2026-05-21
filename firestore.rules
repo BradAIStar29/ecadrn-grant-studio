@@ -25,7 +25,7 @@ service cloud.firestore {
 
     // Personal workspace: only the owner can access
     function isPersonalOrgMember(orgId) {
-      return isOwner(orgId);
+      return orgId == request.auth.uid;
     }
 
     // Shared workspace: any verified @ecadrn.org member
@@ -97,17 +97,17 @@ service cloud.firestore {
              data.timestamp is string;
     }
 
-    // ── Organizations ─────────────────────────────────────────────────────────
+    // ── Organizations ───────────────────────────────────────────────────────
     match /organizations/{orgId} {
       allow get:    if isOrgMember(orgId) && isValidId(orgId);
-      allow list:   if isSignedIn() && (isOwner(request.auth.uid) || isEcadrnMember());
-      allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
+      allow list:   if isSignedIn() && isEcadrnMember();
+      allow create: if isSignedIn() && isValidOrganization(incoming());
       allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) &&
                        incoming().diff(existing()).affectedKeys()
                          .hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt', 'members']);
       allow delete: if false; // orgs are never deleted through the app
 
-      // ── Funders ─────────────────────────────────────────────────────────────
+      // ── Funders ─────────────────────────────────────────────────────────
       match /funders/{funderId} {
         allow get:    if isOrgMember(orgId) && isValidId(funderId);
         allow list:   if isOrgMember(orgId);
@@ -119,7 +119,7 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(funderId);
       }
 
-      // ── Voice Profiles ───────────────────────────────────────────────────────
+      // ── Voice Profiles ──────────────────────────────────────────────────────
       match /voiceProfiles/{profileId} {
         allow list:   if isOrgMember(orgId);
         allow get:    if isOrgMember(orgId) && isValidId(profileId);
@@ -128,7 +128,7 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(profileId);
       }
 
-      // ── Templates ────────────────────────────────────────────────────────────
+      // ── Templates ────────────────────────────────────────────────────────
       match /templates/{templateId} {
         allow list:   if isOrgMember(orgId);
         allow get:    if isOrgMember(orgId) && isValidId(templateId);
@@ -138,7 +138,7 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(templateId);
       }
 
-      // ── Grants ───────────────────────────────────────────────────────────────
+      // ── Grants ─────────────────────────────────────────────────────────
       match /grants/{grantId} {
         allow get:    if isOrgMember(orgId) && isValidId(grantId);
         allow list:   if isOrgMember(orgId);
@@ -147,7 +147,7 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(grantId);
       }
 
-      // ── Proposals ────────────────────────────────────────────────────────────
+      // ── Proposals ────────────────────────────────────────────────────────
       match /proposals/{proposalId} {
         allow get:    if isOrgMember(orgId) && isValidId(proposalId);
         allow list:   if isOrgMember(orgId);
