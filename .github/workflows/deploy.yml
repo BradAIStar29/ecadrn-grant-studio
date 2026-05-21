@@ -42,7 +42,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
 
-   deploy-firestore-rules:
+  deploy-firestore-rules:
     name: Deploy Firestore Rules
     runs-on: ubuntu-latest
     permissions:
