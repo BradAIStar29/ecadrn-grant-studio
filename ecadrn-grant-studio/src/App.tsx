@@ -394,7 +394,7 @@ CORE PROGRAMS:
           )}
         </div>
 
-        <nav           {/* ── Workspace Switcher ── */}
+        {/* ── Workspace Switcher ── */}
           {isSidebarOpen && (
             <div className="px-4 pt-4 pb-1">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 px-1">Workspace</p>
@@ -451,7 +451,7 @@ CORE PROGRAMS:
             </div>
           )}
           
-          <div id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1 mt-4">
+          <nav id="sidebar-nav" className="flex-1 px-4 py-4 space-y-1 mt-4">
           <NavItem 
             icon={<Layout size={20} />} 
             label="Dashboard" 
