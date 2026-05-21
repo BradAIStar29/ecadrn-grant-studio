@@ -61,9 +61,6 @@ jobs:
           workload_identity_provider: "projects/457031665165/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider"
           service_account: "github-deployer@ecadrn.iam.gserviceaccount.com"
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
