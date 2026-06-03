@@ -3530,6 +3530,7 @@ function GrantsView({
   const [autopilotRunning, setAutopilotRunning] = useState(false);
   const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
   const [autopilotOpen, setAutopilotOpen] = useState(false);
+  const [hideUnverified, setHideUnverified] = useState(false);
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
 
   const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
@@ -3871,6 +3872,7 @@ Deadline: 2026-11-15`;
 
   const filteredGrants = grants
     .filter(g => {
+      if (hideUnverified && g.verified === false) return false;
       const matchText = g.title?.toLowerCase().includes(filterText.toLowerCase()) || 
                         g.funderName?.toLowerCase().includes(filterText.toLowerCase()) ||
                         (g.focusAreas && g.focusAreas.some((fa: string) => fa.toLowerCase().includes(filterText.toLowerCase()))) ||
@@ -3910,6 +3912,15 @@ Deadline: 2026-11-15`;
           </button>
         </div>
         <div className="flex gap-4">
+          <div className="flex items-center gap-2">
+          <button
+            onClick={() => setHideUnverified(h => !h)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+              hideUnverified ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {hideUnverified ? '✓ Verified Only' : '⚠️ Show All'}
+          </button>
           <div className="flex bg-slate-100 rounded-lg p-1">
             <button 
               onClick={() => { setSortBy('match'); setSortOrder(prev => sortBy === 'match' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'); }}
@@ -3929,6 +3940,7 @@ Deadline: 2026-11-15`;
             >
               Funder {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
             </button>
+          </div>
           </div>
           <button 
             onClick={runDiscovery}
@@ -4199,12 +4211,22 @@ Deadline: 2026-11-15`;
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredGrants.length > 0 ? filteredGrants.map(g => (
           <div key={g.id} className="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-xl transition-all group relative overflow-hidden flex flex-col h-full border-t-4 border-t-transparent hover:border-t-indigo-500">
-            <div className="absolute top-0 right-0 p-3">
+            <div className="absolute top-0 right-0 p-3 flex flex-col items-end gap-1">
               <span className={`text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded ${
                 g.missionFitScore >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
               }`}>
                 Match: {g.missionFitScore || 0}%
               </span>
+              {g.verified === false && (
+                <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1">
+                  ⚠️ Unverified
+                </span>
+              )}
+              {g.verified === true && (
+                <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-200">
+                  ✓ Verified
+                </span>
+              )}
             </div>
             <h4 className="font-bold text-slate-900 mb-2 leading-tight group-hover:text-indigo-600 pr-12 text-lg tracking-tight">{g.title}</h4>
             <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -4695,6 +4717,7 @@ function VoiceView({
   };
 
   const highAlignmentGrants = (grants || [])
+    .filter(g => g.verified !== false) // Never surface unverified/hallucinated grants on dashboard
     .filter(g => (g.ecadrnAlignmentScore && g.ecadrnAlignmentScore >= 80) || (g.missionFitScore && g.missionFitScore >= 80))
     .map(g => {
       const pPhrases = activeProfile?.keyPhrases || [];
@@ -5493,7 +5516,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
               </div>
               <div>
                 <h4 className="font-black text-slate-900 tracking-tight text-sm">Voice-Aligned ECADRN Grants</h4>
-                <p className="text-[10px] text-slate-500 font-medium font-semibold">Grants with high ECADRN scores matched with active profile style traits.</p>
+                <p className="text-[10px] text-slate-500 font-medium font-semibold">Verified grants with high ECADRN scores matched to your active voice profile.</p>
               </div>
             </div>
 
@@ -5522,6 +5545,12 @@ We bridge the gap between ADR theory and transformative community practice by fo
                   )}
                 </div>
               ))}
+              {grants.some(g => g.verified === false) && highAlignmentGrants.length === 0 && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-2">
+                  <span className="text-amber-500 text-sm shrink-0">⚠️</span>
+                  <p className="text-[10px] text-amber-700 font-semibold">Some discovered grants were flagged as unverified and are hidden here. Run a new Discovery search or manually review grants in Grant Matcher.</p>
+                </div>
+              )}
               {highAlignmentGrants.length === 0 && (
                 <p className="text-xs text-slate-400 italic text-center p-6 bg-slate-50 rounded-xl font-semibold">No grants currently qualified as high-alignment (ECADRN of 80% or greater). Execute Discover Grants search in Grant Matcher to populate.</p>
               )}
