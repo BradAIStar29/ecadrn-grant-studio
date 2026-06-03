@@ -5,7 +5,7 @@ export interface AIResponse<T = any> {
   error?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.workers.dev';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.workers.dev';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const user = auth.currentUser;
