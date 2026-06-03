@@ -646,10 +646,10 @@ CORE PROGRAMS:
         <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
-            {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} />}
-            {activeTab === 'funders' && <FundersView funders={funders} organization={organization} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} />}
-            {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} />}
+            {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} />}
+            {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} />}
+            {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
@@ -765,7 +765,7 @@ function DashboardView({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend="+12.4%" />
-        <StatCard title="Strategic Matches" value={grants.length.toString()} icon={<TrendingUp className="text-emerald-600" />} trend="High Alignment" />
+        <StatCard title="Strategic Matches" value={(grants?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="High Alignment" />
         <StatCard title="Voice Maturity" value={`${organization?.voiceProfile?.maturityScore || 78}%`} icon={<Mic className="text-indigo-600" />} trend="Nominal State" />
       </div>
 
@@ -863,9 +863,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId 
+  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId
 }: { 
-  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void 
+  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1118,7 +1118,8 @@ function ProposalsView({
       </div>
 
       <TemplateModal 
-        isOpen={showTemplateModal} 
+        isOpen={showTemplateModal}
+        orgId={orgId}
         onClose={() => setShowTemplateModal(false)}
         onSelect={(template) => {
           setShowTemplateModal(false);
@@ -1265,13 +1266,18 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     const presenceRef = doc(db, propPath, 'presence', auth.currentUser!.uid);
     const updatePresence = async () => {
       if (!auth.currentUser) return;
-      await setDoc(presenceRef, {
-        userId: auth.currentUser!.uid,
-        userEmail: auth.currentUser!.email,
-        sectionIndex: activeSectionIdx,
-        isEditing: isEditingSection,
-        lastSeen: new Date().toISOString()
-      }, { merge: true });
+      try {
+        await setDoc(presenceRef, {
+          userId: auth.currentUser!.uid,
+          userEmail: auth.currentUser!.email,
+          sectionIndex: activeSectionIdx,
+          isEditing: isEditingSection,
+          lastSeen: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        // Non-critical — presence update failure shouldn't crash the editor
+        console.warn('Presence update failed:', e);
+      }
     };
     updatePresence();
     const presenceInterval = setInterval(updatePresence, 10000);
@@ -2356,7 +2362,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   );
 }
 
-function TemplateModal({ isOpen, onClose, onSelect }: { isOpen: boolean, onClose: () => void, onSelect: (t: any) => void }) {
+function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, onClose: () => void, onSelect: (t: any) => void, orgId: string }) {
   const [customTemplates, setCustomTemplates] = useState<any[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
 
@@ -2456,7 +2462,7 @@ function TemplateModal({ isOpen, onClose, onSelect }: { isOpen: boolean, onClose
   );
 }
 
-function FundersView({ funders, organization }: { funders: any[], organization: any }) {
+function FundersView({ funders, organization, orgId }: { funders: any[], organization: any, orgId: string }) {
   const [researchingId, setResearchingId] = useState<string | null>(null);
   const [isResearchingNew, setIsResearchingNew] = useState(false);
   const [newFunderUrl, setNewFunderUrl] = useState('');
@@ -3004,6 +3010,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
           <FunderCard 
             key={f.id} 
             f={f}
+            orgId={orgId}
             isEditing={editingFunderId === f.id}
             isResearching={researchingId === f.id}
             editData={editData}
@@ -3032,7 +3039,7 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
   );
 }
 
-function FunderNotesField({ funderId, initialNotes }: { funderId: string, initialNotes: string }) {
+function FunderNotesField({ funderId, initialNotes, orgId }: { funderId: string, initialNotes: string, orgId: string }) {
   const [notes, setNotes] = useState(initialNotes);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -3068,12 +3075,12 @@ function FunderNotesField({ funderId, initialNotes }: { funderId: string, initia
 }
 
 function FunderCard({ 
-  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick 
+  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick, orgId
 }: { 
   f: any, isEditing: boolean, isResearching: boolean, editData: any, onEdit: () => void, 
   onCancelEdit: () => any, onSaveEdit: () => any, onResearch: () => any, setEditData: (d: any) => void, STAGES: string[],
   onTagClick: (tag: string) => void,
-  key?: any
+  key?: any, orgId: string
 }) {
   const [customTagInput, setCustomTagInput] = useState('');
   const [inlineTagText, setInlineTagText] = useState('');
@@ -3472,7 +3479,7 @@ function FunderCard({
                   )}
                 </div>
 
-                <FunderNotesField funderId={f.id} initialNotes={f.notes || ''} />
+                <FunderNotesField funderId={f.id} initialNotes={f.notes || ''} orgId={orgId} />
 
                 {f.intelligence?.typicalGrantees && (
                   <div>
@@ -3534,12 +3541,16 @@ function GrantsView({
   grants, 
   organization, 
   voiceProfiles = [], 
-  selectedVoiceProfileId = null 
+  selectedVoiceProfileId = null,
+  orgId = '',
+  user = null 
 }: { 
   grants: any[], 
   organization: any, 
   voiceProfiles?: any[], 
-  selectedVoiceProfileId?: string | null 
+  selectedVoiceProfileId?: string | null,
+  orgId?: string,
+  user?: any
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
@@ -4669,14 +4680,16 @@ function VoiceView({
   selectedProfileId, 
   onSetSelectedProfileId,
   funders,
-  grants = []
+  grants = [],
+  orgId = ''
 }: { 
   organization: any, 
   profiles: any[], 
   selectedProfileId: string | null, 
   onSetSelectedProfileId: (id: string) => void,
   funders: any[],
-  grants?: any[]
+  grants?: any[],
+  orgId?: string
 }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -5808,7 +5821,7 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
         body: JSON.stringify({ 
           userMessage: userMsg,
           orgProfile: organization,
-          pipelineSummary: `Currently managing ${proposals.length} proposals and ${proposals.filter(p => p.status === 'draft').length} drafts.`
+          pipelineSummary: `Currently managing ${(proposals || []).length} proposals and ${(proposals || []).filter(p => p.status === 'draft').length} drafts.`
         })
       });
       const text = await res.text();
