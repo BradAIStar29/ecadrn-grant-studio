@@ -80,65 +80,77 @@ import 'react-quill/dist/quill.snow.css';
 type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar';
 
 const WALKTHROUGH_STEPS = [
-  { 
-    title: "Navigation Center", 
+  {
+    title: "Welcome to ECADRN Grant Studio",
     tab: 'dashboard',
-    content: "The Sidebar is your map to the Nexus OS. Switch between Dashboard, Proposals, Funder Intelligence, and more to manage your full grant lifecycle.",
+    content: "Your AI-powered grant management OS. Switch between modules using the sidebar — Dashboard, Proposals, Funder Intelligence, Grant Matcher, Voice Lab, Outreach, and AI Advisor.",
     highlight: "sidebar-nav"
   },
-  { 
-    title: "Strategic Dashboard", 
+  {
+    title: "Personal & Team Workspaces",
     tab: 'dashboard',
-    content: "Use 'Export Portfolio MD' to download your entire organizational brain as a professional document. Monitor 'Strategic Priorities' to see which grants need immediate attention.",
+    content: "Use the workspace switcher at the top of the sidebar to toggle between your Personal workspace (private to you) and the Team workspace (shared with all @ecadrn.org members). Every proposal, grant, and funder record is kept separate between workspaces.",
+    highlight: "sidebar-nav"
+  },
+  {
+    title: "Strategic Dashboard",
+    tab: 'dashboard',
+    content: "Your command center. See high-alignment grants (verified only — no hallucinated data), active proposals by stage, pipeline value, and upcoming deadlines at a glance. Use 'Export Portfolio MD' to download your full org profile as a document.",
     highlight: "dashboard-overview"
   },
-  { 
-    title: "Proposal Studio", 
+  {
+    title: "Proposal Studio",
     tab: 'proposals',
-    content: "Click 'New Draft' to launch the AI Intelligence Engine. It scans your mission and voice to generate high-alignment 9-section proposals in seconds.",
+    content: "Click 'New Draft' to generate a complete 9-section proposal in seconds using your trained voice profile. Proposals are auto-stamped with 'Created By' and 'Last Edited By' so the whole team knows who's working on what.",
     highlight: "proposals-view"
   },
-  { 
-    title: "Template Library", 
+  {
+    title: "Template Library",
     tab: 'proposals',
-    content: "Access 'Templates' to jumpstart new applications using structures from your most successful past ADR grants.",
+    content: "Save any successful proposal structure as a reusable template. Templates speed up future applications and keep your team aligned on winning section formats.",
     highlight: "proposals-templates"
   },
-  { 
-    title: "Funder Intel", 
-    tab: 'funders',
-    content: "Use 'AI Re-Research' on any funder to get fresh data points. Track your 'Relationship Stage' from initial contact to secured funding.",
-    highlight: "funders-view"
-  },
-  { 
-    title: "Voice Lab", 
-    tab: 'voice',
-    content: "Train the AI on your brand. Use 'Import Website Context' or 'Analyze Sample' to ensure every sentence sounds exactly like your organization.",
-    highlight: "voice-view"
-  },
-  { 
-    title: "Communication Center", 
-    tab: 'outreach', 
-    content: "Generate tailored 'Outreach' emails and 'Grant Inquiries' that resonate with specific foundations using your trained organizational voice.",
-    highlight: "outreach-view"
-  },
-  { 
-    title: "Strategic Matching", 
-    tab: 'grants', 
-    content: "Our 'Grant Matcher' algorithm parses global databases to identify the exact grants that align with your civic equity and ADR mission.",
+  {
+    title: "Grant Matcher + Autopilot",
+    tab: 'grants',
+    content: "Run Discovery to surface real, verified grant opportunities matched to ECADRN's mission. Every result is checked against known real funders — unverified results are clearly flagged. Use the Verified Only toggle to filter out any uncertain results.",
     highlight: "grants-view"
   },
-  { 
-    title: "AI Strategy Advisor", 
-    tab: 'chat', 
-    content: "Use the 'AI Advisor' for deep strategic thinking. Ask it about funder landscape analysis, complex budgeting, or mission-alignment checking.",
+  {
+    title: "NEW: Grant Autopilot",
+    tab: 'grants',
+    content: "Hit the 'Autopilot' button in Grant Matcher to run the full grant cycle hands-free. Assisted Mode stops at review so you approve before anything is submitted. Full Agent Mode searches, drafts, and submits automatically — then sends you a confirmation notification.",
+    highlight: "grants-view"
+  },
+  {
+    title: "Funder Intelligence",
+    tab: 'funders',
+    content: "Add any funder by website URL and our AI will research their giving priorities, mission alignment, and geographic focus. Use 'AI Re-Research' anytime to refresh intelligence. Track relationship stages from Prospect through Active.",
+    highlight: "funders-view"
+  },
+  {
+    title: "Voice Lab",
+    tab: 'voice',
+    content: "Train the AI on ECADRN's unique voice by pasting writing samples, uploading documents, or loading built-in resources. The AI extracts tone descriptors, key phrases, and voice rules — every AI-generated proposal then sounds authentically like you.",
+    highlight: "voice-view"
+  },
+  {
+    title: "Strategic Outreach",
+    tab: 'outreach',
+    content: "Generate personalized outreach emails, LOIs, and follow-ups for any funder. The AI uses your voice profile and funder intelligence reports to maximize relevance and tone-match.",
+    highlight: "outreach-view"
+  },
+  {
+    title: "AI Strategy Advisor",
+    tab: 'chat',
+    content: "Your on-demand grants strategist. Ask about funder landscapes, how to strengthen a proposal section, budget strategy, or mission alignment. It has full context on your org profile and pipeline.",
     highlight: "chat-view"
   },
-  { 
-    title: "Mission Timeline", 
-    tab: 'calendar', 
-    content: "The 'Calendar' aggregates and manages your mission-critical proposal deadlines and reporting schedules in one unified view.",
-    highlight: "calendar-view"
+  {
+    title: "You're ready — launch the OS",
+    tab: 'dashboard',
+    content: "Start by setting up your Organization Profile, then train your Voice Lab. Once those are set, run a Grant Discovery or launch Autopilot and let the system work for you.",
+    highlight: "dashboard-overview"
   }
 ];
 
@@ -862,10 +874,12 @@ function ProposalsView({
   const [showGuide, setShowGuide] = useState(false);
   
   const guideSteps = [
-    { title: "Generative Drafting", content: "Use the 'New Draft' button to trigger AI-powered generation of a full 9-section proposal based on your organization's mission and voice." },
-    { title: "Smart Templates", content: "Choose from pre-built ADR grant structures or save your own successful drafts as custom templates for future work." },
-    { title: "Advanced Editing", content: "Inside the editor, you can split or merge sections to control flow, and assign specific blocks to team members for collaboration." },
-    { title: "Evolution & Budget", content: "Track every manual and auto-save via the Timeline view, and build complex budgets with AI-generated justifications for each line item." }
+    { title: "AI Proposal Drafting", content: "Click 'New Draft', enter the grant title, funder, and a brief description. The AI generates a complete 9-section proposal in seconds using your active voice profile. The more complete your Voice Lab training, the stronger the output." },
+    { title: "Team Collaboration", content: "Every proposal is stamped with 'Created By' and 'Last Edited By' metadata so the full team knows who worked on what and when. Switch to the Team workspace to share proposals across all @ecadrn.org members." },
+    { title: "Template Library", content: "Save any successful proposal structure as a reusable template via the Templates tab. On your next draft, pick a template to pre-fill sections — great for recurring funders or similar grant types." },
+    { title: "Section Editing & Budget Builder", content: "Inside the editor, refine any section with AI assistance or type directly. Use the Budget Builder to generate AI-justified line items for each expense category." },
+    { title: "AI Review & Score", content: "Once drafted, click 'AI Review' to run a full fundability audit — scores each of the 9 sections, flags red flags, and suggests priority revisions before submission." },
+    { title: "Autopilot-Generated Proposals", content: "Proposals created by Grant Autopilot appear here automatically with 'autopilot' tags. In Assisted Mode they land in 'Review' status for your approval. In Full Agent Mode they are marked 'Submitted' with a notification confirmation." }
   ];
 
   const [newProposalData, setNewProposalData] = useState({
@@ -2527,10 +2541,12 @@ function FundersView({ funders, organization }: { funders: any[], organization: 
   ]));
 
   const guideSteps = [
-    { title: "AI Intelligence", content: "Enter any funder domain to trigger the Nexus Intelligence engine. We'll scrape their public profile and assess mission alignment automatically." },
-    { title: "Surgical Search", content: "Filter by relationship stage, analysis date, tags, or search deep within the intelligence reports for specific strategic keywords." },
-    { title: "Continuous Research", content: "Use the Sparkles icon on any card to trigger a re-analysis. This updates the funder's strategic shifts and alignment score." },
-    { title: "Relationship Management", content: "Directly edit funder notes on each card to keep your team synced on the latest interactions." }
+    { title: "Adding a Funder", content: "Paste any funder's website URL into the search bar and hit Research. The AI scrapes their public profile, extracts giving priorities, award ranges, geographic focus, and produces a mission alignment rationale specific to ECADRN." },
+    { title: "Relationship Stages", content: "Each funder card has a Relationship Stage selector — move prospects through Prospect → Initial Contact → LOI Submitted → Proposal Pending → Active → Declined. This keeps the whole team aligned on where each relationship stands." },
+    { title: "Re-Research & Intelligence Refresh", content: "Funders change their priorities. Hit the Sparkles icon on any card to trigger a fresh AI analysis. The intelligence report updates automatically with new strategic data." },
+    { title: "Smart Filtering & Tags", content: "Filter your funder pipeline by relationship stage, tags, or keyword search within the intelligence reports. Tags are auto-generated from the funder's giving areas and geographic focus." },
+    { title: "Team Funder Sync", content: "In the Team workspace, all @ecadrn.org members share the same funder list. Notes and stage updates made by any team member are visible to everyone in real time." },
+    { title: "Funder → Proposal Pipeline", content: "When drafting a new proposal, select a funder from your intelligence database and the AI uses that funder's known priorities to tailor the draft — making mission alignment explicit and targeted." }
   ];
 
   const STAGES = [
@@ -3720,9 +3736,13 @@ Deadline: 2026-11-15`;
   };
 
   const guideSteps = [
-    { title: "Grant Discovery", content: "Our matching engine scans global datasets to find active grant opportunities that perfectly align with your nonprofit mission." },
-    { title: "Mission Fit Scoring", content: "Each discovered grant is evaluated by AI against your specific project focus areas and geographic reach to give you a 'Match' score." },
-    { title: "Strategic Filtering", content: "Sort your matches by deadline urgency or alignment score to prioritize which opportunities to pursue first." }
+    { title: "Run Discovery", content: "Click 'Run Discovery' to surface real grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and civic equity. The AI only returns funders and programs it can verify from its training data — no fabricated grants." },
+    { title: "Verified vs. Unverified Badges", content: "Every grant result displays a badge: ✓ Verified means the funder and program are confirmed real. ⚠️ Unverified means the AI has some uncertainty — treat these as leads to research further, not confirmed opportunities." },
+    { title: "Verified Only Toggle", content: "Use the 'Verified Only' toggle in the filter bar to instantly hide all unverified results and focus only on confirmed grant opportunities. This is especially useful before sharing the pipeline with leadership." },
+    { title: "Mission Fit Score", content: "Each grant shows a Match % score based on alignment with your organization's focus areas, geographic scope, and eligibility. Sort by Match, Deadline, or Funder Name to prioritize your pipeline." },
+    { title: "Upload RFP for Scoring", content: "Drag and drop any RFP document onto the upload panel. The AI reads it, scores alignment against your mission profile, and adds it to your pipeline with a detailed breakdown." },
+    { title: "NEW: Grant Autopilot", content: "Click 'Autopilot' to run the complete grant cycle without manual steps. Choose Assisted Mode (AI stops at Review for your approval) or Full Agent Mode (AI searches, drafts, and submits automatically with a notification confirmation)." },
+    { title: "Autopilot Live Log", content: "When Autopilot is running, a live terminal log shows every step in real time — grant discovery, proposal drafting, and submission status — so you always know exactly what the AI is doing." }
   ];
 
   const runAutopilot = async () => {
@@ -4661,10 +4681,12 @@ function VoiceView({
   const [showGuide, setShowGuide] = useState(false);
 
   const guideSteps = [
-    { title: "Voice Training", content: "Upload your historical grant applications, annual reports, or mission statements. We'll analyze them to identify your core organizational personality." },
-    { title: "Style Calibration", content: "We extract 'Tone Descriptors' and 'Key Phrases' that ensure every AI-generated proposal sounds authentically like you." },
-    { title: "Multiple Profiles", content: "Switch between different voice profiles for different funders or departments (e.g., Academic vs. Grassroots)." },
-    { title: "Content Transformation", content: "Once your voice is trained, every draft from the Proposal Studio can be calibrated to your unique ADR style." }
+    { title: "Training Your Voice", content: "Paste writing samples directly (letters, press releases, past proposals, mission statements), upload documents, or load ECADRN's built-in resource library. The more content you provide, the more accurately the AI captures your organizational voice." },
+    { title: "What Gets Extracted", content: "The AI identifies Tone Descriptors (e.g. 'community-centered', 'equity-driven'), Key Phrases (your signature language), Voice Rules (what to avoid), and Writing Samples that anchor future generation. These are all editable after analysis." },
+    { title: "Multiple Voice Profiles", content: "Create separate named profiles for different contexts — for example, an Academic profile for university funders and a Grassroots profile for community foundations. Select which profile is active before generating any proposal." },
+    { title: "Funder Alignment Analysis", content: "The Voice Lab includes a Funder Alignment tool that cross-references your active voice profile against your top funder's known priorities. It surfaces style gaps so you can refine your approach before submitting." },
+    { title: "Rewrite Tool", content: "Paste any text into the Rewrite panel and the AI will rework it to match your trained voice — useful for editing sections written by others or repurposing old content." },
+    { title: "Voice Profiles in Autopilot", content: "Grant Autopilot automatically applies your currently selected voice profile to every proposal it drafts. Make sure your best profile is active before running Autopilot for the most on-brand outputs." }
   ];
 
   const [isRewriting, setIsRewriting] = useState(false);
@@ -5652,9 +5674,11 @@ function OutreachView({ organization }: { organization: any }) {
   const [showGuide, setShowGuide] = useState(false);
 
   const guideSteps = [
-     { title: "Strategic Outreach", content: "Generate surgical emails and letters or introduction to funders that haven't been reached out to yet." },
-     { title: "Funder Personalization", content: "AI uses the funder intelligence reports to bridge your organization mission with their specific strategic shifts." },
-     { title: "Response Optimization", content: "Draft follow-ups or LOIs that maximize the probability of a meeting invitation based on historical success patterns." }
+    { title: "Personalized Outreach", content: "Select a funder from your intelligence database and the AI drafts a tailored introduction email, LOI, or follow-up. It uses both your trained voice profile and the funder's known giving priorities to maximize relevance." },
+    { title: "Email Types", content: "Generate cold introductions for new prospects, follow-up messages after an LOI, or thank-you notes post-decision. Each type is tuned differently by the AI based on your relationship stage with that funder." },
+    { title: "Funder Intelligence Integration", content: "Outreach quality improves with better funder intelligence. The richer the AI's analysis of a funder's priorities, the more precisely it can bridge ECADRN's mission to their current strategic focus." },
+    { title: "Team Workspace Outreach", content: "In the Team workspace, outreach drafts are visible to all @ecadrn.org members. This prevents duplicate outreach and keeps everyone aligned on who has contacted which funder and when." },
+    { title: "Audit Build Requirements", content: "The 'Audit Build Requirements' tool scans your current pipeline and identifies any gaps — missing org profile fields, untrained voice lab, funders without intelligence reports — so you know exactly what to complete before an outreach push." }
   ];
   const [missingComponents, setMissingComponents] = useState<string[]>([]);
   const [isChecking, setIsChecking] = useState(false);
@@ -6071,52 +6095,76 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
 function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose: () => void, title: string, steps: { title: string, content: string }[] }) {
   const [step, setStep] = useState(0);
 
+  // Reset to first step whenever guide opens
+  useEffect(() => { if (isOpen) setStep(0); }, [isOpen]);
+
   if (!isOpen) return null;
 
+  const isNew = steps[step].title.startsWith('NEW:') || steps[step].title.includes('Autopilot') || steps[step].title.includes('Team') || steps[step].title.includes('Verified');
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6 text-left">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6 text-left" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white rounded-[40px] shadow-2xl max-w-xl w-full overflow-hidden"
+        exit={{ opacity: 0, scale: 0.92, y: 24 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        className="bg-white rounded-[36px] shadow-2xl max-w-lg w-full overflow-hidden"
+        onClick={e => e.stopPropagation()}
       >
-        <div className="relative p-10 space-y-6">
+        {/* Header stripe */}
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-8 pt-8 pb-6">
           <div className="flex justify-between items-start">
-            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center">
-              <Sparkles className="text-indigo-600" size={28} />
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[9px] font-black text-indigo-200 uppercase tracking-[0.2em]">{title} Guide</span>
+                {isNew && (
+                  <span className="text-[8px] font-black uppercase tracking-widest bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                    ✦ New Feature
+                  </span>
+                )}
+              </div>
+              <h4 className="text-xl font-black text-white tracking-tight leading-tight">{steps[step].title.replace('NEW: ', '')}</h4>
             </div>
-            <button onClick={onClose} className="p-2 text-slate-300 hover:text-slate-900 transition-colors">
-              <X size={24} />
+            <button onClick={onClose} className="p-2 text-indigo-200 hover:text-white transition-colors rounded-xl hover:bg-white/10">
+              <X size={20} />
             </button>
           </div>
-          <div>
-            <h3 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-2">{title} Guide</h3>
-            <h4 className="text-2xl font-black text-slate-900 tracking-tight">{steps[step].title}</h4>
-            <p className="text-sm text-slate-500 mt-4 leading-relaxed font-medium">{steps[step].content}</p>
+          {/* Step dots */}
+          <div className="flex items-center gap-1.5 mt-5">
+            {steps.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setStep(i)}
+                className={`h-1.5 rounded-full transition-all ${i === step ? 'w-7 bg-white' : 'w-1.5 bg-white/30 hover:bg-white/60'}`}
+              />
+            ))}
+            <span className="ml-auto text-[9px] font-black text-indigo-200 tabular-nums">{step + 1} / {steps.length}</span>
           </div>
-          <div className="flex items-center gap-2 pt-4">
-             {steps.map((_, i) => (
-               <div key={i} className={`h-1 rounded-full transition-all ${i === step ? 'w-8 bg-indigo-600' : 'w-2 bg-slate-100'}`}></div>
-             ))}
-          </div>
-          <div className="flex gap-4 pt-4 border-t border-slate-50">
+        </div>
+
+        {/* Body */}
+        <div className="px-8 py-6 space-y-6">
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">{steps[step].content}</p>
+
+          <div className="flex gap-3">
             {step > 0 && (
-              <button 
+              <button
                 onClick={() => setStep(step - 1)}
-                className="flex-1 py-4 border-2 border-slate-100 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-slate-400 hover:bg-slate-50"
+                className="flex-1 py-3.5 border-2 border-slate-100 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all"
               >
-                Back
+                ← Back
               </button>
             )}
-            <button 
+            <button
               onClick={() => {
                 if (step < steps.length - 1) setStep(step + 1);
                 else onClose();
               }}
-              className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100"
+              className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
             >
-              {step < steps.length - 1 ? 'Next Step' : 'Got it, thanks!'}
-              <ArrowRight size={14} />
+              {step < steps.length - 1 ? 'Next' : '✓ Got it'}
+              {step < steps.length - 1 && <ArrowRight size={13} />}
             </button>
           </div>
         </div>
