@@ -198,6 +198,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+    if (activeWorkspace === 'personal' && !user.uid) return; // uid not yet resolved
 
     // Load Notifications
     const notifPath = `organizations/${orgId}/notifications`;
@@ -730,8 +731,8 @@ function DashboardView({
 }: { 
   organization: any, proposals: any[], grants: any[], onStartTour: () => void, onExportMaster: () => void 
 }) {
-  const activeProposals = proposals.filter(p => p.status === 'draft' || p.status === 'review').length;
-  const pendingDeadlines = grants.filter(g => g.deadline && new Date(g.deadline) > new Date()).length;
+  const activeProposals = (proposals || []).filter(p => p.status === 'draft' || p.status === 'review').length;
+  const pendingDeadlines = (grants || []).filter(g => g.deadline && new Date(g.deadline) > new Date()).length;
 
   return (
     <motion.div 
@@ -1442,7 +1443,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         setHumanizerResults(result);
         setShowHumanizer(true);
       } else if (action === 'voice') {
-        const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization.voiceProfile;
+        const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization?.voiceProfile;
         const result = await callAI('rewrite-voice', {
           voiceProfile: activeProfile,
           content: sections[activeSectionIdx].content
@@ -1877,7 +1878,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                             try {
                               setIsAIWorking('voice');
                               const targetSection = sections[activeSectionIdx];
-                              const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization.voiceProfile;
+                              const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization?.voiceProfile;
                               // Ask AI to rewrite specifically targeting humanizer rules
                               const result = await callAI('rewrite-voice', {
                                 voiceProfile: activeProfile,
@@ -5152,7 +5153,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                 <div>
                   <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Tone Descriptors</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {organization.voiceProfile.toneDescriptors?.map((t: string) => (
+                    {organization.voiceProfile?.toneDescriptors?.map((t: string) => (
                       <span key={t} className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-[9px] font-extrabold border border-indigo-100 uppercase">{t}</span>
                     ))}
                   </div>
@@ -5161,9 +5162,9 @@ We bridge the gap between ADR theory and transformative community practice by fo
                   <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Writing Maturity Score</span>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
-                      <div className="bg-indigo-600 h-full" style={{ width: `${organization.voiceProfile.maturityScore || 80}%` }}></div>
+                      <div className="bg-indigo-600 h-full" style={{ width: `${organization.voiceProfile?.maturityScore || 80}%` }}></div>
                     </div>
-                    <span className="font-bold text-slate-700 text-xs">{organization.voiceProfile.maturityScore || 80}%</span>
+                    <span className="font-bold text-slate-700 text-xs">{organization.voiceProfile?.maturityScore || 80}%</span>
                   </div>
                 </div>
               </div>
@@ -6100,7 +6101,8 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
 
   if (!isOpen) return null;
 
-  const isNew = steps[step].title.startsWith('NEW:') || steps[step].title.includes('Autopilot') || steps[step].title.includes('Team') || steps[step].title.includes('Verified');
+  const currentStep = steps[Math.min(step, steps.length - 1)];
+  const isNew = currentStep.title.startsWith('NEW:') || currentStep.title.includes('Autopilot') || currentStep.title.includes('Team') || currentStep.title.includes('Verified');
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-6 text-left" onClick={onClose}>
@@ -6124,7 +6126,7 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
                   </span>
                 )}
               </div>
-              <h4 className="text-xl font-black text-white tracking-tight leading-tight">{steps[step].title.replace('NEW: ', '')}</h4>
+              <h4 className="text-xl font-black text-white tracking-tight leading-tight">{currentStep.title.replace('NEW: ', '')}</h4>
             </div>
             <button onClick={onClose} className="p-2 text-indigo-200 hover:text-white transition-colors rounded-xl hover:bg-white/10">
               <X size={20} />
@@ -6145,7 +6147,7 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
 
         {/* Body */}
         <div className="px-8 py-6 space-y-6">
-          <p className="text-sm text-slate-600 leading-relaxed font-medium">{steps[step].content}</p>
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">{currentStep.content}</p>
 
           <div className="flex gap-3">
             {step > 0 && (
