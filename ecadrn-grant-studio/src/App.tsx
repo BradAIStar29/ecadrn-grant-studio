@@ -142,6 +142,9 @@ const WALKTHROUGH_STEPS = [
   }
 ];
 
+
+const SHARED_ORG_ID = 'ecadrn-shared';
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
@@ -3523,6 +3526,10 @@ function GrantsView({
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
+  const [autopilotMode, setAutopilotMode] = useState<'assisted' | 'full'>('assisted');
+  const [autopilotRunning, setAutopilotRunning] = useState(false);
+  const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
+  const [autopilotOpen, setAutopilotOpen] = useState(false);
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
 
   const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
@@ -3717,6 +3724,118 @@ Deadline: 2026-11-15`;
     { title: "Strategic Filtering", content: "Sort your matches by deadline urgency or alignment score to prioritize which opportunities to pursue first." }
   ];
 
+  const runAutopilot = async () => {
+    if (!organization) return;
+    setAutopilotRunning(true);
+    setAutopilotLog([]);
+    setAutopilotOpen(true);
+
+    const log = (msg: string) => setAutopilotLog(prev => [...prev, msg]);
+
+    try {
+      log('🔍 Searching for best-match grants for ECADRN...');
+      const results = await callAI('autopilot-search', {
+        orgProfile: organization,
+        focusAreas: organization?.voiceProfile?.keyPhrases?.join(', ') || 'ADR, conflict resolution, civic equity'
+      });
+
+      if (!Array.isArray(results) || results.length === 0) {
+        log('⚠️ No grants found. Try updating your voice profile first.');
+        setAutopilotRunning(false);
+        return;
+      }
+      log(`✅ Found ${results.length} grant opportunities.`);
+
+      const grantsPath = `organizations/${orgId}/grants`;
+      const grantsRef = collection(db, grantsPath);
+      const savedGrants: any[] = [];
+      for (const g of results) {
+        const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
+        const ref = await addDoc(grantsRef, {
+          ...g, tags: autoTags, source: 'autopilot', status: 'discovery',
+          updatedAt: new Date().toISOString()
+        });
+        savedGrants.push({ id: ref.id, ...g });
+        log(`  📌 ${g.title} (${g.funderName}) — ${g.matchScore}% match`);
+      }
+
+      const topGrants = savedGrants.filter(g => g.matchScore >= 75).slice(0, 3);
+      log(`
+✍️ Drafting proposals for top ${topGrants.length} grant(s)...`);
+
+      const proposalsPath = `organizations/${orgId}/proposals`;
+      const proposalsRef = collection(db, proposalsPath);
+
+      for (const grant of topGrants) {
+        log(`  ⏳ Writing full proposal: ${grant.title}...`);
+        try {
+          const activeVoice = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || voiceProfiles[0];
+          const draft = await callAI('generate-draft', {
+            orgProfile: organization,
+            grantTitle: grant.title,
+            funderName: grant.funderName,
+            funderType: grant.funderType || 'Foundation',
+            grantDescription: grant.description,
+            focusAreas: (grant.focusAreas || []).join(', '),
+            amountMin: grant.amountMin || 25000,
+            amountMax: grant.amountMax || 100000,
+            eligibility: grant.eligibility || 'Nonprofits',
+            geographicFocus: grant.geographicFocus || 'National',
+            toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || organization?.voiceProfile?.toneDescriptors?.join(', ') || '',
+            keyPhrases: activeVoice?.keyPhrases?.join(', ') || organization?.voiceProfile?.keyPhrases?.join(', ') || '',
+            voiceRules: activeVoice?.voiceRules?.join('; ') || organization?.voiceProfile?.voiceRules?.join('; ') || '',
+            writingSamples: activeVoice?.writingSamples?.join(' | ') || organization?.voiceProfile?.writingSamples?.join(' | ') || ''
+          });
+
+          const sections = [
+            { id: 'executiveSummary', title: 'Executive Summary', content: draft.executiveSummary || '' },
+            { id: 'needStatement', title: 'Need Statement', content: draft.needStatement || '' },
+            { id: 'projectDescription', title: 'Project Description', content: draft.projectDescription || '' },
+            { id: 'goalsObjectives', title: 'Goals & Objectives', content: draft.goalsObjectives || '' },
+            { id: 'methodology', title: 'Methodology', content: draft.methodology || '' },
+            { id: 'evaluationPlan', title: 'Evaluation Plan', content: draft.evaluationPlan || '' },
+            { id: 'sustainability', title: 'Sustainability', content: draft.sustainability || '' },
+            { id: 'organizationalCapacity', title: 'Organizational Capacity', content: draft.organizationalCapacity || '' },
+            { id: 'budgetNarrative', title: 'Budget Narrative', content: draft.budgetNarrative || '' }
+          ];
+
+          const status = autopilotMode === 'full' ? 'submitted' : 'review';
+          const proposalRef = await addDoc(proposalsRef, {
+            title: grant.title, funder: grant.funderName, description: grant.description,
+            sections, status, createdBy: user?.email || 'autopilot', lastEditedBy: 'Autopilot',
+            source: 'autopilot', autopilot: true, matchScore: grant.matchScore,
+            updatedAt: new Date().toISOString(), createdAt: new Date().toISOString()
+          });
+
+          if (autopilotMode === 'full') {
+            log(`  🚀 SUBMITTED: ${grant.title} — ID: ${proposalRef.id}`);
+            const notifPath = `organizations/${orgId}/notifications`;
+            await addDoc(collection(db, notifPath), {
+              userId: user?.uid,
+              title: '✅ Grant Submitted by Autopilot',
+              message: `"${grant.title}" (${grant.funderName}) submitted automatically. Proposal ID: ${proposalRef.id}`,
+              read: false, timestamp: new Date().toISOString(),
+              type: 'autopilot_submission', proposalId: proposalRef.id
+            });
+          } else {
+            log(`  ✅ Ready for review: ${grant.title} → Proposals tab`);
+          }
+        } catch (err: any) {
+          log(`  ❌ Failed: ${grant.title}: ${err.message}`);
+        }
+      }
+      log(autopilotMode === 'full'
+        ? `
+🎉 Done! ${topGrants.length} proposals submitted. Check Notifications for confirmations.`
+        : `
+🎉 Done! ${topGrants.length} proposals queued for your review in Proposals.`);
+    } catch (err: any) {
+      log(`❌ Autopilot error: ${err.message}`);
+    } finally {
+      setAutopilotRunning(false);
+    }
+  };
+
   const runDiscovery = async () => {
     setIsDiscovering(true);
     try {
@@ -3819,8 +3938,80 @@ Deadline: 2026-11-15`;
             {isDiscovering ? <RefreshCw className="animate-spin" size={16} /> : <TrendingUp size={16} />}
             {isDiscovering ? 'Searching...' : 'Run Discovery'}
           </button>
+          <button
+            onClick={() => setAutopilotOpen(o => !o)}
+            className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-violet-100"
+          >
+            <Sparkles size={16} />
+            Autopilot
+          </button>
         </div>
       </div>
+
+      {/* ── Autopilot Panel ── */}
+      {autopilotOpen && (
+        <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center text-white">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 text-sm">Grant Autopilot</h4>
+                <p className="text-[11px] text-slate-500">Search → Draft → Review/Submit. Full cycle, hands-free.</p>
+              </div>
+            </div>
+            <button onClick={() => setAutopilotOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-4">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Mode</p>
+            <div className="flex rounded-xl overflow-hidden border border-violet-200 bg-white">
+              <button
+                onClick={() => setAutopilotMode('assisted')}
+                className={`px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-colors ${autopilotMode === 'assisted' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                👤 Assisted — Stop at Review
+              </button>
+              <button
+                onClick={() => setAutopilotMode('full')}
+                className={`px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-colors ${autopilotMode === 'full' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                🤖 Full Agent — Auto Submit
+              </button>
+            </div>
+          </div>
+
+          {autopilotMode === 'full' && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-amber-700 font-semibold">Full Agent mode will mark proposals as submitted and send you a notification with confirmation. Ensure your voice profile is up to date before running.</p>
+            </div>
+          )}
+
+          <button
+            onClick={runAutopilot}
+            disabled={autopilotRunning}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-3 rounded-xl text-sm font-black uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg"
+          >
+            {autopilotRunning ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+            {autopilotRunning ? 'Autopilot Running...' : 'Launch Autopilot'}
+          </button>
+
+          {/* Live Log */}
+          {autopilotLog.length > 0 && (
+            <div className="bg-slate-900 rounded-xl p-4 font-mono text-[11px] text-green-400 space-y-1 max-h-48 overflow-y-auto">
+              {autopilotLog.map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+              {autopilotRunning && <div className="animate-pulse">▋</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Matcher Configuration Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

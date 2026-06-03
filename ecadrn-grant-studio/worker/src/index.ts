@@ -201,6 +201,39 @@ OUTPUT FORMAT — Respond ONLY with a valid JSON array. No preamble. No markdown
   "justification": "string"
 }]`;
 
+
+    case 'autopilot-search':
+      return `You are an expert grant researcher for the Early Career ADR Network (ECADRN).
+
+TASK: Search for and identify the TOP 5 most fundable grant opportunities for this organization RIGHT NOW.
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile)}
+
+VOICE & FOCUS AREAS: ${data.focusAreas || 'ADR, conflict resolution, civic equity, early career professional development'}
+
+For each grant, assess realistic fit based on:
+- Mission alignment with ADR, mediation, access to justice, civic equity
+- Organization size and stage (early-career professional network)
+- Geographic scope (national/international)
+- Typical award range $20,000–$200,000
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON array. No preamble. No markdown fences.
+[{
+  "title": "string",
+  "funderName": "string",
+  "funderType": "Foundation | Government | Corporate",
+  "description": "string (2-3 sentences on why this is a strong match)",
+  "focusAreas": ["string"],
+  "amountMin": number,
+  "amountMax": number,
+  "deadline": "string (e.g. Rolling, March 2026, or specific date)",
+  "geographicFocus": "string",
+  "eligibility": "string",
+  "matchScore": number,
+  "matchReason": "string (1-2 sentences)"
+}]`;
+
     default:
       return 'INVALID';
   }
