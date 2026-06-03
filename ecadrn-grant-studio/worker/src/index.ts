@@ -90,7 +90,7 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
     case 'discover-grants':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding.
 
-TASK: Identify ${data.count || 5} active grant opportunities that are a strong mission fit for the organization below.
+TASK: Identify up to ${data.count || 5} REAL, VERIFIABLE grant opportunities that are a strong mission fit for the organization below.
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile)}
@@ -101,22 +101,39 @@ Geographic scope: ${data.geographicFocus}
 Preferred award range: $${data.amountMin}–$${data.amountMax}
 Additional guidance: ${data.searchQuery}
 
+⚠️ STRICT ANTI-HALLUCINATION RULES — FOLLOW EXACTLY:
+1. ONLY include funders that ACTUALLY EXIST and are KNOWN to fund nonprofits in the ADR, conflict resolution, access to justice, or civic equity space.
+2. ONLY include grant programs that have ACTUALLY EXISTED or are CURRENTLY ACTIVE as of your knowledge cutoff. Do NOT invent program names.
+3. If you are not certain a grant program exists, DO NOT include it. It is better to return fewer results than to fabricate any.
+4. Every "title" must be the REAL name of an actual grant program — not a description you made up.
+5. Every "funderName" must be a REAL organization with a real website.
+6. "url" must be a real, known URL for the grant or funder — set to null if you are not certain.
+7. "deadline" must be null unless you have specific knowledge of a real deadline date.
+8. "amountMin" and "amountMax" must reflect ACTUAL known award ranges — do not fabricate numbers.
+9. Set "verified": false if you have ANY uncertainty about the grant's current active status.
+10. NEVER set "verified": true unless you are highly confident the program is real and currently active.
+
+GOOD examples of real funders in this space:
+- Open Society Foundations, Z. Smith Reynolds Foundation, Hewlett Foundation, MacArthur Foundation,
+  Robert Wood Johnson Foundation, JPMorgan Chase Foundation, Google.org, National Institute of Justice,
+  Surdna Foundation, W.K. Kellogg Foundation, Ford Foundation, Skoll Foundation.
+
 OUTPUT FORMAT — Respond ONLY with a valid JSON array. No preamble. No markdown fences.
 [{
-  "title": "string",
-  "funderName": "string",
+  "title": "string — REAL grant program name only",
+  "funderName": "string — REAL organization name only",
   "funderType": "foundation | government | corporate | community_foundation",
-  "description": "string",
+  "description": "string — accurate description of what the program actually funds",
   "focusAreas": ["string"],
   "geographicFocus": "string",
   "amountMin": number,
   "amountMax": number,
   "deadline": "YYYY-MM-DD or null",
-  "url": "string or null",
+  "url": "string — real known URL, or null",
   "eligibility": "string",
   "missionFitScore": number,
-  "missionFitRationale": "string",
-  "verified": true
+  "missionFitRationale": "string — cite specific alignment between this funder's KNOWN priorities and ECADRN's mission",
+  "verified": boolean
 }]`;
 
     case 'review-proposal':
@@ -205,33 +222,51 @@ OUTPUT FORMAT — Respond ONLY with a valid JSON array. No preamble. No markdown
     case 'autopilot-search':
       return `You are an expert grant researcher for the Early Career ADR Network (ECADRN).
 
-TASK: Search for and identify the TOP 5 most fundable grant opportunities for this organization RIGHT NOW.
+TASK: Identify the TOP 5 most fundable REAL grant opportunities for this organization.
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile)}
 
 VOICE & FOCUS AREAS: ${data.focusAreas || 'ADR, conflict resolution, civic equity, early career professional development'}
 
-For each grant, assess realistic fit based on:
-- Mission alignment with ADR, mediation, access to justice, civic equity
-- Organization size and stage (early-career professional network)
-- Geographic scope (national/international)
-- Typical award range $20,000–$200,000
+⚠️ CRITICAL ANTI-HALLUCINATION RULES — NON-NEGOTIABLE:
+1. You MUST only return grants from funders that ACTUALLY EXIST in the real world.
+2. You MUST only return grant PROGRAMS that have actually existed or are currently known to be active.
+3. DO NOT invent, composite, or approximate any grant name, funder name, amount, or deadline.
+4. If you are not certain a specific program exists by name, describe the funder's general grantmaking instead and set verified: false.
+5. "url" must be a real known URL — set to null if uncertain.
+6. "deadline" must be null unless you know a specific real date.
+7. It is BETTER to return 2-3 real grants than 5 fabricated ones.
+8. Each "matchReason" must cite the funder's KNOWN, DOCUMENTED funding priorities — not assumptions.
+
+REAL funders known to fund ADR / access to justice / conflict resolution / civic equity:
+- Open Society Foundations (Justice & Governance)
+- Hewlett Foundation (Conflict Resolution & Global Development)
+- MacArthur Foundation (Safety & Justice Challenge)
+- Z. Smith Reynolds Foundation (NC nonprofits)
+- Surdna Foundation (Thriving Cultures / Strong Democracy)
+- National Institute of Justice (DOJ grants)
+- Robert Wood Johnson Foundation (Health Equity)
+- Ford Foundation (Civic Engagement & Government)
+- W.K. Kellogg Foundation (Racial Equity, Community Engagement)
+- Skoll Foundation (Social Innovation)
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON array. No preamble. No markdown fences.
 [{
-  "title": "string",
-  "funderName": "string",
+  "title": "string — REAL program name, or funder's general grantmaking if no named program known",
+  "funderName": "string — REAL organization only",
   "funderType": "Foundation | Government | Corporate",
-  "description": "string (2-3 sentences on why this is a strong match)",
+  "description": "string — accurate 2-3 sentence description of what this funder ACTUALLY supports",
   "focusAreas": ["string"],
   "amountMin": number,
   "amountMax": number,
-  "deadline": "string (e.g. Rolling, March 2026, or specific date)",
+  "deadline": "YYYY-MM-DD or null",
   "geographicFocus": "string",
   "eligibility": "string",
   "matchScore": number,
-  "matchReason": "string (1-2 sentences)"
+  "matchReason": "string — cite specific known funder priorities that align with ECADRN",
+  "verified": boolean,
+  "url": "string or null"
 }]`;
 
     default:
