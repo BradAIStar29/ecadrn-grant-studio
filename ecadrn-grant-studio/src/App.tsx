@@ -1150,6 +1150,7 @@ function ProposalEditor({
   });
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [showDriveExport, setShowDriveExport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<any[]>([]);
@@ -1328,6 +1329,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
 
   const saveProposal = async (auto = false, customMsg: string = '') => {
     if (!auto) setIsSaving(true);
+    if (auto) setAutoSaveStatus('saving');
     try {
       const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       await setDoc(doc(db, propPath), {
@@ -1336,6 +1338,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         updatedAt: new Date().toISOString(),
         lastEditedBy: auth.currentUser?.email || '',
       }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, propPath));
+      if (auto) { setAutoSaveStatus('saved'); setTimeout(() => setAutoSaveStatus('idle'), 2500); }
 
       if (!auto) {
         const versionsPath = `${propPath}/versions`;
@@ -1625,6 +1628,16 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
             >
               {isSaving ? 'Syncing...' : 'Save Version'}
             </button>
+            {/* Auto-save status indicator */}
+            {autoSaveStatus !== 'idle' && (
+              <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 px-2 py-1 rounded-lg transition-all ${autoSaveStatus === 'saving' ? 'text-indigo-400 bg-indigo-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                {autoSaveStatus === 'saving' ? (
+                  <><span className="inline-block w-2 h-2 rounded-full bg-indigo-400 animate-pulse" /> Saving…</>
+                ) : (
+                  <><span className="text-emerald-500">✓</span> Saved</>
+                )}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -4361,7 +4374,20 @@ Deadline: 2026-11-15`;
               {g.deadline && (
                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   <span>Deadline</span>
-                  <span className="text-rose-500">{new Date(g.deadline).toLocaleDateString()}</span>
+                  <span className="flex items-center gap-1.5">
+                    {(() => {
+                      const daysLeft = Math.ceil((new Date(g.deadline).getTime() - Date.now()) / 86400000);
+                      const badge = daysLeft < 0
+                        ? <span className="bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded text-[9px] font-black">CLOSED</span>
+                        : daysLeft <= 7
+                        ? <span className="bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded text-[9px] font-black animate-pulse">🔴 {daysLeft}d left</span>
+                        : daysLeft <= 21
+                        ? <span className="bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded text-[9px] font-black">🟡 {daysLeft}d left</span>
+                        : <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[9px] font-black">🟢 {daysLeft}d left</span>;
+                      return badge;
+                    })()}
+                    <span className="text-rose-500">{new Date(g.deadline).toLocaleDateString()}</span>
+                  </span>
                 </div>
               )}
             </div>
@@ -6431,6 +6457,13 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
           <AlertCircle size={20} />
         </div>
         <div>
+          {/* Budget Total */}
+          {lineItems.length > 0 && (
+            <div className="flex justify-between items-center px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl mb-4">
+              <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">Total Project Budget</span>
+              <span className="text-lg font-black text-indigo-900">${total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            </div>
+          )}
           <h4 className="text-sm font-bold text-slate-900 mb-1">Budget Alignment Check</h4>
           <p className="text-xs text-slate-600 leading-relaxed">This budget is automatically mirrored to your Budget Narrative section. AI Advisor suggests including at least 15% indirect costs if the funder allows it.</p>
         </div>
