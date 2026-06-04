@@ -765,7 +765,7 @@ function DashboardView({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend="+12.4%" />
-        <StatCard title="Strategic Matches" value={(grants?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="High Alignment" />
+        <StatCard title="Verified Matches" value={(grants?.filter((g: any) => g.verified !== false)?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="Verified Only" />
         <StatCard title="Voice Maturity" value={`${organization?.voiceProfile?.maturityScore || 78}%`} icon={<Mic className="text-indigo-600" />} trend="Nominal State" />
       </div>
 
@@ -3558,7 +3558,7 @@ function GrantsView({
   const [autopilotRunning, setAutopilotRunning] = useState(false);
   const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
   const [autopilotOpen, setAutopilotOpen] = useState(false);
-  const [hideUnverified, setHideUnverified] = useState(false);
+  const [hideUnverified, setHideUnverified] = useState(true); // Default: only show verified grants
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
 
   const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
@@ -3578,7 +3578,9 @@ function GrantsView({
 
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
-      for (const g of results) {
+      const validResults = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
+      if (validResults.length === 0) throw new Error('No valid grants returned by AI — refusing to save unverified data.');
+      for (const g of validResults) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
           autoTags.push(g.geographicFocus);
@@ -3782,7 +3784,13 @@ Deadline: 2026-11-15`;
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       const savedGrants: any[] = [];
-      for (const g of results) {
+      const verifiedResults = results.filter((g: any) => g?.title && g?.funderName);
+      if (verifiedResults.length === 0) {
+        log('⚠️ AI returned no verifiable grants. Aborting to prevent hallucinated data.');
+        setAutopilotRunning(false);
+        return;
+      }
+      for (const g of verifiedResults) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         const ref = await addDoc(grantsRef, {
           ...g, tags: autoTags, source: 'autopilot', status: 'discovery',
@@ -3883,7 +3891,9 @@ Deadline: 2026-11-15`;
 
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
-      for (const g of results) {
+      const validGrants = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
+      if (validGrants.length === 0) throw new Error('AI returned no verifiable grants — nothing saved.');
+      for (const g of validGrants) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
           autoTags.push(g.geographicFocus);
@@ -5815,16 +5825,13 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
     setInput('');
 
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userMessage: userMsg,
-          orgProfile: organization,
-          pipelineSummary: `Currently managing ${(proposals || []).length} proposals and ${(proposals || []).filter(p => p.status === 'draft').length} drafts.`
-        })
+      const res = await callAI<{ raw?: string } | string>('chat', {
+        userMessage: userMsg,
+        orgProfile: organization,
+        pipelineSummary: `Currently managing ${(proposals || []).length} proposals and ${(proposals || []).filter(p => p.status === 'draft').length} drafts.`
       });
-      const text = await res.text();
+      // Worker returns { raw: text } for plain-text AI responses
+      const text = typeof res === 'string' ? res : (res as any).raw || JSON.stringify(res);
       setMessages(prev => [...prev, { role: 'assistant', text }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', text: "Strategic uplink interrupted. Please retry your request." }]);
