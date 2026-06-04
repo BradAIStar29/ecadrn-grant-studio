@@ -876,13 +876,17 @@ function ProposalsView({
   const [showGuide, setShowGuide] = useState(false);
   
   const guideSteps = [
-    { title: "AI Proposal Drafting", content: "Click 'New Draft', enter the grant title, funder, and a brief description. The AI generates a complete 9-section proposal in seconds using your active voice profile. The more complete your Voice Lab training, the stronger the output." },
-    { title: "Team Collaboration", content: "Every proposal is stamped with 'Created By' and 'Last Edited By' metadata so the full team knows who worked on what and when. Switch to the Team workspace to share proposals across all @ecadrn.org members." },
-    { title: "Template Library", content: "Save any successful proposal structure as a reusable template via the Templates tab. On your next draft, pick a template to pre-fill sections — great for recurring funders or similar grant types." },
-    { title: "Section Editing & Budget Builder", content: "Inside the editor, refine any section with AI assistance or type directly. Use the Budget Builder to generate AI-justified line items for each expense category." },
-    { title: "AI Review & Score", content: "Once drafted, click 'AI Review' to run a full fundability audit — scores each of the 9 sections, flags red flags, and suggests priority revisions before submission." },
-    { title: "Autopilot-Generated Proposals", content: "Proposals created by Grant Autopilot appear here automatically with 'autopilot' tags. In Assisted Mode they land in 'Review' status for your approval. In Full Agent Mode they are marked 'Submitted' with a notification confirmation." }
-  ];
+    { title: "Create a New Draft", content: "Click 'New Draft' in the top-right to open the proposal form. Enter the grant title, target funder, and a brief project description. The AI uses this to shape the entire proposal." },
+    { title: "AI Proposal Generation", content: "Click 'Generate AI Proposal Draft' and the AI writes a full 9-section proposal in seconds — executive summary, goals, methodology, evaluation, sustainability, organizational capacity, and budget narrative — all tailored to your funder." },
+    { title: "Status Filter", content: "Use the status dropdown next to the search bar to filter proposals by Draft, In Review, Submitted, or Approved. Quickly find what needs your attention without scrolling." },
+    { title: "Search Proposals", content: "Type in the search bar to filter proposals by title or funder name in real time. Combine with the status filter to narrow down your pipeline." },
+    { title: "Proposal Templates", content: "Click 'Templates' to choose from pre-built starter templates (education, health equity, community programs, and more). Templates pre-fill the funder, description, and structure to speed up drafting." },
+    { title: "Team Collaboration", content: "Switch to the 'Team' workspace (top-right toggle) to see all proposals drafted by the full @ecadrn.org team. Every proposal is stamped with 'Created by' and 'Last edited by' so you always know who touched what." },
+    { title: "Autopilot-Generated Proposals", content: "Proposals created by Grant Autopilot appear here automatically with 'autopilot' tags. In Assisted Mode they land in 'Review' status for your approval. In Full Agent Mode they are marked 'Submitted' with a notification confirmation." },
+    { title: "Open the Editor", content: "Click any proposal row to open the full Proposal Editor — a multi-section rich-text workspace with AI section rewriting, funder alignment, voice matching, focus mode, and version history." },
+    { title: "Proposal Lifecycle", content: "Move proposals through statuses manually: Draft → In Review → Submitted → Approved. Each status change is saved and visible to the whole team in the shared workspace." },
+    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 10 steps are always available." }
+  
 
   const [newProposalData, setNewProposalData] = useState({
     title: '',
@@ -2575,12 +2579,14 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   ]));
 
   const guideSteps = [
-    { title: "Adding a Funder", content: "Paste any funder's website URL into the search bar and hit Research. The AI scrapes their public profile, extracts giving priorities, award ranges, geographic focus, and produces a mission alignment rationale specific to ECADRN." },
-    { title: "Relationship Stages", content: "Each funder card has a Relationship Stage selector — move prospects through Prospect → Initial Contact → LOI Submitted → Proposal Pending → Active → Declined. This keeps the whole team aligned on where each relationship stands." },
-    { title: "Re-Research & Intelligence Refresh", content: "Funders change their priorities. Hit the Sparkles icon on any card to trigger a fresh AI analysis. The intelligence report updates automatically with new strategic data." },
-    { title: "Smart Filtering & Tags", content: "Filter your funder pipeline by relationship stage, tags, or keyword search within the intelligence reports. Tags are auto-generated from the funder's giving areas and geographic focus." },
-    { title: "Team Funder Sync", content: "In the Team workspace, all @ecadrn.org members share the same funder list. Notes and stage updates made by any team member are visible to everyone in real time." },
-    { title: "Funder → Proposal Pipeline", content: "When drafting a new proposal, select a funder from your intelligence database and the AI uses that funder's known priorities to tailor the draft — making mission alignment explicit and targeted." }
+    { title: "Add a Funder", content: "Paste any funder's website URL into the search bar and click Research. The AI scrapes their public profile, extracts giving priorities, award ranges, geographic focus, and writes an ECADRN alignment rationale." },
+    { title: "Relationship Stages", content: "Each funder card has a stage selector. Move prospects through: Prospect → Initial Contact → LOI Submitted → Proposal Pending → Active → Declined. Keeps the whole team aligned." },
+    { title: "AI Intelligence Refresh", content: "Funder priorities change. Click the ✦ sparkles icon on any card to run a fresh AI analysis. The strategic intelligence report updates immediately with new data." },
+    { title: "Filter & Search", content: "Use the relationship stage filter and keyword search bar to narrow your funder pipeline. Tags (auto-generated from giving areas) are also filterable." },
+    { title: "Outreach Email from Funder", content: "From any funder card, jump directly to the Outreach tab with that funder pre-selected. The AI drafts a tailored cold intro, LOI, or follow-up email based on their intelligence profile." },
+    { title: "Team Funder Database", content: "Switch to Team workspace and all @ecadrn.org members share a live funder list. Any notes, stage updates, or new funders added by your teammates are instantly visible." },
+    { title: "Funder → Proposal Link", content: "When drafting a proposal, pick a funder from your database and the AI uses that funder's stated priorities to shape every section — no generic language." },
+    { title: "Replay This Guide", content: "Click the ? icon at any time to reopen this guide. All steps are always available so you can review any feature at any point." }
   ];
 
   const STAGES = [
