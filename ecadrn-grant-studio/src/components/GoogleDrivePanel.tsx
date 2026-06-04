@@ -12,7 +12,7 @@ import {
   Folder, Settings
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, reauthenticateWithPopup, signInWithPopup } from 'firebase/auth';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.workers.dev';
@@ -49,12 +49,25 @@ export interface Props {
 // ── Session-scoped Drive token cache ─────────────────────────────────────────
 const DRIVE_TOKEN_KEY = 'ecadrn_drive_token';
 
+const DRIVE_TOKEN_EXPIRY_KEY = 'ecadrn_drive_token_expiry';
+
 function saveDriveToken(token: string) {
   sessionStorage.setItem(DRIVE_TOKEN_KEY, token);
+  // Drive tokens last ~1 hour; store expiry 55 minutes from now
+  const expiry = Date.now() + 55 * 60 * 1000;
+  sessionStorage.setItem(DRIVE_TOKEN_EXPIRY_KEY, String(expiry));
 }
 
 function loadDriveToken(): string | null {
-  return sessionStorage.getItem(DRIVE_TOKEN_KEY);
+  const token = sessionStorage.getItem(DRIVE_TOKEN_KEY);
+  const expiry = Number(sessionStorage.getItem(DRIVE_TOKEN_EXPIRY_KEY) || 0);
+  if (!token || Date.now() > expiry) {
+    // Token missing or expired — clear it so the UI prompts re-auth
+    sessionStorage.removeItem(DRIVE_TOKEN_KEY);
+    sessionStorage.removeItem(DRIVE_TOKEN_EXPIRY_KEY);
+    return null;
+  }
+  return token;
 }
 
 // ── Helper: build auth headers (no Content-Type for GET) ─────────────────────
@@ -92,20 +105,37 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
     setError('');
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error('Not logged in');
+      if (!user) throw new Error('You must be signed in to connect Drive');
       const provider = new GoogleAuthProvider();
       provider.addScope(DRIVE_SCOPE);
-      const result = await reauthenticateWithPopup(user, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
+      // Force account selection so user can confirm which Google account to use
+      provider.setCustomParameters({ prompt: 'select_account', hd: 'ecadrn.org' });
+
+      let credential;
+      try {
+        // Try reauthenticate first (preserves session)
+        const result = await reauthenticateWithPopup(user, provider);
+        credential = GoogleAuthProvider.credentialFromResult(result);
+      } catch (reAuthErr: any) {
+        // If reauthenticate fails (e.g. different provider), fall back to signInWithPopup
+        if (reAuthErr.code !== 'auth/popup-closed-by-user') {
+          const result = await signInWithPopup(auth, provider);
+          credential = GoogleAuthProvider.credentialFromResult(result);
+        } else {
+          return; // User closed popup — not an error
+        }
+      }
+
       if (credential?.accessToken) {
         setDriveToken(credential.accessToken);
         saveDriveToken(credential.accessToken);
+        setError('');
       } else {
-        throw new Error('No access token returned from Google');
+        throw new Error('Google did not return a Drive access token. Make sure your @ecadrn.org account has Drive enabled.');
       }
     } catch (e: any) {
       if (e.code !== 'auth/popup-closed-by-user') {
-        setError('Drive authorization failed: ' + e.message);
+        setError('Drive authorization failed: ' + (e.message || 'Unknown error'));
       }
     } finally {
       setIsAuthorizing(false);
@@ -274,8 +304,8 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <HardDrive className="w-5 h-5 text-blue-600" />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${driveToken ? 'bg-emerald-50' : 'bg-blue-50'}`}>
+                  <HardDrive className={`w-5 h-5 ${driveToken ? 'text-emerald-600' : 'text-blue-600'}`} />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
@@ -283,7 +313,24 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
                     {mode === 'export' && 'Export to Google Drive'}
                     {mode === 'sync' && 'Sync Grants Folder'}
                   </h2>
-                  <p className="text-xs text-slate-500">ECADRN Drive Integration</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${driveToken ? 'text-emerald-500' : 'text-slate-400'}`}>
+                      {driveToken ? '● Connected · @ecadrn.org' : '○ Not connected'}
+                    </span>
+                    {driveToken && (
+                      <button
+                        onClick={() => {
+                          sessionStorage.removeItem('ecadrn_drive_token');
+                          sessionStorage.removeItem('ecadrn_drive_token_expiry');
+                          setDriveToken(null);
+                        }}
+                        className="text-[9px] font-bold text-slate-400 hover:text-rose-500 uppercase tracking-widest transition-colors"
+                        title="Disconnect and re-authorize"
+                      >
+                        Reconnect ↺
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors">
@@ -306,22 +353,31 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
 
               {/* ── Auth Step ── */}
               {!driveToken ? (
-                <div className="text-center py-8">
+                <div className="text-center py-8 px-6">
                   <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <HardDrive className="w-8 h-8 text-blue-500" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-2">Connect Google Drive</h3>
-                  <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
-                    Authorize access to your ECADRN Google Drive to import documents and export proposals.
+                  <p className="text-sm text-slate-500 mb-3 max-w-sm mx-auto">
+                    Authorize your <strong>@ecadrn.org</strong> Google account to browse, import, and export files. 
+                    This is a one-time step per session — Drive tokens expire after 1 hour.
                   </p>
-                  <button
-                    onClick={authorizeWithDrive}
-                    disabled={isAuthorizing}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isAuthorizing ? <Loader size={16} className="animate-spin" /> : <HardDrive size={16} />}
-                    {isAuthorizing ? 'Connecting…' : 'Connect Google Drive'}
-                  </button>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-700 font-semibold mb-5 inline-block">
+                    ⚠ Must use your @ecadrn.org account — personal accounts are blocked
+                  </div>
+                  <div>
+                    <button
+                      onClick={authorizeWithDrive}
+                      disabled={isAuthorizing}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg shadow-blue-100"
+                    >
+                      {isAuthorizing ? <Loader size={16} className="animate-spin" /> : <HardDrive size={16} />}
+                      {isAuthorizing ? 'Connecting…' : 'Connect with @ecadrn.org'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-3">
+                    You'll see a Google popup — sign in with your @ecadrn.org account and approve Drive access.
+                  </p>
                 </div>
               ) : (
                 <>
