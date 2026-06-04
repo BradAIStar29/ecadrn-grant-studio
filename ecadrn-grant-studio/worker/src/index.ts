@@ -269,6 +269,166 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON array. No preamble. No markd
   "url": "string or null"
 }]`;
 
+
+    case 'rewrite-voice':
+      return `You are an expert editor who masterfully adopts any brand voice.
+
+TASK: Rewrite the SOURCE CONTENT below to strictly adhere to the VOICE PROFILE provided. 
+
+VOICE PROFILE:
+Tone: \${data.voiceProfile.toneDescriptors}
+Rules: \${data.voiceProfile.voiceRules}
+Samples: \${data.voiceProfile.writingSamples}
+
+SOURCE CONTENT:
+\${data.content}
+
+REQUIREMENTS:
+- Preserve all facts, data points, and semantic meaning perfectly.
+- Transform the vocabulary, rhythm, and tone to match the profile.
+- Output ONLY the rewritten text. No meta-commentary. No preamble.`;
+
+    case 'identify-missing':
+      return `You are a systems analyst for a Grant Management SaaS.
+
+TASK: Compare the current application feature set against requirements for a Professional Grant Studio.
+
+CURRENT FEATURES:
+\${JSON.stringify(data.currentFeatures)}
+
+USER CONTEXT: ECADRN (Early Career ADR Network)
+
+OUTPUT FORMAT: JSON array of strings describing missing components or improvements needed.`;
+
+    case 'align-to-funder':
+      return `You are a strategic grant writer.
+      
+TASK: Incorporate specific funder intelligence into the grant section provided to maximize alignment.
+
+FUNDER INTELLIGENCE:
+\${JSON.stringify(data.funderIntelligence)}
+
+GRANT SECTION CONTENT:
+\${data.content}
+
+REQUIREMENTS:
+- Subtle but potent inclusion of funder-aligned priorities and vocabulary.
+- Do NOT change the core meaning or facts.
+- Heighten the rationale for why THIS funder is the right partner for this work.
+- Output ONLY the rewritten text. No preamble.`;
+
+    case 'generate-justification':
+      return `You are a professional grant budget analyst.
+      
+TASK: Generate a concise, persuasive budget justification for a specific line item.
+
+PROJECT DESCRIPTION:
+\${data.projectDescription}
+
+LINE ITEM:
+Description: \${data.description}
+Amount: $\${data.amount}
+
+REQUIREMENTS:
+- Be specific and direct.
+- Explain WHY this expense is necessary for the project.
+- Keep it under 2 sentences.
+- Output ONLY the justification text. No preamble.`;
+
+    case 'align-grant-ecadrn':
+      return `You are a specialist ADR scholar and grants manager evaluating a funding opportunity against ECADRN's mission.
+
+FUNDER & GRANT DETAILS:
+Title: \${data.grantTitle}
+Funder Name: \${data.funderName}
+Description: \${data.grantDescription}
+Focus Areas: \${data.focusAreas}
+Geographic Scope: \${data.geographicFocus}
+Eligibility: \${data.eligibility}
+
+ECADRN MISSION: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+ECADRN VISION: An equitable and accessible ADR field where early career professionals lead, innovate, and bridge the gap between academic research and community restorative efforts.
+
+TASK: Compare the grant against ECADRN's mission/vision and provide an alignment score (0-100) and 2-sentence rationale.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON structure. No preamble. No markdown fences.
+{
+  "ecadrnAlignmentScore": number,
+  "ecadrnAlignmentRationale": "string"
+}`;
+
+    case 'analyze-uploaded-grant':
+      return `You are a professional grants officer and ADR analyst at ECADRN.
+      
+TASK: Read the uploaded grant document text, extract its parameters, and assess strategic fit against ECADRN.
+
+ECADRN MISSION: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+ECADRN VISION: An equitable and accessible ADR field where early career professionals lead, innovate, and bridge academic research with community restorative efforts.
+
+UPLOADED GRANT DOCUMENT / TEXT:
+\${data.text}
+
+REQUIREMENTS:
+- Extract or infer the grant title and funder name. Use placeholders if not found.
+- Provide a summary description.
+- Map focus areas as an array of strings.
+- Extract or infer geographic scope and eligibility.
+- Provide ecadrnAlignmentScore (0-100) and ecadrnAlignmentRationale (2 sentences).
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "title": "string",
+  "funderName": "string",
+  "description": "string",
+  "focusAreas": ["string"],
+  "geographicFocus": "string",
+  "eligibility": "string",
+  "amountMin": number,
+  "amountMax": number,
+  "missionFitScore": number,
+  "missionFitRationale": "string",
+  "ecadrnAlignmentScore": number,
+  "ecadrnAlignmentRationale": "string",
+  "deadline": "YYYY-MM-DD or null"
+}`;
+
+    case 'humanize-proposal':
+      return `You are an elite academic editor specializing in making AI-written grant proposals read as genuinely human.
+
+TASK: Audit the draft proposal below for robotic styling, clichés, and artificial transitional phrases, and provide humanization recommendations.
+
+PROPOSAL FOR AUDIT:
+\${JSON.stringify(data.proposal)}
+
+FUNDER FOR ALIGNMENT:
+\${data.funderName || "Target Funder"}
+
+REQUIREMENTS:
+1. Estimate aiProbabilityScore (0-100) and its inverse humanScore.
+2. Flag overused AI terms (e.g., "delve", "testament", "tapestry", "moreover", "leverage", "robust").
+3. Determine funderAiCheckRisk (Low, Medium, or High).
+4. Provide section-by-section humanization strategies.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "aiProbabilityScore": number,
+  "humanScore": number,
+  "flaggedPhrases": ["string"],
+  "bannedWordsFound": ["string"],
+  "readabilityGrade": "string",
+  "funderAiCheckRisk": "Low",
+  "structuralVarianceAdvice": "string",
+  "sectionAverages": [
+    {
+      "sectionTitle": "string",
+      "detectionProbability": number,
+      "roboticPhrases": ["string"],
+      "humanizerStrategy": "string"
+    }
+  ],
+  "verdict": "string"
+}`;
+
     default:
       return 'INVALID';
   }
