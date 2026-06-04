@@ -650,7 +650,7 @@ CORE PROGRAMS:
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
             {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
-            {activeTab === 'outreach' && <OutreachView organization={organization} />}
+            {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
           </AnimatePresence>
@@ -872,6 +872,7 @@ function ProposalsView({
   const [showNewForm, setShowNewForm] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showGuide, setShowGuide] = useState(false);
   
   const guideSteps = [
@@ -902,10 +903,12 @@ function ProposalsView({
     />;
   }
 
-  const filteredProposals = proposals.filter(p => 
-    p.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.funder?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProposals = proposals.filter(p => {
+    const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.funder?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const startNewProposal = async (template?: any) => {
     if (!organization || (!template && (!newProposalData.title || !newProposalData.funder))) return;
@@ -978,6 +981,17 @@ function ProposalsView({
               className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
             />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer"
+          >
+            <option value="all">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="review">In Review</option>
+            <option value="submitted">Submitted</option>
+            <option value="approved">Approved</option>
+          </select>
           <div className="flex gap-2">
             <button 
               onClick={() => setShowTemplateModal(true)}
@@ -5720,7 +5734,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
   );
 }
 
-function OutreachView({ organization }: { organization: any }) {
+function OutreachView({ organization, funders, proposals }: { organization: any, funders: any[], proposals: any[] }) {
   const [showGuide, setShowGuide] = useState(false);
 
   const guideSteps = [
@@ -5730,8 +5744,17 @@ function OutreachView({ organization }: { organization: any }) {
     { title: "Team Workspace Outreach", content: "In the Team workspace, outreach drafts are visible to all @ecadrn.org members. This prevents duplicate outreach and keeps everyone aligned on who has contacted which funder and when." },
     { title: "Audit Build Requirements", content: "The 'Audit Build Requirements' tool scans your current pipeline and identifies any gaps — missing org profile fields, untrained voice lab, funders without intelligence reports — so you know exactly what to complete before an outreach push." }
   ];
+  const [selectedFunderId, setSelectedFunderId] = useState<string>('');
+  const [emailType, setEmailType] = useState<'introduction' | 'loi' | 'followup' | 'thankyou'>('introduction');
+  const [relatedProposalId, setRelatedProposalId] = useState<string>('');
+  const [generatedEmail, setGeneratedEmail] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [missingComponents, setMissingComponents] = useState<string[]>([]);
   const [isChecking, setIsChecking] = useState(false);
+
+  const selectedFunder = funders.find(f => f.id === selectedFunderId);
+  const relatedProposal = proposals.find(p => p.id === relatedProposalId);
 
   const checkMissing = async () => {
     setIsChecking(true);
@@ -5746,6 +5769,50 @@ function OutreachView({ organization }: { organization: any }) {
     } finally {
       setIsChecking(false);
     }
+  };
+
+  const generateEmail = async () => {
+    if (!selectedFunder) return;
+    setIsGenerating(true);
+    setGeneratedEmail('');
+    try {
+      const result = await callAI('generate-outreach-email', {
+        emailType,
+        funder: {
+          name: selectedFunder.funderName || selectedFunder.name,
+          priorities: selectedFunder.givingPriorities || selectedFunder.notes || '',
+          analysis: selectedFunder.aiAnalysis || ''
+        },
+        organization: {
+          name: organization?.name || 'ECADRN',
+          mission: organization?.mission || '',
+          programs: organization?.programs || ''
+        },
+        proposal: relatedProposal ? {
+          title: relatedProposal.title,
+          funder: relatedProposal.funder,
+          description: relatedProposal.description || ''
+        } : null
+      });
+      setGeneratedEmail(typeof result === 'string' ? result : JSON.stringify(result));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(generatedEmail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const emailTypeLabels = {
+    introduction: { label: 'Cold Introduction', desc: 'First contact with a new funder', icon: '✉️' },
+    loi: { label: 'Letter of Inquiry', desc: 'Formal LOI request', icon: '📄' },
+    followup: { label: 'Follow-Up', desc: 'After an LOI or meeting', icon: '🔁' },
+    thankyou: { label: 'Thank You', desc: 'Post-decision or post-grant', icon: '🙏' }
   };
 
   return (
@@ -5763,25 +5830,111 @@ function OutreachView({ organization }: { organization: any }) {
         <button 
           onClick={checkMissing}
           disabled={isChecking}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-2"
+          className="border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 flex items-center gap-2"
         >
           {isChecking ? <RefreshCw className="animate-spin" size={16} /> : <CheckCircle size={16} />}
-          {isChecking ? 'Auditing...' : 'Audit Build Requirements'}
+          {isChecking ? 'Auditing...' : 'Audit Build'}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <OutreachStat label="Neural Link" value="Stable" color="green" />
-        <OutreachStat label="Auth Integrity" value="High" color="blue" />
-        <OutreachStat label="DB Readiness" value="Nominal" color="green" />
-        <OutreachStat label="API Quota" value="Spark" color="orange" />
+      {/* Email Generator Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-white flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+            <Mail size={18} className="text-white" />
+          </div>
+          <div>
+            <h4 className="font-black text-slate-900 tracking-tight">AI Outreach Composer</h4>
+            <p className="text-xs text-slate-500 font-medium">Draft tailored emails using your org voice + funder intelligence</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Email Type Selector */}
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Email Type</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {(Object.entries(emailTypeLabels) as [keyof typeof emailTypeLabels, any][]).map(([type, meta]) => (
+                <button
+                  key={type}
+                  onClick={() => setEmailType(type)}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${emailType === type ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
+                >
+                  <div className="text-lg mb-1">{meta.icon}</div>
+                  <div className={`text-[10px] font-black uppercase tracking-widest ${emailType === type ? 'text-indigo-700' : 'text-slate-700'}`}>{meta.label}</div>
+                  <div className="text-[9px] text-slate-400 font-medium mt-0.5">{meta.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Funder Selector */}
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Target Funder *</label>
+            <select
+              value={selectedFunderId}
+              onChange={(e) => setSelectedFunderId(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            >
+              <option value="">Select a funder from your database...</option>
+              {(funders || []).map(f => (
+                <option key={f.id} value={f.id}>{f.funderName || f.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Related Proposal (optional) */}
+          {(emailType === 'loi' || emailType === 'followup') && (
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Related Proposal (Optional)</label>
+              <select
+                value={relatedProposalId}
+                onChange={(e) => setRelatedProposalId(e.target.value)}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              >
+                <option value="">No proposal linked</option>
+                {(proposals || []).map(p => (
+                  <option key={p.id} value={p.id}>{p.title} — {p.funder}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            onClick={generateEmail}
+            disabled={!selectedFunderId || isGenerating}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+          >
+            {isGenerating ? <><RefreshCw size={14} className="animate-spin" /> Composing…</> : <><Mail size={14} /> Generate Outreach Email</>}
+          </button>
+        </div>
       </div>
 
+      {/* Generated Email Output */}
+      {generatedEmail && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-emerald-50">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={16} className="text-emerald-600" />
+              <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">Draft Ready — {emailTypeLabels[emailType].label}</span>
+            </div>
+            <button
+              onClick={copyToClipboard}
+              className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all ${copied ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              {copied ? '✓ Copied!' : '📋 Copy'}
+            </button>
+          </div>
+          <div className="p-6">
+            <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">{generatedEmail}</pre>
+          </div>
+        </motion.div>
+      )}
+
       {missingComponents.length > 0 && (
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden mb-8">
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
           <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-center gap-3">
             <AlertTriangle className="text-amber-600" size={18} />
-            <span className="text-sm font-bold text-amber-900 uppercase tracking-tight">Improvement Vector Identified</span>
+            <span className="text-sm font-bold text-amber-900 uppercase tracking-tight">Build Gaps Identified</span>
           </div>
           <div className="p-6 space-y-3">
             {missingComponents.map((m, i) => (
@@ -5793,25 +5946,6 @@ function OutreachView({ organization }: { organization: any }) {
           </div>
         </motion.div>
       )}
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-          <span className="text-xs font-bold text-slate-500 uppercase">Recent System Events</span>
-          <button className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Clear Logs</button>
-        </div>
-        <div className="divide-y divide-slate-100">
-          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center"><Globe size={16} className="text-slate-400" /></div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">Firestore Hook Initialized</p>
-                <p className="text-[10px] text-slate-400">Success • System Core</p>
-              </div>
-            </div>
-            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tight">Active</span>
-          </div>
-        </div>
-      </div>
 
       <PageGuide 
         isOpen={showGuide} 

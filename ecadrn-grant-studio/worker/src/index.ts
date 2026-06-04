@@ -288,6 +288,45 @@ REQUIREMENTS:
 - Transform the vocabulary, rhythm, and tone to match the profile.
 - Output ONLY the rewritten text. No meta-commentary. No preamble.`;
 
+    case 'generate-outreach-email': {
+      const emailTypeDesc: Record<string, string> = {
+        introduction: 'a warm cold introduction email to a funder we have not previously contacted',
+        loi: 'a formal Letter of Inquiry (LOI) requesting consideration for funding',
+        followup: 'a professional follow-up email after a previous conversation or LOI submission',
+        thankyou: 'a heartfelt thank-you note after receiving a grant decision (positive or otherwise)'
+      };
+      const typeDesc = emailTypeDesc[data.emailType] || 'a professional outreach email';
+      return `You are a senior nonprofit development director with 20 years of experience writing funder correspondence for ECADRN (Early Career ADR Network — a nonprofit focused on conflict resolution and access to justice).
+
+TASK: Draft ${typeDesc}.
+
+ORGANIZATION:
+- Name: ${data.organization?.name || 'ECADRN'}
+- Mission: ${data.organization?.mission || 'Expanding access to conflict resolution and ADR for early-career professionals and underserved communities'}
+- Programs: ${data.organization?.programs || 'Training, mentorship, and community outreach'}
+
+TARGET FUNDER:
+- Name: ${data.funder?.name || 'Unknown Funder'}
+- Giving Priorities: ${data.funder?.priorities || 'Not specified'}
+- Intelligence Notes: ${data.funder?.analysis || 'None available'}
+
+${data.proposal ? `RELATED PROPOSAL:
+- Title: ${data.proposal.title}
+- Funder: ${data.proposal.funder}
+- Description: ${data.proposal.description}` : ''}
+
+WRITING RULES:
+1. Write in a warm, professional, mission-driven tone
+2. Bridge ECADRN's work explicitly to the funder's stated priorities
+3. Be specific — reference real programs, populations served, or outcomes where possible
+4. Keep the email concise: 250–400 words maximum
+5. Include: subject line, greeting, body paragraphs, closing, and signature placeholder
+6. Do NOT use generic filler phrases or obvious nonprofit clichés
+7. Make the connection between funder priorities and ECADRN's work feel natural and genuine
+
+OUTPUT: Return the full email as plain text (not JSON), starting with "Subject: ..."`;
+    }
+
     case 'identify-missing':
       return `You are a systems analyst for a Grant Management SaaS.
 
