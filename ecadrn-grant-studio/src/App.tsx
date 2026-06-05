@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   BarChart2, 
   FileText, 
@@ -63,6 +63,10 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
+import {
+  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+  BorderStyle, PageBreak
+} from 'docx';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { 
@@ -3778,39 +3782,174 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     }
   };
 
-  const downloadProposal = () => {
+  const downloadProposal = async () => {
     if (!proposalSections || !researchData) return;
-    let text = `GRANT PROPOSAL\n`;
-    text += `${'='.repeat(60)}\n`;
-    text += `Grant: ${researchData.grantTitle}\n`;
-    text += `Funder: ${researchData.funderName}\n`;
-    text += `Award Range: $${researchData.amountMin?.toLocaleString()} – $${researchData.amountMax?.toLocaleString()}\n`;
-    text += `Deadline: ${researchData.deadline}\n`;
-    text += `Organization: ECADRN\n`;
-    text += `Prepared by: ECADRN Grant Agent (Ellis)\n`;
-    text += `Date: ${new Date().toLocaleDateString()}\n`;
-    text += `${'='.repeat(60)}\n\n`;
 
-    Object.entries(SECTION_LABELS).forEach(([key, label]) => {
-      text += `${label.toUpperCase()}\n`;
-      text += `${'-'.repeat(label.length)}\n`;
-      text += (proposalSections[key] || '') + '\n\n';
+    // ── Build the Word document ──
+    const children: any[] = [];
+
+    // Cover header
+    children.push(
+      new Paragraph({
+        text: 'GRANT PROPOSAL',
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Organization: ', bold: true }),
+          new TextRun('ECADRN'),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Grant: ', bold: true }),
+          new TextRun(researchData.grantTitle || ''),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Funder: ', bold: true }),
+          new TextRun(researchData.funderName || ''),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Award Range: ', bold: true }),
+          new TextRun(`$${researchData.amountMin?.toLocaleString() || '0'} – $${researchData.amountMax?.toLocaleString() || '0'}`),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Deadline: ', bold: true }),
+          new TextRun(researchData.deadline || 'See funder website'),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Prepared by: ', bold: true }),
+          new TextRun('ECADRN Grant Agent'),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 80 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Date: ', bold: true }),
+          new TextRun(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      }),
+    );
+
+    // Page break after cover
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+
+    // Each proposal section
+    Object.entries(SECTION_LABELS).forEach(([key, label], i) => {
+      // Section heading
+      children.push(
+        new Paragraph({
+          text: label.toUpperCase(),
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: i === 0 ? 0 : 480, after: 160 },
+          border: {
+            bottom: { color: '6366F1', size: 6, style: BorderStyle.SINGLE },
+          },
+        })
+      );
+
+      // Section body — split on newlines to preserve paragraph breaks
+      const bodyText = (proposalSections[key] || '').trim();
+      const paragraphs = bodyText.split(/\n{2,}/);
+      paragraphs.forEach((para: string) => {
+        if (para.trim()) {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: para.trim(), size: 24 })],
+              spacing: { after: 240 },
+              alignment: AlignmentType.JUSTIFIED,
+            })
+          );
+        }
+      });
     });
 
+    // Revision notes / chat Q&A
     if (chatHistory.length > 0) {
-      text += `${'='.repeat(60)}\n`;
-      text += `REVISION NOTES & FOLLOW-UP Q&A\n`;
-      text += `${'='.repeat(60)}\n\n`;
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+      children.push(
+        new Paragraph({
+          text: 'REVISION NOTES & FOLLOW-UP Q&A',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 0, after: 240 },
+        })
+      );
       chatHistory.forEach(m => {
-        text += `[${m.role === 'user' ? 'You' : 'Agent'}]: ${m.text}\n\n`;
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: m.role === 'user' ? 'You: ' : 'Agent: ', bold: true, color: m.role === 'user' ? '6366F1' : '059669' }),
+              new TextRun({ text: m.text }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
       });
     }
 
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+    // ECADRN alignment sidebar note at end
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(
+      new Paragraph({
+        text: 'FUNDER ALIGNMENT NOTES',
+        heading: HeadingLevel.HEADING_2,
+        spacing: { after: 160 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'ECADRN Alignment Score: ', bold: true }),
+          new TextRun(`${researchData.ecadrnAlignmentScore || 'N/A'}%`),
+        ],
+        spacing: { after: 120 },
+      }),
+      new Paragraph({
+        children: [new TextRun({ text: researchData.ecadrnAlignmentRationale || '' })],
+        spacing: { after: 120 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Strategic Approach: ', bold: true }),
+          new TextRun(researchData.strategicApproach || ''),
+        ],
+        spacing: { after: 120 },
+      }),
+    );
+
+    const doc = new Document({
+      creator: 'ECADRN Grant Agent',
+      title: researchData.grantTitle || 'Grant Proposal',
+      description: `Grant proposal for ${researchData.funderName} prepared by ECADRN`,
+      sections: [{ children }],
+    });
+
+    const buffer = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(buffer);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(researchData.grantTitle || 'proposal').replace(/[^a-z0-9]/gi, '_')}_ECADRN_Proposal.txt`;
+    a.download = `${(researchData.grantTitle || 'proposal').replace(/[^a-z0-9]/gi, '_')}_ECADRN_Proposal.docx`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -3861,7 +4000,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl text-[11px] font-black uppercase tracking-wider text-white hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm"
                 >
                   <Download size={12} />
-                  Download .txt
+                  Download .docx
                 </button>
               </>
             )}
