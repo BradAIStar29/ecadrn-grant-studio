@@ -316,7 +316,7 @@ CORE PROGRAMS:
     });
 
     md += `## 3. Active Proposals\n\n`;
-    proposals.forEach((p, i) => {
+    (proposals || []).forEach((p, i) => {
       md += `### Proposal ${i+1}: ${p.title}\n`;
       md += `**Funder:** ${p.funder}\n`;
       md += `**Description:** ${p.description}\n\n`;
@@ -550,7 +550,7 @@ CORE PROGRAMS:
             {isSidebarOpen && (
               <div className="overflow-hidden">
                 <p className="text-sm font-medium text-white truncate">{user.displayName || 'User'}</p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                <p className="text-xs text-slate-500 truncate">{user?.email}</p>
               </div>
             )}
           </div>
@@ -3853,7 +3853,7 @@ Deadline: 2026-11-15`;
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       const savedGrants: any[] = [];
-      const verifiedResults = results.filter((g: any) => g?.title && g?.funderName);
+      const verifiedResults = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
       if (verifiedResults.length === 0) {
         log('⚠️ AI returned no verifiable grants. Aborting to prevent hallucinated data.');
         setAutopilotRunning(false);
@@ -6015,6 +6015,325 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
     </motion.div>
   );
 }
+
+function OutreachStat({ label, value, color }: { label: string, value: string, color: 'blue' | 'green' | 'orange' | 'red' }) {
+  const colors = {
+    blue: 'text-indigo-600 bg-indigo-50',
+    green: 'text-emerald-600 bg-emerald-50',
+    orange: 'text-amber-600 bg-amber-50',
+    red: 'text-rose-600 bg-rose-50',
+  };
+  return (
+    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+      <div className={`text-sm font-black ${colors[color]} inline-block px-3 py-1 rounded-lg`}>{value}</div>
+    </div>
+  );
+}
+
+
+function ChatView({ organization, proposals }: { organization: any, proposals: any[] }) {
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([
+    { role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals.length} active projects today?` }
+  ]);
+
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMsg = input;
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setInput('');
+
+    try {
+      const res = await callAI<{ raw?: string } | string>('chat', {
+        userMessage: userMsg,
+        orgProfile: organization,
+        pipelineSummary: `Currently managing ${(proposals || []).length} proposals and ${(proposals || []).filter(p => p.status === 'draft').length} drafts.`
+      });
+      // Worker returns { raw: text } for plain-text AI responses
+      const text = typeof res === 'string' ? res : (res as any).raw || JSON.stringify(res);
+      setMessages(prev => [...prev, { role: 'assistant', text }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', text: "Strategic uplink interrupted. Please retry your request." }]);
+    }
+  };
+
+  return (
+    <div id="chat-view" className="h-[calc(100vh-12rem)] flex flex-col bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
+      <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
+            <MessageSquare size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold tracking-tight">AI Strategic Advisor</h3>
+            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Active • Neural Link Stable</p>
+          </div>
+        </div>
+        <button className="text-slate-400 hover:text-white transition-colors">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-5 rounded-xl shadow-sm leading-relaxed text-sm ${
+              msg.role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-tr-none' 
+                : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
+            }`}>
+              {msg.text}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-6 bg-white border-t border-slate-100">
+        <div className="flex gap-4">
+          <input 
+            type="text" 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+            placeholder="Search projects or request strategic insight..."
+            className="flex-1 bg-slate-100 border-transparent rounded-full px-6 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+          />
+          <button 
+            onClick={sendMessage}
+            className="bg-indigo-600 text-white px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }) {
+  const [activeTab, setActiveTab] = useState<'grid' | 'monthly' | 'weekly'>('grid');
+  
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  
+  const events = [
+    ...grants.filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
+    ...proposals.map(p => ({ date: new Date(p.updatedAt), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
+  ];
+
+  const sortedEvents = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const getWeeklyGroup = (date: Date) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const eventDay = new Date(date);
+    eventDay.setHours(0,0,0,0);
+    const diffTime = eventDay.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'Recent History';
+    if (diffDays >= 0 && diffDays <= 7) return 'This Week';
+    if (diffDays > 7 && diffDays <= 14) return 'Next Week';
+    if (diffDays > 14 && diffDays <= 30) return 'In 3-4 Weeks';
+    return 'Future Timeline';
+  };
+
+  const getRelativeTimeText = (date: Date) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const eventDay = new Date(date);
+    eventDay.setHours(0,0,0,0);
+    const diffTime = eventDay.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      const absDays = Math.abs(diffDays);
+      if (absDays === 1) return 'Yesterday';
+      return `${absDays} days ago`;
+    }
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    return `In ${diffDays} days`;
+  };
+
+  const monthlyGroups: { [key: string]: any[] } = {};
+  sortedEvents.forEach(e => {
+    const mKey = e.date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    if (!monthlyGroups[mKey]) monthlyGroups[mKey] = [];
+    monthlyGroups[mKey].push(e);
+  });
+
+  const weeklyColumns = ['This Week', 'Next Week', 'In 3-4 Weeks', 'Future Timeline', 'Recent History'];
+
+  return (
+    <motion.div id="calendar-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <h3 className="text-2xl font-bold tracking-tight text-slate-900">Nexus Calendar & Timeline</h3>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Lifecycle Tracking</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+            <button
+              onClick={() => setActiveTab('grid')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'grid' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Calendar Grid
+            </button>
+            <button
+              onClick={() => setActiveTab('monthly')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'monthly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Monthly Track
+            </button>
+            <button
+              onClick={() => setActiveTab('weekly')}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                activeTab === 'weekly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Weekly Columns
+            </button>
+          </div>
+          
+          <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg shadow-slate-100 hidden sm:inline-block">
+            {now.toLocaleString('default', { month: 'long' })} {currentYear}
+          </span>
+        </div>
+      </div>
+
+      {activeTab === 'grid' && (
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-100">
+          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+            {days.map(day => (
+              <div key={day} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{day}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {Array.from({ length: 42 }).map((_, i) => {
+              const dayNum = i - firstDay + 1;
+              const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
+              const date = new Date(currentYear, currentMonth, dayNum);
+              const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
+
+              return (
+                <div key={i} className={`border-r border-b border-slate-100 p-4 min-h-[140px] transition-colors ${!isCurrentMonth ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/50'}`}>
+                  {isCurrentMonth && (
+                    <>
+                      <span className={`text-xs font-bold ${date.toDateString() === now.toDateString() ? 'bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-xl shadow-lg shadow-indigo-100' : 'text-slate-400'}`}>
+                        {dayNum}
+                      </span>
+                      <div className="mt-3 space-y-2">
+                        {dayEvents.map((e, idx) => (
+                          <div key={idx} className={`text-[9.5px] font-extrabold py-1 px-2 rounded-lg truncate border leading-tight ${
+                            e.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                          }`} title={`${e.type.toUpperCase()}: ${e.title}`}>
+                            {e.title}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'monthly' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-8">
+          {Object.keys(monthlyGroups).length > 0 ? (
+            Object.keys(monthlyGroups).map(monthKey => (
+              <div key={monthKey} className="relative pl-6 border-l-2 border-slate-100 space-y-4">
+                <div className="absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full bg-white border-2 border-indigo-500 shadow-sm"></div>
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{monthKey}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {monthlyGroups[monthKey].map((e, idx) => (
+                    <div key={idx} className={`p-4 rounded-xl border flex items-start gap-3 transition-all hover:shadow-md ${
+                      e.color === 'rose' ? 'bg-rose-50/30 border-rose-100' : 'bg-indigo-50/30 border-indigo-100'
+                    }`}>
+                      <div className={`p-2 rounded-lg text-center shrink-0 w-12 ${
+                        e.color === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
+                      }`}>
+                        <span className="text-xs font-black block tracking-tighter leading-none">{e.date.getDate()}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-wide">{e.date.toLocaleString('default', { month: 'short' })}</span>
+                      </div>
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <span className={`text-[8.5px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                          e.color === 'rose' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {e.type === 'grant' ? 'Grant Deadline' : 'Proposal Update'}
+                        </span>
+                        <h5 className="text-xs font-bold text-slate-900 truncate" title={e.title}>{e.title}</h5>
+                        <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                          <span>Status: {e.status}</span>
+                          <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                          <span className="text-indigo-600">{getRelativeTimeText(e.date)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="py-12 text-center text-slate-400 italic">No events currently tracked.</div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'weekly' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {weeklyColumns.map(colName => {
+            const colEvents = sortedEvents.filter(e => getWeeklyGroup(e.date) === colName);
+            
+            return (
+              <div key={colName} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 flex flex-col min-h-[300px]">
+                <div className="border-b border-slate-150 pb-2 mb-3 flex justify-between items-center">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{colName}</h4>
+                  <span className="text-[9px] font-bold text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded-full">{colEvents.length}</span>
+                </div>
+                
+                <div className="space-y-3 flex-1 overflow-y-auto">
+                  {colEvents.length > 0 ? colEvents.map((e, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-2">
+                      <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded block w-fit ${
+                        e.color === 'rose' ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'
+                      }`}>
+                        {e.type}
+                      </span>
+                      <h5 className="text-xs font-bold text-slate-800 leading-snug line-clamp-2" title={e.title}>{e.title}</h5>
+                      <div className="text-[9px] text-slate-400 font-medium">
+                        <span className="font-semibold text-slate-600 block">{e.date.toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
+                        <span className="text-indigo-600 font-semibold">{getRelativeTimeText(e.date)}</span>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-[9.5px] text-slate-400 italic text-center py-6">No deadlines</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 
 function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose: () => void, title: string, steps: { title: string, content: string }[] }) {
   const [step, setStep] = useState(0);
