@@ -886,7 +886,7 @@ function ProposalsView({
     { title: "Open the Editor", content: "Click any proposal row to open the full Proposal Editor — a multi-section rich-text workspace with AI section rewriting, funder alignment, voice matching, focus mode, and version history." },
     { title: "Proposal Lifecycle", content: "Move proposals through statuses manually: Draft → In Review → Submitted → Approved. Each status change is saved and visible to the whole team in the shared workspace." },
     { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 10 steps are always available." }
-  
+  ];
 
   const [newProposalData, setNewProposalData] = useState({
     title: '',
@@ -1191,6 +1191,22 @@ function ProposalEditor({
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [customSaveMsg, setCustomSaveMsg] = useState('');
+  const [showEditorGuide, setShowEditorGuide] = useState(false);
+
+  const editorGuideSteps = [
+    { title: "Navigate Sections", content: "Use the section list on the left to jump between proposal sections. The active section is highlighted in indigo. Click any section to start editing it immediately." },
+    { title: "AI Section Rewrite", content: "Click the ✦ AI Rewrite button above the editor to regenerate the current section. The AI uses your org's voice profile, the funder's giving priorities, and the proposal context to produce a targeted rewrite." },
+    { title: "Funder Alignment", content: "Click 'Align to Funder' to rewrite the active section so it mirrors the funder's stated priorities and language — the AI injects their themes naturally without sounding generic." },
+    { title: "Auto-Save & Versions", content: "Every change is auto-saved after 2 seconds. Watch the header for the 'Saving…' → '✓ Saved' indicator. Click 'Save Version' to create a named snapshot you can restore at any time." },
+    { title: "Focus Mode", content: "Click the ⛶ expand icon in the toolbar to enter full-screen Focus Mode — no sidebars, no distractions. Press Escape or click the icon again to exit." },
+    { title: "Budget Builder", content: "Click the Budget tab (above the editor) to open the Budget Builder. Add line items by category, set amounts and descriptions, and the total is calculated automatically. The AI can draft the budget from your proposal text." },
+    { title: "Timeline Builder", content: "Click the Timeline tab to build a project milestones timeline. Useful for phased grants or multi-year programs. Each milestone has a date, title, and description." },
+    { title: "AI Review & Humanizer", content: "Use 'AI Review' to get a scored critique with specific improvement suggestions per section. Use 'Humanizer' to reduce AI-sounding language and make the writing feel authentic and human." },
+    { title: "Export to Google Drive", content: "Click the Drive icon in the header to export this proposal as a Google Doc in your @ecadrn.org Drive. Pick a destination folder — the document opens in Google Docs automatically." },
+    { title: "Word Counts", content: "The section list shows per-section word counts. Use these to stay within funder page or word limits. The total word count is shown at the bottom of the section panel." },
+    { title: "Team Collaboration", content: "In Team workspace, every edit stamps 'Last edited by' with your name. Use the Comments panel (speech bubble icon) to leave notes or questions for teammates on any section." },
+    { title: "Replay This Guide", content: "Click the ? icon in the editor header any time to reopen this guide. All 12 steps are always available — nothing is hidden after first use." }
+  ];
 
   const [funderGivingPriorities, setFunderGivingPriorities] = useState(() => {
     const matchedFunder = funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase());
@@ -1656,9 +1672,25 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 )}
               </span>
             )}
+            {/* Guide button */}
+            <button
+              onClick={() => setShowEditorGuide(true)}
+              className="ml-2 p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Proposal Editor Guide"
+            >
+              <HelpCircle size={16} />
+            </button>
           </div>
         </div>
       )}
+
+      {/* Editor Guide */}
+      <PageGuide
+        isOpen={showEditorGuide}
+        onClose={() => setShowEditorGuide(false)}
+        title="Proposal Editor"
+        steps={editorGuideSteps}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {!focusMode && (
@@ -3783,13 +3815,17 @@ Deadline: 2026-11-15`;
   };
 
   const guideSteps = [
-    { title: "Run Discovery", content: "Click 'Run Discovery' to surface real grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and civic equity. The AI only returns funders and programs it can verify from its training data — no fabricated grants." },
-    { title: "Verified vs. Unverified Badges", content: "Every grant result displays a badge: ✓ Verified means the funder and program are confirmed real. ⚠️ Unverified means the AI has some uncertainty — treat these as leads to research further, not confirmed opportunities." },
-    { title: "Verified Only Toggle", content: "Use the 'Verified Only' toggle in the filter bar to instantly hide all unverified results and focus only on confirmed grant opportunities. This is especially useful before sharing the pipeline with leadership." },
-    { title: "Mission Fit Score", content: "Each grant shows a Match % score based on alignment with your organization's focus areas, geographic scope, and eligibility. Sort by Match, Deadline, or Funder Name to prioritize your pipeline." },
-    { title: "Upload RFP for Scoring", content: "Drag and drop any RFP document onto the upload panel. The AI reads it, scores alignment against your mission profile, and adds it to your pipeline with a detailed breakdown." },
-    { title: "NEW: Grant Autopilot", content: "Click 'Autopilot' to run the complete grant cycle without manual steps. Choose Assisted Mode (AI stops at Review for your approval) or Full Agent Mode (AI searches, drafts, and submits automatically with a notification confirmation)." },
-    { title: "Autopilot Live Log", content: "When Autopilot is running, a live terminal log shows every step in real time — grant discovery, proposal drafting, and submission status — so you always know exactly what the AI is doing." }
+    { title: "Run Grant Discovery", content: "Click 'Run Discovery' to have the AI surface grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and equity. Results are verified against known funder databases — unverified entries are flagged." },
+    { title: "Verified vs. Unverified Grants", content: "Grants marked with a green ✓ badge are from confirmed sources. Orange '⚠ Unverified' badges mean the AI found a likely match but couldn't confirm the active listing. Always verify unverified grants before submitting." },
+    { title: "Hide Unverified Toggle", content: "Use the 'Hide Unverified' toggle (top-right of the grants list) to filter your view to confirmed opportunities only. This is on by default to keep your focus clean." },
+    { title: "Deadline Urgency Badges", content: "Each grant card shows a color-coded deadline badge: 🔴 pulsing = 7 days or less, 🟡 = 8–21 days, 🟢 = more than 21 days, and CLOSED = past deadline. Sort by urgency to prioritize your pipeline." },
+    { title: "Match Score", content: "Each discovered grant shows a match score (0–100) indicating how closely it aligns with ECADRN's mission and profile. Focus on 75+ scores for highest-probability applications." },
+    { title: "Upload a Grant RFP", content: "Have an RFP PDF or document? Click 'Upload Grant Doc' to paste or upload it. The AI extracts requirements, deadlines, eligibility, and creates a structured grant record automatically." },
+    { title: "Grant Autopilot", content: "Click 'Grant Autopilot' to run the full AI pipeline: it discovers top matching grants, drafts complete proposals for each, and either queues them for your review (Assisted Mode) or marks them submitted (Full Agent Mode)." },
+    { title: "Autopilot: What 'Submitted' Means", content: "IMPORTANT: In Full Agent Mode, 'Submitted' means a complete proposal is drafted and saved in your system — it does NOT automatically submit to an external portal. You must still log into each funder's portal and submit manually. The app helps you draft; submission is always a human step." },
+    { title: "Autopilot Credentials", content: "Grant Autopilot uses your @ecadrn.org email (the account you are logged in with) as the organization contact on all generated proposals. No passwords or portal credentials are stored — the app never logs into external systems on your behalf." },
+    { title: "Add Grants Manually", content: "Click 'Add Grant' to manually enter a grant opportunity. Fill in funder, amount, deadline, and requirements. Useful for grants you found through a conference, newsletter, or referral." },
+    { title: "Replay This Guide", content: "Click the ? icon any time to reopen this guide. All 11 steps are always available — including the Autopilot and credentials explainer." }
   ];
 
   const runAutopilot = async () => {
@@ -4073,9 +4109,20 @@ Deadline: 2026-11-15`;
           </div>
 
           {autopilotMode === 'full' && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-amber-700 font-semibold">Full Agent mode will mark proposals as submitted and send you a notification with confirmation. Ensure your voice profile is up to date before running.</p>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-amber-700 font-semibold space-y-1">
+                  <p>⚠ <strong>"Auto Submit" drafts proposals in your system only.</strong> It does NOT log into any external funder portal or submit on your behalf.</p>
+                  <p>You must still visit each funder's portal and submit manually. The Autopilot gets the proposal ready — the final submission is always a human step.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <span className="text-blue-500 text-sm mt-0.5 shrink-0">ℹ</span>
+                <p className="text-[11px] text-blue-700 font-semibold">
+                  Proposals are authored under: <strong>{user?.email || '@ecadrn.org'}</strong>. No external portal credentials are required or stored.
+                </p>
+              </div>
             </div>
           )}
 
@@ -4751,12 +4798,15 @@ function VoiceView({
   const [showGuide, setShowGuide] = useState(false);
 
   const guideSteps = [
-    { title: "Training Your Voice", content: "Paste writing samples directly (letters, press releases, past proposals, mission statements), upload documents, or load ECADRN's built-in resource library. The more content you provide, the more accurately the AI captures your organizational voice." },
-    { title: "What Gets Extracted", content: "The AI identifies Tone Descriptors (e.g. 'community-centered', 'equity-driven'), Key Phrases (your signature language), Voice Rules (what to avoid), and Writing Samples that anchor future generation. These are all editable after analysis." },
-    { title: "Multiple Voice Profiles", content: "Create separate named profiles for different contexts — for example, an Academic profile for university funders and a Grassroots profile for community foundations. Select which profile is active before generating any proposal." },
-    { title: "Funder Alignment Analysis", content: "The Voice Lab includes a Funder Alignment tool that cross-references your active voice profile against your top funder's known priorities. It surfaces style gaps so you can refine your approach before submitting." },
-    { title: "Rewrite Tool", content: "Paste any text into the Rewrite panel and the AI will rework it to match your trained voice — useful for editing sections written by others or repurposing old content." },
-    { title: "Voice Profiles in Autopilot", content: "Grant Autopilot automatically applies your currently selected voice profile to every proposal it drafts. Make sure your best profile is active before running Autopilot for the most on-brand outputs." }
+    { title: "What Is Voice Training?", content: "The Voice Studio learns ECADRN's unique writing style from your own documents. Once trained, every AI-generated proposal section automatically matches your organization's tone, vocabulary, and mission framing — no generic AI language." },
+    { title: "Add Writing Samples", content: "Paste writing samples directly (past proposals, letters, press releases, mission statements) into the text area, or upload documents from your computer. The AI analyzes them for tone, vocabulary, sentence structure, and recurring themes." },
+    { title: "Load Built-In Samples", content: "Click 'Load ECADRN Built-In Samples' to pre-load a set of mission-aligned writing examples curated for ADR and access-to-justice organizations. Great starting point before adding your own." },
+    { title: "Import from Google Drive", content: "Click the Drive icon to import documents directly from your @ecadrn.org Google Drive. This lets you pull in previous grant proposals, annual reports, or any document that reflects your org's voice." },
+    { title: "Train the Voice Model", content: "After adding samples, click 'Train Voice Profile' and give it a name (e.g. 'Formal Grant Tone', 'Community Brief Style'). The AI builds a style model you can apply across all proposals." },
+    { title: "Multiple Voice Profiles", content: "Create multiple named profiles for different audiences — a formal foundation tone, a government grant style, a community-facing voice. Switch between them when drafting different proposal types." },
+    { title: "Apply Voice to Proposals", content: "In the Proposal Editor, select your voice profile from the dropdown before running AI rewrites. All AI-generated content will then match that profile's style and tone automatically." },
+    { title: "Voice Strength", content: "Each trained profile shows a 'strength' indicator based on how many samples were used. More samples = stronger, more consistent voice. Aim for at least 3–5 diverse writing samples per profile." },
+    { title: "Replay This Guide", content: "Click the ? icon any time to reopen this guide. All 9 steps are always available." }
   ];
 
   const [isRewriting, setIsRewriting] = useState(false);
@@ -5744,11 +5794,14 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
   const [showGuide, setShowGuide] = useState(false);
 
   const guideSteps = [
-    { title: "Personalized Outreach", content: "Select a funder from your intelligence database and the AI drafts a tailored introduction email, LOI, or follow-up. It uses both your trained voice profile and the funder's known giving priorities to maximize relevance." },
-    { title: "Email Types", content: "Generate cold introductions for new prospects, follow-up messages after an LOI, or thank-you notes post-decision. Each type is tuned differently by the AI based on your relationship stage with that funder." },
-    { title: "Funder Intelligence Integration", content: "Outreach quality improves with better funder intelligence. The richer the AI's analysis of a funder's priorities, the more precisely it can bridge ECADRN's mission to their current strategic focus." },
-    { title: "Team Workspace Outreach", content: "In the Team workspace, outreach drafts are visible to all @ecadrn.org members. This prevents duplicate outreach and keeps everyone aligned on who has contacted which funder and when." },
-    { title: "Audit Build Requirements", content: "The 'Audit Build Requirements' tool scans your current pipeline and identifies any gaps — missing org profile fields, untrained voice lab, funders without intelligence reports — so you know exactly what to complete before an outreach push." }
+    { title: "AI Outreach Email Composer", content: "Select a funder from your intelligence database, choose an email type (Cold Intro, LOI Announcement, Follow-Up, or Thank You), and click Generate. The AI drafts a 250–400 word personalized email using both your org's profile and that funder's known giving priorities." },
+    { title: "Email Types Explained", content: "Cold Intro: first contact to introduce ECADRN. LOI Announcement: formal letter of inquiry. Follow-Up: after a meeting or prior submission. Thank You: post-award or post-meeting gratitude. Each has a distinct tone and structure." },
+    { title: "Link a Proposal", content: "Optionally select an existing proposal to reference in the email. The AI will mention the specific project, its alignment to the funder's priorities, and the funding amount requested — making the email concrete and credible." },
+    { title: "Edit Before Sending", content: "All generated emails appear in the editable text area below. Review, customize, and personalize before copying. Click 'Copy to Clipboard' and paste into your email client — the app does not send emails directly." },
+    { title: "Funder Intelligence Integration", content: "The AI uses your funder's full intelligence profile (giving priorities, geographic focus, award ranges, past grantees) to craft language that mirrors what that funder cares about — not a generic template." },
+    { title: "Calendar & Deadlines", content: "Grant deadlines and proposal due dates are tracked on the main Calendar view. Use it to prioritize your outreach — target funders with upcoming deadlines first." },
+    { title: "System Notifications", content: "The Notifications panel shows autopilot submission confirmations, deadline reminders, and team activity alerts. Mark items as read to keep your inbox clean." },
+    { title: "Replay This Guide", content: "Click the ? icon any time to reopen this guide. All 8 steps are always available." }
   ];
   const [selectedFunderId, setSelectedFunderId] = useState<string>('');
   const [emailType, setEmailType] = useState<'introduction' | 'loi' | 'followup' | 'thankyou'>('introduction');
@@ -5959,322 +6012,6 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
         title="Outreach" 
         steps={guideSteps} 
       />
-    </motion.div>
-  );
-}
-
-function OutreachStat({ label, value, color }: { label: string, value: string, color: 'blue' | 'green' | 'orange' | 'red' }) {
-  const colors = {
-    blue: 'text-indigo-600 bg-indigo-50',
-    green: 'text-emerald-600 bg-emerald-50',
-    orange: 'text-amber-600 bg-amber-50',
-    red: 'text-rose-600 bg-rose-50',
-  };
-  return (
-    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <div className={`text-sm font-black ${colors[color]} inline-block px-3 py-1 rounded-lg`}>{value}</div>
-    </div>
-  );
-}
-
-function ChatView({ organization, proposals }: { organization: any, proposals: any[] }) {
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([
-    { role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals.length} active projects today?` }
-  ]);
-
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-    const userMsg = input;
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setInput('');
-
-    try {
-      const res = await callAI<{ raw?: string } | string>('chat', {
-        userMessage: userMsg,
-        orgProfile: organization,
-        pipelineSummary: `Currently managing ${(proposals || []).length} proposals and ${(proposals || []).filter(p => p.status === 'draft').length} drafts.`
-      });
-      // Worker returns { raw: text } for plain-text AI responses
-      const text = typeof res === 'string' ? res : (res as any).raw || JSON.stringify(res);
-      setMessages(prev => [...prev, { role: 'assistant', text }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', text: "Strategic uplink interrupted. Please retry your request." }]);
-    }
-  };
-
-  return (
-    <div id="chat-view" className="h-[calc(100vh-12rem)] flex flex-col bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-            <MessageSquare size={20} />
-          </div>
-          <div>
-            <h3 className="font-bold tracking-tight">AI Strategic Advisor</h3>
-            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Active • Neural Link Stable</p>
-          </div>
-        </div>
-        <button className="text-slate-400 hover:text-white transition-colors">
-          <X size={20} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-5 rounded-xl shadow-sm leading-relaxed text-sm ${
-              msg.role === 'user' 
-                ? 'bg-indigo-600 text-white rounded-tr-none' 
-                : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
-            }`}>
-              {msg.text}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="p-6 bg-white border-t border-slate-100">
-        <div className="flex gap-4">
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Search projects or request strategic insight..."
-            className="flex-1 bg-slate-100 border-transparent rounded-full px-6 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-          />
-          <button 
-            onClick={sendMessage}
-            className="bg-indigo-600 text-white px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-          >
-            Send
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }) {
-  const [activeTab, setActiveTab] = useState<'grid' | 'monthly' | 'weekly'>('grid');
-  
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  
-  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  
-  const events = [
-    ...grants.filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
-    ...proposals.map(p => ({ date: new Date(p.updatedAt), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
-  ];
-
-  const sortedEvents = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  const getWeeklyGroup = (date: Date) => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const eventDay = new Date(date);
-    eventDay.setHours(0,0,0,0);
-    const diffTime = eventDay.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return 'Recent History';
-    if (diffDays >= 0 && diffDays <= 7) return 'This Week';
-    if (diffDays > 7 && diffDays <= 14) return 'Next Week';
-    if (diffDays > 14 && diffDays <= 30) return 'In 3-4 Weeks';
-    return 'Future Timeline';
-  };
-
-  const getRelativeTimeText = (date: Date) => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const eventDay = new Date(date);
-    eventDay.setHours(0,0,0,0);
-    const diffTime = eventDay.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      const absDays = Math.abs(diffDays);
-      if (absDays === 1) return 'Yesterday';
-      return `${absDays} days ago`;
-    }
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Tomorrow';
-    return `In ${diffDays} days`;
-  };
-
-  const monthlyGroups: { [key: string]: any[] } = {};
-  sortedEvents.forEach(e => {
-    const mKey = e.date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    if (!monthlyGroups[mKey]) monthlyGroups[mKey] = [];
-    monthlyGroups[mKey].push(e);
-  });
-
-  const weeklyColumns = ['This Week', 'Next Week', 'In 3-4 Weeks', 'Future Timeline', 'Recent History'];
-
-  return (
-    <motion.div id="calendar-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <h3 className="text-2xl font-bold tracking-tight text-slate-900">Nexus Calendar & Timeline</h3>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Lifecycle Tracking</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
-            <button
-              onClick={() => setActiveTab('grid')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'grid' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Calendar Grid
-            </button>
-            <button
-              onClick={() => setActiveTab('monthly')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'monthly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Monthly Track
-            </button>
-            <button
-              onClick={() => setActiveTab('weekly')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'weekly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Weekly Columns
-            </button>
-          </div>
-          
-          <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg shadow-slate-100 hidden sm:inline-block">
-            {now.toLocaleString('default', { month: 'long' })} {currentYear}
-          </span>
-        </div>
-      </div>
-
-      {activeTab === 'grid' && (
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-100">
-          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-            {days.map(day => (
-              <div key={day} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{day}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {Array.from({ length: 42 }).map((_, i) => {
-              const dayNum = i - firstDay + 1;
-              const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
-              const date = new Date(currentYear, currentMonth, dayNum);
-              const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
-
-              return (
-                <div key={i} className={`border-r border-b border-slate-100 p-4 min-h-[140px] transition-colors ${!isCurrentMonth ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/50'}`}>
-                  {isCurrentMonth && (
-                    <>
-                      <span className={`text-xs font-bold ${date.toDateString() === now.toDateString() ? 'bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-xl shadow-lg shadow-indigo-100' : 'text-slate-400'}`}>
-                        {dayNum}
-                      </span>
-                      <div className="mt-3 space-y-2">
-                        {dayEvents.map((e, idx) => (
-                          <div key={idx} className={`text-[9.5px] font-extrabold py-1 px-2 rounded-lg truncate border leading-tight ${
-                            e.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
-                          }`} title={`${e.type.toUpperCase()}: ${e.title}`}>
-                            {e.title}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'monthly' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-8">
-          {Object.keys(monthlyGroups).length > 0 ? (
-            Object.keys(monthlyGroups).map(monthKey => (
-              <div key={monthKey} className="relative pl-6 border-l-2 border-slate-100 space-y-4">
-                <div className="absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full bg-white border-2 border-indigo-500 shadow-sm"></div>
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{monthKey}</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {monthlyGroups[monthKey].map((e, idx) => (
-                    <div key={idx} className={`p-4 rounded-xl border flex items-start gap-3 transition-all hover:shadow-md ${
-                      e.color === 'rose' ? 'bg-rose-50/30 border-rose-100' : 'bg-indigo-50/30 border-indigo-100'
-                    }`}>
-                      <div className={`p-2 rounded-lg text-center shrink-0 w-12 ${
-                        e.color === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
-                      }`}>
-                        <span className="text-xs font-black block tracking-tighter leading-none">{e.date.getDate()}</span>
-                        <span className="text-[8px] font-bold uppercase tracking-wide">{e.date.toLocaleString('default', { month: 'short' })}</span>
-                      </div>
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <span className={`text-[8.5px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
-                          e.color === 'rose' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'
-                        }`}>
-                          {e.type === 'grant' ? 'Grant Deadline' : 'Proposal Update'}
-                        </span>
-                        <h5 className="text-xs font-bold text-slate-900 truncate" title={e.title}>{e.title}</h5>
-                        <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
-                          <span>Status: {e.status}</span>
-                          <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                          <span className="text-indigo-600">{getRelativeTimeText(e.date)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="py-12 text-center text-slate-400 italic">No events currently tracked.</div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'weekly' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {weeklyColumns.map(colName => {
-            const colEvents = sortedEvents.filter(e => getWeeklyGroup(e.date) === colName);
-            
-            return (
-              <div key={colName} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 flex flex-col min-h-[300px]">
-                <div className="border-b border-slate-150 pb-2 mb-3 flex justify-between items-center">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{colName}</h4>
-                  <span className="text-[9px] font-bold text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded-full">{colEvents.length}</span>
-                </div>
-                
-                <div className="space-y-3 flex-1 overflow-y-auto">
-                  {colEvents.length > 0 ? colEvents.map((e, idx) => (
-                    <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-2">
-                      <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded block w-fit ${
-                        e.color === 'rose' ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'
-                      }`}>
-                        {e.type}
-                      </span>
-                      <h5 className="text-xs font-bold text-slate-800 leading-snug line-clamp-2" title={e.title}>{e.title}</h5>
-                      <div className="text-[9px] text-slate-400 font-medium">
-                        <span className="font-semibold text-slate-600 block">{e.date.toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
-                        <span className="text-indigo-600 font-semibold">{getRelativeTimeText(e.date)}</span>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="text-[9.5px] text-slate-400 italic text-center py-6">No deadlines</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </motion.div>
   );
 }
