@@ -55,6 +55,97 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "budgetNarrative": "string"
 }`;
 
+
+    case 'research-grant-url':
+      return `You are a nonprofit grants researcher and web analyst. The user has provided a grant opportunity name and/or URL.
+
+TASK: Based on the grant name and any URL context provided, generate a comprehensive intelligence report on this specific grant opportunity — as if you researched its official program page.
+
+GRANT NAME: \${data.grantName}
+GRANT URL: \${data.grantUrl || 'Not provided'}
+ADDITIONAL CONTEXT: \${data.additionalContext || 'None'}
+
+APPLYING ORGANIZATION — ECADRN:
+Mission: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+Programs: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "grantTitle": "string",
+  "funderName": "string",
+  "funderType": "Foundation | Government | Corporation | Community Foundation | University",
+  "description": "2-3 sentence overview of what this grant funds",
+  "missionStatement": "string — funder's stated mission",
+  "focusAreas": ["string"],
+  "geographicFocus": "string",
+  "eligibility": "string — who can apply",
+  "amountMin": number,
+  "amountMax": number,
+  "deadline": "YYYY-MM-DD or Varies or Rolling",
+  "applicationProcess": "string",
+  "whatTheyFund": ["string — specific program types they fund"],
+  "whatTheyDontFund": ["string"],
+  "recentGrantees": ["string — known past grantees if any"],
+  "keySelectionCriteria": ["string — what reviewers prioritize"],
+  "ecadrnAlignmentScore": number,
+  "ecadrnAlignmentRationale": "string — 2-3 sentences on fit",
+  "strategicApproach": "string — recommended framing and angle for ECADRN's application"
+}`;
+
+    case 'agent-write-proposal':
+      return `You are ECADRN's elite grant writer — a senior fundraising strategist who writes proposals that win. You are writing the COMPLETE, FINAL, SUBMISSION-READY grant proposal for this opportunity.
+
+ORGANIZATION: ECADRN
+${JSON.stringify(data.orgProfile)}
+
+GRANT OPPORTUNITY (fully researched):
+Title: \${data.grantTitle}
+Funder: \${data.funderName}
+Funder type: \${data.funderType}
+Description: \${data.description}
+Focus areas: \${JSON.stringify(data.focusAreas)}
+Award range: $\${data.amountMin}–$\${data.amountMax}
+Geographic focus: \${data.geographicFocus}
+Eligibility: \${data.eligibility}
+What they fund: \${JSON.stringify(data.whatTheyFund)}
+What they don't fund: \${JSON.stringify(data.whatTheyDontFund)}
+Key selection criteria: \${JSON.stringify(data.keySelectionCriteria)}
+Strategic approach: \${data.strategicApproach}
+Deadline: \${data.deadline}
+
+ECADRN VOICE PROFILE:
+Tone: \${data.toneDescriptors}
+Signature phrases: \${data.keyPhrases}
+Style rules: \${data.voiceRules}
+Sample writing: \${data.writingSamples}
+
+STRICT REQUIREMENTS:
+1. Write EVERY section as a complete, polished, submission-ready piece — not a placeholder or outline.
+2. Mirror the funder's language and priorities directly in each section.
+3. Every goal must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
+4. Budget narrative must align exactly with described activities and realistic nonprofit costs.
+5. Apply ECADRN's voice throughout — it must read as written by a human who deeply knows this org.
+6. Evaluation plan must name specific metrics, data collection methods, and reporting timelines.
+7. Organizational capacity section must reference ECADRN's actual programs and credentials.
+8. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note".
+9. Executive summary must open with a compelling hook, not a boilerplate intro.
+10. sustainability section must describe concrete plans beyond grant period.
+
+ADDITIONAL INSTRUCTIONS FROM USER: \${data.userInstructions || 'None — write the strongest possible proposal.'}
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "executiveSummary": "string — 300-400 words, compelling hook, mission alignment, ask amount, key outcomes",
+  "needStatement": "string — 300-400 words, data-backed, community voice, urgency",
+  "projectDescription": "string — 400-500 words, specific activities, timeline, populations served",
+  "goalsObjectives": "string — 300-400 words, 3-4 SMART goals with measurable targets",
+  "methodology": "string — 400-500 words, evidence-based approach, step-by-step activities",
+  "evaluationPlan": "string — 300-400 words, metrics, data collection, reporting cadence",
+  "sustainability": "string — 250-350 words, diversified revenue, partnerships, long-term vision",
+  "organizationalCapacity": "string — 300-400 words, track record, team, programs, governance",
+  "budgetNarrative": "string — 300-400 words, itemized rationale, cost-effectiveness, match if any"
+}`;
+
     case 'research-funder':
       return `You are a nonprofit fundraising strategist specializing in foundation research and ADR/conflict resolution sector funding.
 

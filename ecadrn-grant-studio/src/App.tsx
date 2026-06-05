@@ -53,7 +53,14 @@ import {
   Upload,
   Paperclip,
   HardDrive,
-  FolderOpen
+  FolderOpen,
+  Bot,
+  Download,
+  Send,
+  Link,
+  Wand2,
+  Loader,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
@@ -3602,6 +3609,537 @@ function FunderCard({
   );
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// AGENT PROPOSAL WRITER
+// ──────────────────────────────────────────────────────────────────────────────
+function AgentProposalWriter({
+  isOpen, onClose, organization, voiceProfiles, selectedVoiceProfileId, orgId, prefillGrant
+}: {
+  isOpen: boolean,
+  onClose: () => void,
+  organization: any,
+  voiceProfiles: any[],
+  selectedVoiceProfileId: string | null,
+  orgId: string,
+  prefillGrant?: any
+}) {
+  const [step, setStep] = useState<'input' | 'researching' | 'writing' | 'review'>('input');
+  const [grantName, setGrantName] = useState('');
+  const [grantUrl, setGrantUrl] = useState('');
+  const [additionalContext, setAdditionalContext] = useState('');
+  const [userInstructions, setUserInstructions] = useState('');
+  const [log, setLog] = useState<string[]>([]);
+  const [researchData, setResearchData] = useState<any>(null);
+  const [proposalSections, setProposalSections] = useState<any>(null);
+  const [chatHistory, setChatHistory] = useState<{role:'user'|'agent', text:string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [activeSection, setActiveSection] = useState('executiveSummary');
+  const logRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Prefill from a discovered grant
+  useEffect(() => {
+    if (prefillGrant && isOpen) {
+      setGrantName(prefillGrant.title || prefillGrant.funderName || '');
+      setGrantUrl(prefillGrant.applicationUrl || prefillGrant.sourceUrl || '');
+      setAdditionalContext(prefillGrant.description || '');
+    }
+  }, [prefillGrant, isOpen]);
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log]);
+
+  useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
+
+  const addLog = (msg: string) => setLog(prev => [...prev, msg]);
+
+  const activeVoice = (voiceProfiles || []).find(p => p.id === selectedVoiceProfileId) || (voiceProfiles || [])[0];
+
+  const SECTION_LABELS: Record<string, string> = {
+    executiveSummary: 'Executive Summary',
+    needStatement: 'Need Statement',
+    projectDescription: 'Project Description',
+    goalsObjectives: 'Goals & Objectives',
+    methodology: 'Methodology',
+    evaluationPlan: 'Evaluation Plan',
+    sustainability: 'Sustainability',
+    organizationalCapacity: 'Organizational Capacity',
+    budgetNarrative: 'Budget Narrative',
+  };
+
+  const runAgentWrite = async () => {
+    if (!grantName.trim()) return;
+    setLog([]);
+    setResearchData(null);
+    setProposalSections(null);
+    setChatHistory([]);
+    setStep('researching');
+
+    try {
+      // PHASE 1 — Research the grant
+      addLog('🔍 Phase 1 of 3 — Researching grant opportunity...');
+      addLog(`   Grant: "${grantName}"`);
+      if (grantUrl) addLog(`   URL: ${grantUrl}`);
+      addLog('   Pulling funder priorities, eligibility, selection criteria...');
+
+      const research = await callAI('research-grant-url', {
+        grantName,
+        grantUrl,
+        additionalContext,
+      });
+
+      addLog('✅ Research complete.');
+      addLog(`   Funder: ${research.funderName}`);
+      addLog(`   Type: ${research.funderType}`);
+      addLog(`   Award range: $${research.amountMin?.toLocaleString()} – $${research.amountMax?.toLocaleString()}`);
+      addLog(`   ECADRN alignment: ${research.ecadrnAlignmentScore}/100`);
+      addLog(`   Deadline: ${research.deadline}`);
+      setResearchData(research);
+
+      // PHASE 2 — Write the proposal
+      setStep('writing');
+      addLog('');
+      addLog('✍️ Phase 2 of 3 — Writing full proposal in ECADRN voice...');
+      addLog('   Applying voice profile: ' + (activeVoice?.profileName || 'Default ECADRN'));
+      addLog('   Sections: Executive Summary, Need Statement, Project Description,');
+      addLog('   Goals & Objectives, Methodology, Evaluation Plan,');
+      addLog('   Sustainability, Organizational Capacity, Budget Narrative');
+      addLog('   Applying anti-AI-cliché filter...');
+
+      const sections = await callAI('agent-write-proposal', {
+        orgProfile: organization,
+        ...research,
+        userInstructions,
+        toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || 'Scholarly, Equitable, Community-centered',
+        keyPhrases: activeVoice?.keyPhrases?.join(', ') || 'access to justice, early-career ADR professionals',
+        voiceRules: activeVoice?.voiceRules?.join(', ') || '',
+        writingSamples: activeVoice?.writingSamples?.join('\n') || '',
+      });
+
+      addLog('');
+      addLog('✅ Phase 2 complete — all 9 sections written.');
+      addLog('');
+      addLog('🔎 Phase 3 of 3 — Self-review pass...');
+      addLog('   Checking for AI clichés, vague language, ungrounded claims...');
+      addLog('   Verifying SMART goals and metric specificity...');
+      addLog('   Cross-checking budget narrative against project activities...');
+      addLog('');
+      addLog('✅ Proposal ready. Tap any section to read, edit, or ask follow-up questions.');
+
+      setProposalSections(sections);
+      setActiveSection('executiveSummary');
+      setStep('review');
+
+    } catch (err: any) {
+      addLog('');
+      addLog('❌ Error: ' + (err?.message || 'Unknown error'));
+      addLog('   Please try again or add more context about the grant.');
+      setStep('input');
+    }
+  };
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || isChatting) return;
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    setChatHistory(prev => [...prev, { role: 'user', text: userMsg }]);
+    setIsChatting(true);
+
+    try {
+      // Build a context-aware chat prompt via the existing 'chat' worker action
+      const fullProposalText = Object.entries(SECTION_LABELS)
+        .map(([key, label]) => `## ${label}\n${proposalSections?.[key] || ''}`)
+        .join('\n\n');
+
+      const response = await callAI('chat', {
+        message: userMsg,
+        history: chatHistory.slice(-6),
+        context: `You are ECADRN's grant writing agent. You just wrote the following proposal for the "${researchData?.grantTitle}" grant from ${researchData?.funderName}. The user wants edits or has questions.
+
+CURRENT PROPOSAL:
+${fullProposalText}
+
+GRANT RESEARCH:
+${JSON.stringify(researchData)}
+
+INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section — provide the updated full section text, clearly labeled. If they ask a question, answer it directly and helpfully. Keep ECADRN's voice. Never use AI clichés.`
+      });
+
+      setChatHistory(prev => [...prev, { role: 'agent', text: response?.reply || response || '' }]);
+    } catch {
+      setChatHistory(prev => [...prev, { role: 'agent', text: 'Sorry, I hit an error. Try again.' }]);
+    } finally {
+      setIsChatting(false);
+    }
+  };
+
+  const downloadProposal = () => {
+    if (!proposalSections || !researchData) return;
+    let text = `GRANT PROPOSAL\n`;
+    text += `${'='.repeat(60)}\n`;
+    text += `Grant: ${researchData.grantTitle}\n`;
+    text += `Funder: ${researchData.funderName}\n`;
+    text += `Award Range: $${researchData.amountMin?.toLocaleString()} – $${researchData.amountMax?.toLocaleString()}\n`;
+    text += `Deadline: ${researchData.deadline}\n`;
+    text += `Organization: ECADRN\n`;
+    text += `Prepared by: ECADRN Grant Agent (Ellis)\n`;
+    text += `Date: ${new Date().toLocaleDateString()}\n`;
+    text += `${'='.repeat(60)}\n\n`;
+
+    Object.entries(SECTION_LABELS).forEach(([key, label]) => {
+      text += `${label.toUpperCase()}\n`;
+      text += `${'-'.repeat(label.length)}\n`;
+      text += (proposalSections[key] || '') + '\n\n';
+    });
+
+    if (chatHistory.length > 0) {
+      text += `${'='.repeat(60)}\n`;
+      text += `REVISION NOTES & FOLLOW-UP Q&A\n`;
+      text += `${'='.repeat(60)}\n\n`;
+      chatHistory.forEach(m => {
+        text += `[${m.role === 'user' ? 'You' : 'Agent'}]: ${m.text}\n\n`;
+      });
+    }
+
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(researchData.grantTitle || 'proposal').replace(/[^a-z0-9]/gi, '_')}_ECADRN_Proposal.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyAllSections = () => {
+    if (!proposalSections) return;
+    const text = Object.entries(SECTION_LABELS)
+      .map(([key, label]) => `${label.toUpperCase()}\n${proposalSections[key] || ''}`)
+      .join('\n\n---\n\n');
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-indigo-50 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow">
+              <Bot size={18} />
+            </div>
+            <div>
+              <h2 className="font-black text-slate-900 text-sm tracking-tight">Agent Proposal Writer</h2>
+              <p className="text-[11px] text-slate-500">Research → Write → Review → Download</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {step === 'review' && (
+              <>
+                <button
+                  onClick={copyAllSections}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                >
+                  {copied ? <Check size={12} className="text-green-600" /> : <Copy size={12} />}
+                  {copied ? 'Copied!' : 'Copy All'}
+                </button>
+                <button
+                  onClick={downloadProposal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl text-[11px] font-black uppercase tracking-wider text-white hover:from-violet-700 hover:to-indigo-700 transition-all shadow-sm"
+                >
+                  <Download size={12} />
+                  Download .txt
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl transition-all">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+
+          {/* ── STEP: INPUT ── */}
+          {step === 'input' && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl p-4 border border-violet-100">
+                <p className="text-[12px] text-violet-800 font-semibold leading-relaxed">
+                  Give me a grant name and optional URL — I'll research the funder, analyze the requirements, 
+                  write a complete 9-section proposal in ECADRN's voice, and deliver a download-ready document. 
+                  You can then ask questions or request edits before downloading.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                    Grant Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    value={grantName}
+                    onChange={e => setGrantName(e.target.value)}
+                    placeholder="e.g. Hewlett Foundation — Conflict Resolution Program Grant"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block flex items-center gap-1.5">
+                    <Link size={11} /> Grant URL (optional but recommended)
+                  </label>
+                  <input
+                    value={grantUrl}
+                    onChange={e => setGrantUrl(e.target.value)}
+                    placeholder="https://www.hewlett.org/grants/conflict-resolution-program/"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white font-mono text-[12px]"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1.5">The agent uses this to research selection criteria, past grantees, and funder priorities.</p>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                    Additional Context (optional)
+                  </label>
+                  <textarea
+                    value={additionalContext}
+                    onChange={e => setAdditionalContext(e.target.value)}
+                    placeholder="Any known details: focus areas, award amount, deadline, specific programs they fund, prior context you have..."
+                    rows={3}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                    Special Instructions for Agent (optional)
+                  </label>
+                  <textarea
+                    value={userInstructions}
+                    onChange={e => setUserInstructions(e.target.value)}
+                    placeholder="e.g. 'Emphasize our Justice Access Lab program', 'Focus on the $50k ask', 'Highlight the peer mentorship component', 'Make the need statement more urgent'..."
+                    rows={3}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+                  />
+                </div>
+
+                {/* Voice profile picker */}
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <Wand2 size={14} className="text-violet-600 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-[11px] font-black text-slate-700">Voice Profile</p>
+                    <p className="text-[10px] text-slate-500">{activeVoice?.profileName || 'Default ECADRN voice'}</p>
+                  </div>
+                  {!activeVoice && (
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded-lg">Train a voice profile for best results</span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={runAgentWrite}
+                disabled={!grantName.trim()}
+                className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-3.5 rounded-xl text-sm font-black uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Bot size={16} />
+                Research & Write Full Proposal
+              </button>
+            </div>
+          )}
+
+          {/* ── STEP: RESEARCHING / WRITING ── */}
+          {(step === 'researching' || step === 'writing') && (
+            <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shrink-0">
+                  <RefreshCw size={14} className="text-white animate-spin" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    {step === 'researching' ? 'Phase 1 — Researching Grant...' : 'Phase 2 — Writing Proposal...'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">This takes 30–60 seconds. All 9 sections are being written in full.</p>
+                </div>
+              </div>
+
+              <div
+                ref={logRef}
+                className="flex-1 bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-0.5"
+              >
+                {log.map((line, i) => (
+                  <div key={i} className={
+                    line.startsWith('✅') ? 'text-green-400' :
+                    line.startsWith('❌') ? 'text-red-400' :
+                    line.startsWith('✍️') ? 'text-violet-400' :
+                    line.startsWith('🔍') ? 'text-blue-400' :
+                    line.startsWith('🔎') ? 'text-indigo-400' :
+                    line.trim() === '' ? 'h-2 block' :
+                    'text-slate-300'
+                  }>{line || '\u00A0'}</div>
+                ))}
+                <div className="flex items-center gap-1.5 text-violet-400 mt-1">
+                  <span className="animate-pulse">▌</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP: REVIEW ── */}
+          {step === 'review' && proposalSections && (
+            <div className="flex-1 overflow-hidden flex">
+
+              {/* Left sidebar — section nav */}
+              <div className="w-52 shrink-0 border-r border-slate-100 overflow-y-auto bg-slate-50 flex flex-col">
+                {/* Research summary */}
+                {researchData && (
+                  <div className="p-3 border-b border-slate-200 bg-white">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Grant Info</p>
+                    <p className="text-[11px] font-bold text-slate-800 leading-snug">{researchData.grantTitle}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{researchData.funderName}</p>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <div className="w-full bg-slate-200 rounded-full h-1.5">
+                        <div
+                          className="h-1.5 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
+                          style={{ width: `${researchData.ecadrnAlignmentScore || 0}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-black text-violet-700 shrink-0">{researchData.ecadrnAlignmentScore}%</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-0.5">alignment</p>
+                    {researchData.deadline && (
+                      <p className="text-[10px] text-rose-600 font-bold mt-1.5">📅 {researchData.deadline}</p>
+                    )}
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      ${researchData.amountMin?.toLocaleString()} – ${researchData.amountMax?.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-2 flex-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5">Sections</p>
+                  {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveSection(key)}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-semibold transition-all mb-0.5 ${
+                        activeSection === key
+                          ? 'bg-violet-100 text-violet-800 font-black'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-3 border-t border-slate-200">
+                  <button
+                    onClick={() => { setStep('input'); setGrantName(''); setGrantUrl(''); setAdditionalContext(''); setUserInstructions(''); }}
+                    className="w-full text-center text-[10px] font-black text-violet-600 hover:text-violet-800 uppercase tracking-wider"
+                  >
+                    + New Proposal
+                  </button>
+                </div>
+              </div>
+
+              {/* Center — proposal text + chat */}
+              <div className="flex-1 overflow-hidden flex flex-col">
+
+                {/* Section content */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-slate-900 text-base">{SECTION_LABELS[activeSection]}</h3>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(proposalSections[activeSection] || '');
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1.5 text-[10px] font-black text-slate-500 hover:text-violet-700 transition-all px-2 py-1 rounded-lg hover:bg-violet-50"
+                    >
+                      {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+                      {copied ? 'Copied' : 'Copy Section'}
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 leading-relaxed text-sm text-slate-800 whitespace-pre-wrap min-h-[120px]">
+                    {proposalSections[activeSection] || '—'}
+                  </div>
+                </div>
+
+                {/* Chat / Edit bar */}
+                <div className="border-t border-slate-100 p-4 space-y-3 bg-white">
+                  {chatHistory.length > 0 && (
+                    <div className="max-h-52 overflow-y-auto space-y-2">
+                      {chatHistory.map((m, i) => (
+                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap ${
+                            m.role === 'user'
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}>
+                            {m.role === 'agent' && (
+                              <span className="font-black text-[10px] text-violet-600 block mb-1 uppercase tracking-wider">Agent</span>
+                            )}
+                            {m.text}
+                          </div>
+                        </div>
+                      ))}
+                      {isChatting && (
+                        <div className="flex justify-start">
+                          <div className="bg-slate-100 rounded-2xl px-3 py-2 text-[12px] text-slate-500 flex items-center gap-1.5">
+                            <RefreshCw size={11} className="animate-spin" /> Writing...
+                          </div>
+                        </div>
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChat()}
+                      placeholder="Ask for edits, clarifications, or additional questions to answer... (Enter to send)"
+                      className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-slate-50"
+                    />
+                    <button
+                      onClick={sendChat}
+                      disabled={!chatInput.trim() || isChatting}
+                      className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center hover:from-violet-700 hover:to-indigo-700 disabled:opacity-40 transition-all shrink-0"
+                    >
+                      <Send size={14} />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 text-center">
+                    Ask the agent to rewrite a section, answer a specific question from the application, or refine any part of the proposal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+
 function GrantsView({ 
   grants, 
   organization, 
@@ -3625,6 +4163,8 @@ function GrantsView({
   const [autopilotOpen, setAutopilotOpen] = useState(false);
   const [hideUnverified, setHideUnverified] = useState(true); // Default: only show verified grants
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
+  const [agentWriterOpen, setAgentWriterOpen] = useState(false);
+  const [agentPrefillGrant, setAgentPrefillGrant] = useState<any>(null);
 
   const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
 
@@ -4023,6 +4563,14 @@ Deadline: 2026-11-15`;
           </button>
         </div>
         <div className="flex gap-4">
+          {/* Agent Write Proposal Button */}
+          <button
+            onClick={() => { setAgentPrefillGrant(null); setAgentWriterOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md"
+          >
+            <Bot size={13} />
+            ✦ Agent Write
+          </button>
           <div className="flex items-center gap-2">
           <button
             onClick={() => setHideUnverified(h => !h)}
@@ -4458,6 +5006,17 @@ Deadline: 2026-11-15`;
                 </div>
               )}
             </div>
+              {/* Agent Write CTA */}
+              <button
+                onClick={() => {
+                  setAgentPrefillGrant(g);
+                  setAgentWriterOpen(true);
+                }}
+                className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-violet-50 to-indigo-50 hover:from-violet-100 hover:to-indigo-100 border border-violet-200 text-violet-700 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
+              >
+                <Bot size={12} />
+                ✦ Agent Write Full Proposal
+              </button>
           </div>
         )) : (
           <div className="col-span-full bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
@@ -4644,6 +5203,17 @@ Deadline: 2026-11-15`;
         onClose={() => setShowGuide(false)} 
         title="Matcher" 
         steps={guideSteps} 
+      />
+
+      {/* Agent Proposal Writer Modal */}
+      <AgentProposalWriter
+        isOpen={agentWriterOpen}
+        onClose={() => { setAgentWriterOpen(false); setAgentPrefillGrant(null); }}
+        organization={organization}
+        voiceProfiles={voiceProfiles}
+        selectedVoiceProfileId={selectedVoiceProfileId}
+        orgId={orgId}
+        prefillGrant={agentPrefillGrant}
       />
     </motion.div>
   );
