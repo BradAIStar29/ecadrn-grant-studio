@@ -12,6 +12,27 @@ export interface Env {
 function getPrompt(action: string, data: any): string {
   switch (action) {
     case 'generate-draft':
+      const funderIntelSection = data.funderIntelligence
+        ? `
+FUNDER INTELLIGENCE (from prior research — use this to tailor the proposal):
+Giving Priorities: ${JSON.stringify(data.funderIntelligence.givingPriorities || [])}
+What They Fund: ${JSON.stringify(data.funderIntelligence.whatTheyFund || [])}
+What They DON'T Fund: ${JSON.stringify(data.funderIntelligence.whatTheyDontFund || [])}
+Application Tips: ${JSON.stringify(data.funderIntelligence.applicationTips || [])}
+Recommended Approach: ${data.funderIntelligence.recommendedApproach || 'N/A'}
+Mission Alignment Rationale: ${data.funderIntelligence.missionAlignmentRationale || 'N/A'}
+Key Selection Criteria: ${JSON.stringify(data.funderIntelligence.keySelectionCriteria || [])}
+Typical Grantees: ${JSON.stringify(data.funderIntelligence.typicalGrantees || [])}
+
+IMPORTANT: Use the funder intelligence above to:
+- Mirror their giving priorities language directly in each section
+- Avoid proposing activities in their "what they don't fund" list
+- Follow their application tips explicitly
+- Frame the proposal using their recommended approach
+- Reference their typical grantees as comparables when relevant
+- Address each key selection criterion systematically`
+        : '';
+
       return `You are an expert nonprofit grant writer with deep experience in Alternative Dispute Resolution, conflict resolution, access to justice, and civic equity funding.
 
 TASK: Write a complete 9-section grant proposal for the organization below, tailored precisely to the grant opportunity provided.
@@ -28,6 +49,7 @@ Focus areas: ${data.focusAreas}
 Award range: $${data.amountMin}–$${data.amountMax}
 Eligibility: ${data.eligibility}
 Geographic focus: ${data.geographicFocus}
+${funderIntelSection}
 
 VOICE PROFILE:
 Tone descriptors: ${data.toneDescriptors}
