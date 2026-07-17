@@ -162,6 +162,27 @@ const WALKTHROUGH_STEPS = [
 
 const SHARED_ORG_ID = 'ecadrn-shared';
 
+// ── Toast notification system ────────────────────────────────────────────────
+let _toastId = 0;
+let _toastSetter: ((toasts: any[] | ((prev: any[]) => any[])) => void) | null = null;
+export function showToast(msg: string, type: 'error' | 'success' = 'error') {
+  const id = ++_toastId;
+  if (_toastSetter) {
+    _toastSetter((prev: any[]) => [...prev, { id, msg, type }]);
+    setTimeout(() => {
+      if (_toastSetter) _toastSetter((prev: any[]) => prev.filter((x: any) => x.id !== id));
+    }, 4000);
+  }
+}
+function useToasts() {
+  const [toasts, setToasts] = useState<{id: number, msg: string, type: 'error' | 'success'}[]>([]);
+  useEffect(() => {
+    _toastSetter = setToasts;
+    return () => { _toastSetter = null; };
+  }, []);
+  return toasts;
+}
+
 // ── Error Boundary ──────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
   state: { hasError: boolean; error: Error | null } = { hasError: false, error: null };
@@ -211,6 +232,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  const toasts = useToasts();
   const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
     return (localStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
   });
@@ -823,6 +845,22 @@ CORE PROGRAMS:
         </div>
       )}
     </div>
+      {/* Toast notifications */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(t => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              className={`pointer-events-auto px-5 py-3 rounded-xl shadow-lg font-medium text-sm ${t.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}
+            >
+              {t.type === 'error' && '⚠️ '}{t.msg}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </ErrorBoundary>
   );
 }
@@ -1139,8 +1177,9 @@ function ProposalsView({
       
       setShowNewForm(false);
       setNewProposalData({ title: '', funder: '', description: '' });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Failed to generate draft.');
     } finally {
       setIsGenerating(false);
     }
@@ -1534,7 +1573,7 @@ function ProposalEditor({
       setDoc(doc(db, propPath), {
         funder: fObj.funderName || '',
         updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(err => console.error("Funder save error:", err));
+      }, { merge: true }).then(() => showToast('Funder saved.', 'success')).catch(err => { console.error("Funder save error:", err); showToast(err?.message || 'Funder save failed.'); });
       proposal.funder = fObj.funderName || '';
 
       // Pre-populate 'Budget Narrative' and 'Organizational Capacity' sections if currently blank, minimal, or placeholders
@@ -2048,8 +2087,9 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           const newSections = [...sections];
                           newSections[activeSectionIdx].content = result;
                           setSections(newSections);
-                        } catch (err) {
+                        } catch (err: any) {
                           console.error(err);
+                          showToast(err?.message || 'AI rewrite failed.');
                         } finally {
                           setIsAIWorking(null);
                         }
@@ -2135,7 +2175,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                             </p>
                           </div>
                         </div>
-                        <button onClick={() => setShowHumanizer(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white cursor-pointer"><X size={18} /></button>
+                        <button onClick={() => setShowHumanizer(false)} aria-label="Close humanizer" className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white cursor-pointer"><X size={18} /></button>
                       </div>
 
                       {/* Scoreboard Row */}
@@ -2262,8 +2302,9 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                                 proposal: { sections: newSections }
                               });
                               setHumanizerResults(updatedResult);
-                            } catch (e) {
-                              console.error(e);
+                            } catch (err: any) {
+                              console.error(err);
+                              showToast(err?.message || 'Humanizer failed.');
                             } finally {
                               setIsAIWorking(null);
                             }
@@ -2295,7 +2336,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           </h5>
                           <p className="text-slate-400 text-sm font-medium tracking-wide">Audit Score: {reviewResults.overallScore}/100</p>
                         </div>
-                        <button onClick={() => setShowAIReview(false)} className="p-2 hover:bg-white/10 rounded-xl transition-colors"><X size={20} /></button>
+                        <button onClick={() => setShowAIReview(false)} aria-label="Close AI review" className="p-2 hover:bg-white/10 rounded-xl transition-colors"><X size={20} /></button>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -2474,7 +2515,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       <span className="text-[9px] text-slate-400 font-bold block">Section-specific team syncing</span>
                     </div>
                   </div>
-                  <button onClick={() => setShowComments(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"><X size={15} /></button>
+                  <button onClick={() => setShowComments(false)} aria-label="Close comments" className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-all"><X size={15} /></button>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 flex flex-col">
@@ -2550,7 +2591,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 <div className="p-6">
                   <div className="flex justify-between items-center mb-6">
                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Version History</h5>
-                    <button onClick={() => setShowVersions(false)}><X size={16} /></button>
+                    <button onClick={() => setShowVersions(false)} aria-label="Close versions"><X size={16} /></button>
                   </div>
                   <div className="space-y-4">
                     {versions.map((v) => (
@@ -2897,8 +2938,9 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       setManualTags([]);
       setManualNotes('');
       setShowAddManualForm(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Failed to add funder.');
     } finally {
       setIsSubmittingManual(false);
     }
@@ -3015,8 +3057,9 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
         setNewFunderUrl('');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Funder research failed.');
     } finally {
       if (funder) setResearchingId(null);
       else setIsResearchingNew(false);
@@ -3188,8 +3231,8 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 type="text" 
                 required
                 value={manualName} 
-                onChange={(e) => setManualName(e.target.value)}
                 placeholder="e.g. The Hewlett Foundation"
+                onChange={(e) => setManualName(e.target.value)}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none animate-none"
               />
             </div>
@@ -3199,8 +3242,8 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 type="text" 
                 required
                 value={manualWebsite} 
-                onChange={(e) => setManualWebsite(e.target.value)}
                 placeholder="e.g. hewlett.org"
+                onChange={(e) => setManualWebsite(e.target.value)}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none animate-none"
               />
             </div>
@@ -4625,8 +4668,9 @@ function GrantsView({
           updatedAt: new Date().toISOString()
         }).catch(err => console.error("Error writing voice grant:", err));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Voice suggestion failed.');
     } finally {
       setIsVoiceSuggesting(false);
     }
@@ -4713,6 +4757,7 @@ Deadline: 2026-11-15`;
         } catch (err: any) {
           console.error(err);
           setUploadError(`Failed to analyze uploaded grant: ${err.message}`);
+          showToast(err?.message || 'Upload analysis failed.');
           setIsUploading(false);
         }
       };
@@ -4724,6 +4769,7 @@ Deadline: 2026-11-15`;
     } catch (err: any) {
       console.error(err);
       setUploadError(err.message);
+      showToast(err?.message || 'File reading failed.');
       setIsUploading(false);
     }
   };
@@ -5848,8 +5894,9 @@ function VoiceView({
         documents: [{ content: analysisContent }]
       });
       setFunderAlignmentResults(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Funder alignment analysis failed.');
     } finally {
       setIsFunderAlignmentAnalyzing(false);
     }
@@ -5929,9 +5976,10 @@ function VoiceView({
       });
       clearInterval(interval);
       setAnalyzedResult(data);
-    } catch (err) {
+    } catch (err: any) {
       clearInterval(interval);
       console.error(err);
+      showToast(err?.message || 'Voice analysis failed.');
     } finally {
       setIsAnalyzing(false);
       setScanningStatus('');
