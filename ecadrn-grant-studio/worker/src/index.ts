@@ -281,6 +281,140 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   }
 ]`;
 
+
+    case 'align-grant-ecadrn':
+      return `You are an expert grant writer for ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation). Align the following grant opportunity with ECADRN's mission of advancing ADR, conflict resolution, and civic equity.
+
+Grant: ${data.grantTitle || ''}
+Funder: ${data.funderName || ''}
+Description: ${data.grantDescription || ''}
+Focus Areas: ${data.focusAreas || ''}
+
+Provide a JSON response with:
+- "alignmentScore" (0-100): how well this grant fits ECADRN
+- "recommendedAngle" (string): suggested approach
+- "keyKeywords" (array of strings): keywords to emphasize
+- "risks" (array of strings): potential alignment risks`;
+
+    case 'align-to-funder':
+      return `You are a grant alignment expert. Align the following proposal section to match the funder's priorities and language.
+
+Funder Intelligence: ${JSON.stringify(data.funderIntelligence || {})}
+Section Content: ${data.content || ''}
+
+Return JSON with:
+- "alignedContent" (string): the revised section content
+- "changes" (array of strings): summary of changes made`;
+
+    case 'analyze-uploaded-grant':
+      return `Analyze this grant document and extract key information. Return JSON with:
+- "title" (string): grant name
+- "funderName" (string): funding organization
+- "deadline" (string): application deadline if found
+- "amount" (string): funding amount if found
+- "focusAreas" (array of strings): key focus areas
+- "eligibility" (array of strings): eligibility requirements
+- "summary" (string): brief summary
+
+Document text:
+${(data.text || '').slice(0, 8000)}`;
+
+    case 'analyze-voice':
+      return `Analyze the following documents to identify the organization's unique writing voice and style. Return JSON with:
+- "tone" (string): dominant tone (formal, conversational, urgent, etc.)
+- "vocabulary" (array of strings): frequently used distinctive words
+- "sentenceStyle" (string): description of sentence structure patterns
+- "keyPhrases" (array of strings): signature phrases or themes
+- "avoidWords" (array of strings): words or phrases to avoid
+
+Documents:
+${JSON.stringify(data.documents || []).slice(0, 8000)}`;
+
+    case 'autopilot-search':
+      return `Search for grant opportunities matching this organization's profile. Return a JSON array of grants, each with:
+- "title" (string)
+- "funderName" (string)
+- "amount" (string)
+- "deadline" (string, ISO format if known)
+- "focusAreas" (array of strings)
+- "url" (string, only if confirmed real)
+- "verified" (boolean, always false — we never fabricate verification)
+- "description" (string)
+
+Organization Profile: ${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
+Focus Areas: ${data.focusAreas || 'ADR, conflict resolution, civic equity'}
+
+IMPORTANT: Only include real grants you are confident exist. Mark all as verified: false. Never fabricate URLs.`;
+
+    case 'chat':
+      return `You are ECADRN's AI grant writing assistant. Respond in JSON format:
+{"reply": "your response text"}
+
+Conversation context: ${data.context || ''}
+Recent history: ${JSON.stringify(data.history || []).slice(-2000)}
+User message: ${data.message || ''}`;
+
+    case 'generate-budget':
+      return `Generate a detailed grant budget based on the project description. Return a JSON array of line items, each with:
+- "category" (string): e.g., Personnel, Travel, Equipment, Other
+- "description" (string): line item description
+- "amount" (number): dollar amount
+- "justification" (string): brief justification
+
+Project Description: ${data.description || ''}`;
+
+    case 'generate-justification':
+      return `Write a budget justification for this line item. Return JSON: {"justification": "string"}
+
+Project Description: ${data.projectDescription || ''}
+Line Item: ${data.description || ''}
+Amount: $${data.amount || 0}`;
+
+    case 'generate-outreach-email':
+      return `Write a professional outreach email. Return JSON: {"subject": "string", "body": "string"}
+
+Email Type: ${data.emailType || 'introduction'}
+Funder: ${JSON.stringify(data.funder || {})}
+Organization: ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation)
+
+Keep the email concise, professional, and tailored to the funder's priorities.`;
+
+    case 'humanize-proposal':
+      return `Review this proposal and suggest improvements to make it more natural and compelling. Return JSON with:
+- "score" (number): natural writing score 0-100
+- "suggestions" (array of strings): specific improvement suggestions
+- "rewrittenSection" (string): a more natural version of any key section
+
+Funder: ${data.funderName || ''}
+Proposal: ${JSON.stringify(data.proposal || {}).slice(0, 6000)}`;
+
+    case 'identify-missing':
+      return `Analyze the current application features and suggest what's missing for a complete grant writing platform. Return JSON:
+{"missing": [{"feature": "string", "priority": "high|medium|low", "description": "string"}]}
+
+Current Features: ${JSON.stringify(data.currentFeatures || [])}
+Organization: ${JSON.stringify(data.orgProfile || {}).slice(0, 2000)}`;
+
+    case 'review-proposal':
+      return `Review this grant proposal for quality and completeness. Return JSON with:
+- "overallScore" (number): 0-100
+- "sectionScores" (object): score per section (0-100)
+- "strengths" (array of strings)
+- "weaknesses" (array of strings)
+- "recommendations" (array of strings)
+
+Grant: ${data.grantTitle || ''}
+Funder: ${data.funderName || ''}
+Description: ${data.grantDescription || ''}
+Proposal: ${JSON.stringify(data.proposal || {}).slice(0, 6000)}`;
+
+    case 'rewrite-voice':
+      return `Rewrite the following content to match the organization's voice profile. Return JSON: {"content": "rewritten text"}
+
+Voice Profile: ${JSON.stringify(data.voiceProfile || {}).slice(0, 2000)}
+Content: ${data.content || ''}`;
+
+
     default:
       return 'INVALID';
   }

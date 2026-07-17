@@ -163,11 +163,8 @@ const WALKTHROUGH_STEPS = [
 const SHARED_ORG_ID = 'ecadrn-shared';
 
 // ── Error Boundary ──────────────────────────────────────────────────────────
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  state = { hasError: false, error: null as Error | null };
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
+  state: { hasError: boolean; error: Error | null } = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
@@ -178,7 +175,8 @@ class ErrorBoundary extends React.Component<
   }
 
   render() {
-    if (this.state.hasError) {
+    const self = this as any;
+    if (self.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
           <div style={{ maxWidth: 480, textAlign: 'center', padding: 48 }}>
@@ -189,11 +187,11 @@ class ErrorBoundary extends React.Component<
             <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 24 }}>
               The application encountered an unexpected error. Try reloading — your data is safe in the cloud.
             </p>
-            {this.state.error && (
+            {self.state.error && (
               <details style={{ textAlign: 'left', background: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 24 }}>
                 <summary style={{ color: '#64748b', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Error details</summary>
                 <pre style={{ color: '#94a3b8', fontSize: 11, marginTop: 8, whiteSpace: 'pre-wrap', overflow: 'auto' }}>
-                  {this.state.error.message}
+                  {self.state.error.message}
                 </pre>
               </details>
             )}
@@ -207,7 +205,7 @@ class ErrorBoundary extends React.Component<
         </div>
       );
     }
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
 
