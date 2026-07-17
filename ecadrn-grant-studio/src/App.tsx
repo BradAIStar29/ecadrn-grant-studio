@@ -29,6 +29,7 @@ import {
   Copy,
   Check,
   ChevronRight,
+  ChevronLeft,
   HelpCircle,
   Maximize,
   Minimize,
@@ -1148,21 +1149,38 @@ function ProposalsView({
         // Use the active voice profile if selected, fall back to org voice
         const activeVoice = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || voiceProfiles[0];
         const voiceSource = activeVoice || organization?.voiceProfile || {};
+
+        // Look up funder intelligence from the funders list
+        const matchedFunder = (funders || []).find(f =>
+          f.funderName?.toLowerCase() === newProposalData.funder?.toLowerCase()
+        );
+        const funderIntel = matchedFunder?.intelligence || null;
+
         const data = await callAI('generate-draft', {
           orgProfile: organization,
           grantTitle: newProposalData.title,
           funderName: newProposalData.funder,
-          funderType: newProposalData.funderType || "Foundation",
+          funderType: newProposalData.funderType || matchedFunder?.funderType || "Foundation",
           grantDescription: newProposalData.description || "General operating support for ADR programs serving early-career professionals.",
-          focusAreas: newProposalData.focusAreas || "ADR, Mediation, Conflict Resolution, Access to Justice",
+          focusAreas: newProposalData.focusAreas || (funderIntel?.givingPriorities?.join(', ')) || "ADR, Mediation, Conflict Resolution, Access to Justice",
           amountMin: newProposalData.amountMin || 25000,
           amountMax: newProposalData.amountMax || 100000,
           eligibility: newProposalData.eligibility || "501(c)(3) nonprofits",
-          geographicFocus: newProposalData.geographicFocus || "National",
+          geographicFocus: newProposalData.geographicFocus || (funderIntel?.geographicFocus) || "National",
           toneDescriptors: voiceSource.toneDescriptors?.join(', '),
           keyPhrases: voiceSource.keyPhrases?.join(', '),
           voiceRules: voiceSource.voiceRules?.join('; '),
-          writingSamples: voiceSource.writingSamples?.join(' | ')
+          writingSamples: voiceSource.writingSamples?.join(' | '),
+          funderIntelligence: funderIntel ? {
+            givingPriorities: funderIntel.givingPriorities,
+            whatTheyFund: funderIntel.whatTheyFund || [],
+            whatTheyDontFund: funderIntel.whatTheyDontFund || [],
+            applicationTips: funderIntel.applicationTips || [],
+            recommendedApproach: funderIntel.recommendedApproach || '',
+            missionAlignmentRationale: funderIntel.missionAlignmentRationale || '',
+            keySelectionCriteria: funderIntel.keySelectionCriteria || [],
+            typicalGrantees: funderIntel.typicalGrantees || []
+          } : null
         });
         sections = data;
       }
@@ -1420,14 +1438,36 @@ function ProposalsView({
         const wc1 = wordCount(p1.sections);
         const wc2 = wordCount(p2.sections);
 
+        const getSectionContent = (p: any, key: string) => {
+          if (!Array.isArray(p.sections)) return '';
+          const s = p.sections.find((s: any) => s.id === key || s.title === SECTION_NAMES[key]);
+          return s?.content ? s.content.replace(/<[^>]*>/g, '').trim() : '';
+        };
+
+        const sectionWordCounts = SECTION_KEYS.map(key => ({
+          key,
+          name: SECTION_NAMES[key],
+          wc1: getSectionContent(p1, key).split(/\s+/).filter(Boolean).length,
+          wc2: getSectionContent(p2, key).split(/\s+/).filter(Boolean).length,
+          content1: getSectionContent(p1, key),
+          content2: getSectionContent(p2, key),
+        }));
+
+        const [activeSection, setActiveSection] = useState(SECTION_KEYS[0]);
+
+        // Find sections that differ
+        const differingSections = sectionWordCounts.filter(s => s.content1 !== s.content2);
+        const identicalSections = sectionWordCounts.filter(s => s.content1 === s.content2);
+
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCompareModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between rounded-t-2xl">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><GitCompare size={20} /> Proposal Comparison</h2>
-                <button onClick={() => setShowCompareModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <button onClick={() => setShowCompareModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
               </div>
               <div className="p-8">
+                {/* Summary cards */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   {[p1, p2].map((p, i) => (
                     <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-indigo-200 bg-indigo-50/50' : 'border-violet-200 bg-violet-50/50'}`}>
@@ -1435,7 +1475,7 @@ function ProposalsView({
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between"><span className="text-slate-500">Funder</span><span className="font-medium">{p.funder || '—'}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Status</span><span className="font-medium capitalize">{p.status || 'draft'}</span></div>
-                        <div className="flex justify-between"><span className="text-slate-500">Words</span><span className="font-medium">{(i === 0 ? wc1 : wc2).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Total Words</span><span className="font-medium">{(i === 0 ? wc1 : wc2).toLocaleString()}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Created by</span><span className="font-medium text-xs">{p.createdBy?.split('@')[0] || '—'}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Last edit</span><span className="font-medium text-xs">{p.lastEditedBy?.split('@')[0] || '—'}</span></div>
                       </div>
@@ -1443,33 +1483,70 @@ function ProposalsView({
                   ))}
                 </div>
 
-                <h4 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Section-by-Section Breakdown</h4>
-                <div className="space-y-2">
-                  {SECTION_KEYS.map(key => {
-                    const s1 = Array.isArray(p1.sections) ? (p1.sections.find((s: any) => s.id === key || s.title === SECTION_NAMES[key])?.content || '') : '';
-                    const s2 = Array.isArray(p2.sections) ? (p2.sections.find((s: any) => s.id === key || s.title === SECTION_NAMES[key])?.content || '') : '';
-                    const len1 = s1.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
-                    const len2 = s2.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
-                    const max = Math.max(len1, len2, 1);
-                    const winner = len1 > len2 ? 0 : len2 > len1 ? 1 : -1;
+                {/* Summary stats */}
+                <div className="flex items-center gap-4 mb-6 text-sm">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
+                    <span className="font-bold">{differingSections.length}</span> sections differ
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
+                    <span className="font-bold">{identicalSections.length}</span> sections identical
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-100">
+                    Word diff: <span className="font-bold">{wc1 - wc2 > 0 ? '+' : ''}{(wc1 - wc2).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Section bar chart overview */}
+                <h4 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Section Word Count Comparison</h4>
+                <div className="space-y-2 mb-6">
+                  {sectionWordCounts.map(s => {
+                    const max = Math.max(s.wc1, s.wc2, 1);
+                    const winner = s.wc1 > s.wc2 ? 0 : s.wc2 > s.wc1 ? 1 : -1;
+                    const differs = s.content1 !== s.content2;
                     return (
-                      <div key={key} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
-                        <span className="text-xs font-medium text-slate-600 w-32 shrink-0">{SECTION_NAMES[key]}</span>
+                      <button
+                        key={s.key}
+                        onClick={() => setActiveSection(s.key)}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${activeSection === s.key ? 'bg-slate-100 ring-1 ring-indigo-200' : 'hover:bg-slate-50'}`}
+                      >
+                        <span className={`text-xs font-medium w-36 shrink-0 ${differs ? 'text-slate-700' : 'text-slate-400'}`}>{s.name}</span>
                         <div className="flex-1 flex items-center gap-2">
                           <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${winner === 0 ? 'bg-indigo-500' : 'bg-indigo-300'}`} style={{ width: `${(len1/max)*100}%` }} />
+                            <div className={`h-full rounded-full ${winner === 0 ? 'bg-indigo-500' : 'bg-indigo-300'}`} style={{ width: `${(s.wc1/max)*100}%` }} />
                           </div>
-                          <span className="text-xs text-slate-500 w-12 text-right">{len1}w</span>
+                          <span className="text-xs text-slate-500 w-12 text-right">{s.wc1}w</span>
                         </div>
                         <div className="flex-1 flex items-center gap-2">
                           <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${winner === 1 ? 'bg-violet-500' : 'bg-violet-300'}`} style={{ width: `${(len2/max)*100}%` }} />
+                            <div className={`h-full rounded-full ${winner === 1 ? 'bg-violet-500' : 'bg-violet-300'}`} style={{ width: `${(s.wc2/max)*100}%` }} />
                           </div>
-                          <span className="text-xs text-slate-500 w-12 text-right">{len2}w</span>
+                          <span className="text-xs text-slate-500 w-12 text-right">{s.wc2}w</span>
                         </div>
-                      </div>
+                        {differs && <span className="text-[10px] text-amber-500 font-bold w-6">●</span>}
+                      </button>
                     );
                   })}
+                </div>
+
+                {/* Side-by-side text comparison */}
+                <h4 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Side-by-Side Preview: {SECTION_NAMES[activeSection]}</h4>
+                <div className="grid grid-cols-2 gap-4 border rounded-xl overflow-hidden">
+                  <div className="border-r border-slate-100">
+                    <div className="bg-indigo-50 px-4 py-2 border-b border-indigo-100">
+                      <span className="text-xs font-bold text-indigo-700">{p1.title}</span>
+                    </div>
+                    <div className="p-4 max-h-80 overflow-y-auto text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {getSectionContent(p1, activeSection) || <span className="text-slate-400 italic">No content for this section</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="bg-violet-50 px-4 py-2 border-b border-violet-100">
+                      <span className="text-xs font-bold text-violet-700">{p2.title}</span>
+                    </div>
+                    <div className="p-4 max-h-80 overflow-y-auto text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {getSectionContent(p2, activeSection) || <span className="text-slate-400 italic">No content for this section</span>}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -7197,21 +7274,65 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
 
 function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }) {
   const [activeTab, setActiveTab] = useState<'grid' | 'monthly' | 'weekly'>('grid');
-  
+  const [showPast, setShowPast] = useState(false);
+  const [navMonth, setNavMonth] = useState(new Date().getMonth());
+  const [navYear, setNavYear] = useState(new Date().getFullYear());
+
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  
-  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  
+
+  const firstDay = new Date(navYear, navMonth, 1).getDay();
+  const daysInMonth = new Date(navYear, navMonth + 1, 0).getDate();
+
   const events = [
-    ...(grants || []).filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
-    ...(proposals || []).map(p => ({ date: new Date(p.updatedAt || new Date().toISOString()), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
+    ...(grants || []).filter(g => g.deadline).map(g => {
+      const d = new Date(g.deadline);
+      const today = new Date(); today.setHours(0,0,0,0);
+      const diffDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      let urgency = 'future';
+      if (diffDays < 0) urgency = 'past';
+      else if (diffDays <= 7) urgency = 'critical';
+      else if (diffDays <= 14) urgency = 'urgent';
+      else if (diffDays <= 30) urgency = 'soon';
+      return { date: d, title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery', urgency, funder: g.funderName };
+    }),
+    ...(proposals || []).map(p => {
+      const d = new Date(p.updatedAt || new Date().toISOString());
+      const today = new Date(); today.setHours(0,0,0,0);
+      const diffDays = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      let urgency = 'future';
+      if (diffDays < 0) urgency = 'past';
+      else if (diffDays <= 7) urgency = 'critical';
+      else if (diffDays <= 14) urgency = 'urgent';
+      else if (diffDays <= 30) urgency = 'soon';
+      return { date: d, title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft', urgency, funder: p.funder };
+    })
   ];
 
-  const sortedEvents = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Filter past events unless showPast is true
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+  const visibleEvents = showPast ? events : events.filter(e => e.date >= todayDate);
+  const sortedEvents = [...visibleEvents].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Summary stats
+  const upcomingDeadlines = events.filter(e => e.type === 'grant' && e.urgency !== 'past');
+  const criticalCount = upcomingDeadlines.filter(e => e.urgency === 'critical').length;
+  const urgentCount = upcomingDeadlines.filter(e => e.urgency === 'urgent').length;
+  const thisWeekCount = upcomingDeadlines.filter(e => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.ceil((e.date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 && diff <= 7;
+  }).length;
+
+  const getUrgencyColors = (urgency: string) => {
+    switch (urgency) {
+      case 'critical': return { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100', badge: 'bg-rose-500 text-white' };
+      case 'urgent': return { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100', badge: 'bg-amber-500 text-white' };
+      case 'soon': return { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-100', badge: 'bg-yellow-400 text-white' };
+      case 'past': return { bg: 'bg-slate-50', text: 'text-slate-400', border: 'border-slate-100', badge: 'bg-slate-300 text-slate-600' };
+      default: return { bg: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-100', badge: 'bg-indigo-500 text-white' };
+    }
+  };
 
   const getWeeklyGroup = (date: Date) => {
     const today = new Date();
@@ -7255,6 +7376,16 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
 
   const weeklyColumns = ['This Week', 'Next Week', 'In 3-4 Weeks', 'Future Timeline', 'Recent History'];
 
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const goPrevMonth = () => {
+    if (navMonth === 0) { setNavMonth(11); setNavYear(navYear - 1); }
+    else setNavMonth(navMonth - 1);
+  };
+  const goNextMonth = () => {
+    if (navMonth === 11) { setNavMonth(0); setNavYear(navYear + 1); }
+    else setNavMonth(navMonth + 1);
+  };
+
   return (
     <motion.div id="calendar-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -7291,14 +7422,51 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             </button>
           </div>
           
-          <span className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full shadow-lg shadow-slate-100 hidden sm:inline-block">
-            {now.toLocaleString('default', { month: 'long' })} {currentYear}
-          </span>
+          <button
+            onClick={() => setShowPast(!showPast)}
+            className={`text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-full transition-all ${
+              showPast ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}
+          >
+            {showPast ? '✓ Past' : 'Hide Past'}
+          </button>
+        </div>
+      </div>
+
+      {/* Deadline Summary Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Upcoming Deadlines</div>
+          <div className="text-2xl font-bold text-slate-900">{upcomingDeadlines.length}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-rose-200 p-4 shadow-sm">
+          <div className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-1">Critical (≤7 days)</div>
+          <div className="text-2xl font-bold text-rose-600">{criticalCount}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm">
+          <div className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-1">Urgent (≤14 days)</div>
+          <div className="text-2xl font-bold text-amber-600">{urgentCount}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-indigo-200 p-4 shadow-sm">
+          <div className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1">This Week</div>
+          <div className="text-2xl font-bold text-indigo-600">{thisWeekCount}</div>
         </div>
       </div>
 
       {activeTab === 'grid' && (
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-100">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+            <button onClick={goPrevMonth} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors">
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              {monthNames[navMonth]} {navYear}
+            </span>
+            <button onClick={goNextMonth} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors">
+              <ChevronRight size={18} />
+            </button>
+          </div>
           <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
             {days.map(day => (
               <div key={day} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{day}</div>
@@ -7308,8 +7476,8 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             {Array.from({ length: 42 }).map((_, i) => {
               const dayNum = i - firstDay + 1;
               const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth;
-              const date = new Date(currentYear, currentMonth, dayNum);
-              const dayEvents = events.filter(e => e.date.toDateString() === date.toDateString());
+              const date = new Date(navYear, navMonth, dayNum);
+              const dayEvents = visibleEvents.filter(e => e.date.toDateString() === date.toDateString());
 
               return (
                 <div key={i} className={`border-r border-b border-slate-100 p-4 min-h-[140px] transition-colors ${!isCurrentMonth ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/50'}`}>
@@ -7319,13 +7487,15 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
                         {dayNum}
                       </span>
                       <div className="mt-3 space-y-2">
-                        {dayEvents.map((e, idx) => (
-                          <div key={idx} className={`text-[9.5px] font-extrabold py-1 px-2 rounded-lg truncate border leading-tight ${
-                            e.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
-                          }`} title={`${e.type.toUpperCase()}: ${e.title}`}>
-                            {e.title}
-                          </div>
-                        ))}
+                        {dayEvents.map((e, idx) => {
+                          const uc = getUrgencyColors(e.urgency);
+                          return (
+                            <div key={idx} className={`text-[9.5px] font-extrabold py-1 px-2 rounded-lg truncate border leading-tight ${uc.bg} ${uc.text} ${uc.border}`} title={`${e.type.toUpperCase()}: ${e.title} — ${getRelativeTimeText(e.date)}`}>
+                              {e.urgency === 'critical' && <span className="mr-1">🔴</span>}
+                              {e.title}
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -7344,31 +7514,30 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
                 <div className="absolute -left-[7px] top-1 w-3.5 h-3.5 rounded-full bg-white border-2 border-indigo-500 shadow-sm"></div>
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{monthKey}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {monthlyGroups[monthKey].map((e, idx) => (
-                    <div key={idx} className={`p-4 rounded-xl border flex items-start gap-3 transition-all hover:shadow-md ${
-                      e.color === 'rose' ? 'bg-rose-50/30 border-rose-100' : 'bg-indigo-50/30 border-indigo-100'
-                    }`}>
-                      <div className={`p-2 rounded-lg text-center shrink-0 w-12 ${
-                        e.color === 'rose' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
-                      }`}>
-                        <span className="text-xs font-black block tracking-tighter leading-none">{e.date.getDate()}</span>
-                        <span className="text-[8px] font-bold uppercase tracking-wide">{e.date.toLocaleString('default', { month: 'short' })}</span>
+                  {monthlyGroups[monthKey].map((e, idx) => {
+                    const uc = getUrgencyColors(e.urgency);
+                    return (
+                    <div key={idx} className={`p-4 rounded-xl border flex items-start gap-3 transition-all hover:shadow-md ${uc.bg} ${uc.border}`}>
+                      <div className={`p-2 rounded-lg text-center shrink-0 w-12 ${uc.badge}`}>
+                        <span className="text-xs font-black block tracking-tighter leading-none text-white">{e.date.getDate()}</span>
+                        <span className="text-[8px] font-bold uppercase tracking-wide text-white/80">{e.date.toLocaleString('default', { month: 'short' })}</span>
                       </div>
                       <div className="space-y-1 min-w-0 flex-1">
-                        <span className={`text-[8.5px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
-                          e.color === 'rose' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'
-                        }`}>
+                        <span className={`text-[8.5px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${uc.badge}`}>
                           {e.type === 'grant' ? 'Grant Deadline' : 'Proposal Update'}
                         </span>
                         <h5 className="text-xs font-bold text-slate-900 truncate" title={e.title}>{e.title}</h5>
                         <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-tight">
                           <span>Status: {e.status}</span>
                           <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                          <span className="text-indigo-600">{getRelativeTimeText(e.date)}</span>
+                          <span className={`${uc.text} font-bold`}>{getRelativeTimeText(e.date)}</span>
+                          {e.funder && <span className="w-1 h-1 bg-slate-200 rounded-full"></span>}
+                          {e.funder && <span className="text-slate-400">{e.funder}</span>}
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))
@@ -7391,20 +7560,25 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
                 </div>
                 
                 <div className="space-y-3 flex-1 overflow-y-auto">
-                  {colEvents.length > 0 ? colEvents.map((e, idx) => (
+                  {colEvents.length > 0 ? colEvents.map((e, idx) => {
+                    const uc = getUrgencyColors(e.urgency);
+                    return (
                     <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-2">
-                      <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded block w-fit ${
-                        e.color === 'rose' ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'
-                      }`}>
-                        {e.type}
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded block w-fit ${uc.badge}`}>
+                          {e.type}
+                        </span>
+                        {e.urgency === 'critical' && <span className="text-[8px]">🔴</span>}
+                      </div>
                       <h5 className="text-xs font-bold text-slate-800 leading-snug line-clamp-2" title={e.title}>{e.title}</h5>
                       <div className="text-[9px] text-slate-400 font-medium">
                         <span className="font-semibold text-slate-600 block">{e.date.toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
-                        <span className="text-indigo-600 font-semibold">{getRelativeTimeText(e.date)}</span>
+                        <span className={`${uc.text} font-bold`}>{getRelativeTimeText(e.date)}</span>
+                        {e.funder && <span className="text-slate-400 block">{e.funder}</span>}
                       </div>
                     </div>
-                  )) : (
+                    );
+                  }) : (
                     <div className="text-[9.5px] text-slate-400 italic text-center py-6">No deadlines</div>
                   )}
                 </div>
