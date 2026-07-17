@@ -973,7 +973,7 @@ function DashboardView({
             <button className="text-indigo-600 text-xs font-bold uppercase tracking-wider">View All</button>
           </div>
           <div className="space-y-4">
-            {proposals.length > 0 ? proposals.slice(0, 3).map(p => (
+            {(proposals || []).length > 0 ? (proposals || []).slice(0, 3).map(p => (
               <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-100">
@@ -1083,9 +1083,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId
+  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user
 }: { 
-  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string
+  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1127,6 +1127,7 @@ function ProposalsView({
       selectedVoiceProfileId={selectedVoiceProfileId}
       onSetVoiceProfileId={onSetVoiceProfileId}
       orgId={orgId}
+      user={user}
     />;
   }
 
@@ -1494,9 +1495,9 @@ function ProposalsView({
 }
 
 function ProposalEditor({ 
-  proposal, onBack, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId
+  proposal, onBack, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user
 }: { 
-  proposal: any, onBack: () => void, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string
+  proposal: any, onBack: () => void, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any
 }) {
   const [sections, setSections] = useState<any[]>(() => {
     return (proposal.sections || []).map((s: any) => ({
@@ -1726,7 +1727,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     } catch (e) {
       console.error(e);
     } finally {
-      if (!auto) setIsSaving(false);
+      if (!auto) { setIsSaving(false); showToast('Proposal saved.', 'success'); }
     }
   };
 
@@ -1742,8 +1743,9 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         createdAt: new Date().toISOString(),
         creatorEmail: auth.currentUser!.email
       }).catch(err => handleFirestoreError(err, OperationType.WRITE, templatesPath));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      showToast(e?.message || 'Save failed.');
     } finally {
       setIsSaving(false);
     }
@@ -1965,8 +1967,8 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                   onChange={(e) => onSetVoiceProfileId(e.target.value)}
                   className="bg-transparent border-none outline-none text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 transition-colors p-1"
                 >
-                  {voiceProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  {voiceProfiles.length === 0 && <option value="">Default Voice</option>}
+                  {(voiceProfiles || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {(voiceProfiles || []).length === 0 && <option value="">Default Voice</option>}
                 </select>
               </div>
               <button 
@@ -4738,6 +4740,11 @@ Deadline: 2026-11-15`;
         try {
           const result = await callAI('analyze-uploaded-grant', { text });
           
+          if (!result || typeof result !== 'object' || !result.title) {
+            showToast('AI returned invalid grant data.');
+            setIsUploading(false);
+            return;
+          }
           // Save result to Firestore
           const grantsPath = `organizations/${orgId}/grants`;
           const grantsRef = collection(db, grantsPath);
@@ -6867,7 +6874,7 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
         currentFeatures: ['Dashboard', 'Proposals', 'Funders', 'Grants', 'Voice Lab', 'Chat'],
         orgProfile: organization
       });
-      setMissingComponents(result);
+      setMissingComponents(Array.isArray(result) ? result : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -7080,7 +7087,7 @@ function OutreachStat({ label, value, color }: { label: string, value: string, c
 function ChatView({ organization, proposals }: { organization: any, proposals: any[] }) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([
-    { role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals.length} active projects today?` }
+    { role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals?.length || 0} active projects today?` }
   ]);
 
   const sendMessage = async () => {
@@ -7606,8 +7613,9 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
                 const result = await callAI('generate-budget', {
                   description: proposalDescription
                 });
-                setLineItems(result);
-                onUpdate(result);
+                const safeResult = Array.isArray(result) ? result : [];
+                setLineItems(safeResult);
+                onUpdate(safeResult);
               } catch (err) {
                 console.error(err);
               } finally {
