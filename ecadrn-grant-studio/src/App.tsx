@@ -383,7 +383,7 @@ CORE PROGRAMS:
     md += `### Mission & Background\n\n${organization?.profileText}\n\n`;
     
     md += `## 2. Voice Intelligence\n\n`;
-    voiceProfiles.forEach((p, i) => {
+    (voiceProfiles || []).forEach((p, i) => {
       md += `### Profile ${i+1}: ${p.name}\n`;
       md += `- Tone: ${p.toneDescriptors?.join(', ')}\n`;
       md += `- Key Phrases: ${p.keyPhrases?.join(', ')}\n`;
@@ -1131,7 +1131,7 @@ function ProposalsView({
     />;
   }
 
-  const filteredProposals = proposals.filter(p => {
+  const filteredProposals = (proposals || []).filter(p => {
     const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       p.funder?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
@@ -1145,21 +1145,24 @@ function ProposalsView({
       let sections = template?.sections;
       
       if (!sections) {
+        // Use the active voice profile if selected, fall back to org voice
+        const activeVoice = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || voiceProfiles[0];
+        const voiceSource = activeVoice || organization?.voiceProfile || {};
         const data = await callAI('generate-draft', {
           orgProfile: organization,
           grantTitle: newProposalData.title,
           funderName: newProposalData.funder,
-          funderType: "foundation",
-          grantDescription: newProposalData.description || "General operating support for ADR programs.",
-          focusAreas: "ADR, Mediation, Conflict Resolution",
-          amountMin: 25000,
-          amountMax: 50000,
-          eligibility: "501c3",
-          geographicFocus: "National",
-          toneDescriptors: organization.voiceProfile?.toneDescriptors?.join(', '),
-          keyPhrases: organization.voiceProfile?.keyPhrases?.join(', '),
-          voiceRules: organization.voiceProfile?.voiceRules?.join(', '),
-          writingSamples: organization.voiceProfile?.writingSamples?.join('\n')
+          funderType: newProposalData.funderType || "Foundation",
+          grantDescription: newProposalData.description || "General operating support for ADR programs serving early-career professionals.",
+          focusAreas: newProposalData.focusAreas || "ADR, Mediation, Conflict Resolution, Access to Justice",
+          amountMin: newProposalData.amountMin || 25000,
+          amountMax: newProposalData.amountMax || 100000,
+          eligibility: newProposalData.eligibility || "501(c)(3) nonprofits",
+          geographicFocus: newProposalData.geographicFocus || "National",
+          toneDescriptors: voiceSource.toneDescriptors?.join(', '),
+          keyPhrases: voiceSource.keyPhrases?.join(', '),
+          voiceRules: voiceSource.voiceRules?.join('; '),
+          writingSamples: voiceSource.writingSamples?.join(' | ')
         });
         sections = data;
       }
@@ -4874,6 +4877,13 @@ Deadline: 2026-11-15`;
       const grantsRef = collection(db, grantsPath);
       const savedGrants: any[] = [];
       const verifiedResults = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
+      // Score grants by ECADRN alignment
+      const alignmentKw = ['adr', 'mediation', 'dispute resolution', 'conflict', 'justice', 'equity', 'restorative', 'peacebuilding', 'access to justice'];
+      verifiedResults.forEach((g: any) => {
+        const grantText = `${g.title || ''} ${g.funderName || ''} ${g.description || ''} ${(g.focusAreas || []).join(' ')}`.toLowerCase();
+        const matchCount = alignmentKw.filter(kw => grantText.includes(kw)).length;
+        g.ecadrnAlignmentScore = Math.min(100, Math.round((matchCount / alignmentKw.length) * 100 + (g.verified ? 10 : 0)));
+      });
       if (verifiedResults.length === 0) {
         log('⚠️ AI returned no verifiable grants. Aborting to prevent hallucinated data.');
         setAutopilotRunning(false);
@@ -4969,33 +4979,54 @@ Deadline: 2026-11-15`;
   const runDiscovery = async () => {
     setIsDiscovering(true);
     try {
+      // Pull search parameters from the org profile dynamically
+      const orgFocusAreas = organization?.voiceProfile?.focusAreas || organization?.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice'];
+      const orgGeoFocus = organization?.geographicFocus || 'National';
+      const orgAmountMin = organization?.typicalGrantMin || 10000;
+      const orgAmountMax = organization?.typicalGrantMax || 100000;
+      const orgSearchQuery = organization?.discoveryKeywords || 'Early career ADR professionals, mediation training, civic equity, access to justice';
+
       const results = await callAI('discover-grants', {
         orgProfile: organization,
-        focusAreas: "ADR, Conflict Resolution, Access to Justice",
-        geographicFocus: "National",
-        amountMin: 10000,
-        amountMax: 100000,
-        searchQuery: "Early career ADR network funding"
+        focusAreas: Array.isArray(orgFocusAreas) ? orgFocusAreas.join(', ') : orgFocusAreas,
+        geographicFocus: orgGeoFocus,
+        amountMin: orgAmountMin,
+        amountMax: orgAmountMax,
+        searchQuery: orgSearchQuery,
+        count: 8
       });
 
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       const validGrants = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
       if (validGrants.length === 0) throw new Error('AI returned no verifiable grants — nothing saved.');
+
+      // Score grants by ECADRN alignment keywords
+      const alignmentKeywords = ['adr', 'mediation', 'dispute resolution', 'conflict', 'justice', 'equity', 'restorative', 'peacebuilding', 'access to justice'];
       for (const g of validGrants) {
+        const grantText = `${g.title || ''} ${g.funderName || ''} ${g.description || ''} ${(g.focusAreas || []).join(' ')}`.toLowerCase();
+        const matchCount = alignmentKeywords.filter(kw => grantText.includes(kw)).length;
+        const ecadrnAlignmentScore = Math.min(100, Math.round((matchCount / alignmentKeywords.length) * 100 + (g.verified ? 10 : 0)));
+
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
           autoTags.push(g.geographicFocus);
         }
         await addDoc(grantsRef, {
           ...g,
+          title: g.grantTitle || g.title,
           tags: autoTags,
           status: 'discovery',
-          updatedAt: new Date().toISOString()
+          ecadrnAlignmentScore,
+          source: 'discovery',
+          updatedAt: new Date().toISOString(),
+          discoveredBy: user?.email || auth.currentUser?.email || ''
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
       }
-    } catch (err) {
+      showToast(`Discovered ${validGrants.length} grant${validGrants.length === 1 ? '' : 's'}.`, 'success');
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Discovery failed.');
     } finally {
       setIsDiscovering(false);
     }
@@ -7176,8 +7207,8 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   
   const events = [
-    ...grants.filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
-    ...proposals.map(p => ({ date: new Date(p.updatedAt), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
+    ...(grants || []).filter(g => g.deadline).map(g => ({ date: new Date(g.deadline), title: g.title, type: 'grant', color: 'rose', status: g.matchStatus || 'Discovery' })),
+    ...(proposals || []).map(p => ({ date: new Date(p.updatedAt || new Date().toISOString()), title: p.title, type: 'proposal', color: 'indigo', status: p.status || 'Draft' }))
   ];
 
   const sortedEvents = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
