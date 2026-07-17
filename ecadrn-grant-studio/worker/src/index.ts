@@ -35,12 +35,27 @@ Characteristic phrases: ${data.keyPhrases}
 Writing style rules: ${data.voiceRules}
 Sample sentences: ${data.writingSamples}
 
-REQUIREMENTS:
-- Each section MUST be substantive, specific, and directly address the funder's stated priorities
-- Ground every claim in the org's actual programs, populations, and work
-- Apply the voice profile throughout — NEVER use vague filler
-- Goals must be SMART; Evaluation plan must reference concrete metrics
-- Budget narrative must align with project description activities
+STRICT REQUIREMENTS:
+1. Each section MUST be substantive, specific, and directly address the funder's stated priorities.
+2. Ground every claim in the org's actual programs, populations, and work — no vague filler.
+3. Apply the voice profile throughout — it must read as written by someone who deeply knows this org.
+4. Goals must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
+5. Evaluation plan must reference concrete metrics, data collection methods, and reporting timelines.
+6. Budget narrative must align with project description activities and realistic nonprofit costs.
+7. Executive summary must open with a compelling hook, not a boilerplate intro.
+8. Sustainability section must describe concrete plans beyond the grant period.
+9. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of".
+
+WORD COUNT GUIDANCE (aim for these ranges):
+- executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
+- needStatement: 300-400 words — data-backed, community voice, urgency
+- projectDescription: 400-500 words — specific activities, timeline, populations served
+- goalsObjectives: 300-400 words — 3-4 SMART goals with measurable targets
+- methodology: 400-500 words — evidence-based approach, step-by-step activities
+- evaluationPlan: 300-400 words — metrics, data collection, reporting cadence
+- sustainability: 250-350 words — diversified revenue, partnerships, long-term vision
+- organizationalCapacity: 300-400 words — track record, team, programs, governance
+- budgetNarrative: 300-400 words — itemized rationale, cost-effectiveness, match if any
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
 {
@@ -331,20 +346,51 @@ Documents:
 ${JSON.stringify(data.documents || []).slice(0, 8000)}`;
 
     case 'autopilot-search':
-      return `Search for grant opportunities matching this organization's profile. Return a JSON array of grants, each with:
-- "title" (string)
-- "funderName" (string)
-- "amount" (string)
-- "deadline" (string, ISO format if known)
-- "focusAreas" (array of strings)
-- "url" (string, only if confirmed real)
-- "verified" (boolean, always false — we never fabricate verification)
-- "description" (string)
+      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, and civic equity funding.
 
-Organization Profile: ${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
-Focus Areas: ${data.focusAreas || 'ADR, conflict resolution, civic equity'}
+TASK: Identify up to ${data.count || 8} REAL, VERIFIABLE grant opportunities that are a strong mission fit for the organization below.
 
-IMPORTANT: Only include real grants you are confident exist. Mark all as verified: false. Never fabricate URLs.`;
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
+
+SEARCH PARAMETERS:
+Focus areas: ${data.focusAreas || 'ADR, conflict resolution, access to justice, restorative justice'}
+Geographic scope: ${data.geographicFocus || 'National'}
+
+⚠️ STRICT ANTI-HALLUCINATION RULES — FOLLOW EXACTLY:
+1. ONLY include funders that ACTUALLY EXIST and are KNOWN to fund nonprofits in the ADR, conflict resolution, access to justice, or civic equity space.
+2. ONLY include grant programs that have ACTUALLY EXISTED or are CURRENTLY ACTIVE. Do NOT invent program names.
+3. If you are not certain a grant program exists, DO NOT include it. Fewer results is better than fabrication.
+4. Every "title" must be the REAL name of an actual grant program — not a description you made up.
+5. Every "funderName" must be a REAL organization with a real website.
+6. "url" must be a real URL for the grant or funder — set to null if you are not certain.
+7. "deadline" must be null unless you have specific knowledge of a real deadline date.
+8. "amountMin" and "amountMax" must reflect ACTUAL known award ranges — do not fabricate numbers.
+9. Set "verified": false unless you are highly confident the program is real and currently active.
+
+KNOWN FUNDERS IN THIS SPACE:
+Open Society Foundations, Z. Smith Reynolds Foundation, Hewlett Foundation, MacArthur Foundation,
+Robert Wood Johnson Foundation, JPMorgan Chase Foundation, Google.org, National Institute of Justice,
+Surdna Foundation, Woods Fund Chicago, JAMS Foundation, AAA-ICDR Foundation, NIDR, State Bar Foundations.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+[
+  {
+    "title": "string — real grant program name",
+    "funderName": "string — real funder name",
+    "funderType": "Foundation | Government | Corporation | Community Foundation | University",
+    "description": "string — 2-3 sentences",
+    "focusAreas": ["string"],
+    "geographicFocus": "string",
+    "amountMin": number,
+    "amountMax": number,
+    "deadline": "YYYY-MM-DD or null",
+    "url": "string or null",
+    "matchScore": number,
+    "alignmentRationale": "string — 2 sentences on ECADRN fit",
+    "verified": boolean
+  }
+]`;
 
     case 'chat':
       return `You are ECADRN's AI grant writing assistant. Respond in JSON format:
@@ -355,13 +401,31 @@ Recent history: ${JSON.stringify(data.history || []).slice(-2000)}
 User message: ${data.message || ''}`;
 
     case 'generate-budget':
-      return `Generate a detailed grant budget based on the project description. Return a JSON array of line items, each with:
-- "category" (string): e.g., Personnel, Travel, Equipment, Other
-- "description" (string): line item description
-- "amount" (number): dollar amount
-- "justification" (string): brief justification
+      return `You are a nonprofit budget analyst specializing in ADR and civic equity grant budgets.
 
-Project Description: ${data.description || ''}`;
+TASK: Generate a detailed, realistic grant budget based on the project description below. Follow standard federal/foundation budget categories.
+
+PROJECT DESCRIPTION:
+${data.description || ''}
+
+REQUIREMENTS:
+- Include Personnel costs (program staff time allocation), Fringe Benefits (~20-28% of personnel)
+- Include Travel (conference, site visits, training), Equipment (if applicable), Supplies
+- Include Indirect/Overhead costs (typically 10-15% for foundations, up to 26% for federal)
+- Each line item must have a specific, realistic dollar amount based on market rates
+- Justification must explain HOW the amount was calculated (rate × hours, per-person cost, etc.)
+- Total budget should be appropriate for a mid-size nonprofit grant ($25K-$150K range)
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+[
+  {
+    "id": "string — unique identifier",
+    "category": "Personnel | Fringe Benefits | Travel | Equipment | Supplies | Contractual | Other | Indirect",
+    "description": "string — specific line item",
+    "amount": number,
+    "justification": "string — how the amount was calculated"
+  }
+]`;
 
     case 'generate-justification':
       return `Write a budget justification for this line item. Return JSON: {"justification": "string"}
@@ -380,13 +444,32 @@ Organization: ECADRN (Equity Center for Alternative Dispute Resolution & Negotia
 Keep the email concise, professional, and tailored to the funder's priorities.`;
 
     case 'humanize-proposal':
-      return `Review this proposal and suggest improvements to make it more natural and compelling. Return JSON with:
-- "score" (number): natural writing score 0-100
-- "suggestions" (array of strings): specific improvement suggestions
-- "rewrittenSection" (string): a more natural version of any key section
+      return `You are a grant writing editor who specializes in making proposals sound authentic, compelling, and human — not like AI-generated text.
 
-Funder: ${data.funderName || ''}
-Proposal: ${JSON.stringify(data.proposal || {}).slice(0, 6000)}`;
+TASK: Review the proposal below and provide specific, actionable feedback to make it more natural and persuasive.
+
+FUNDER: ${data.funderName || 'Unknown'}
+
+PROPOSAL SECTIONS:
+${JSON.stringify(data.proposal || {}).slice(0, 6000)}
+
+ANALYZE FOR:
+1. AI-sounding phrases ("delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note")
+2. Generic filler that could apply to any nonprofit — flag and suggest org-specific replacements
+3. Missing concrete data, specific numbers, named programs, or real outcomes
+4. Passive voice where active voice would be stronger
+5. Lack of community voice — direct quotes, stories, or constituent perspectives
+6. Weak transitions between sections
+7. Budget narrative alignment with activities
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "score": number,
+  "suggestions": ["string — specific, actionable improvement with the exact text to change"],
+  "rewrittenSection": "string — a fully rewritten version of the weakest section, showing what natural grant writing looks like",
+  "aiPhraseCount": number,
+  "flaggedPhrases": ["string — exact AI-sounding phrases found in the text"]
+}`;
 
     case 'identify-missing':
       return `Analyze the current application features and suggest what's missing for a complete grant writing platform. Return JSON:
