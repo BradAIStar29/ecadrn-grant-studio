@@ -13,7 +13,6 @@ import {
   Mail, 
   Layout, 
   CheckCircle, 
-  Clock, 
   Menu,
   X,
   Plus,
@@ -33,7 +32,6 @@ import {
   HelpCircle,
   Maximize,
   Minimize,
-  DollarSign,
   Bell,
   Trash2,
   AlertCircle,
@@ -43,7 +41,6 @@ import {
   Sparkles,
   UserPlus,
   BookOpen,
-  Book,
   ChevronDown,
   ChevronUp,
   Scroll,
@@ -59,8 +56,7 @@ import {
   Send,
   Link,
   Wand2,
-  Loader,
-  ExternalLink
+  GitCompare,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -77,9 +73,7 @@ import {
   doc, 
   setDoc, 
   addDoc, 
-  getDoc,
   deleteDoc,
-  serverTimestamp,
   orderBy,
   limit
 } from 'firebase/firestore';
@@ -168,6 +162,55 @@ const WALKTHROUGH_STEPS = [
 
 const SHARED_ORG_ID = 'ecadrn-shared';
 
+// ── Error Boundary ──────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  state = { hasError: false, error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
+          <div style={{ maxWidth: 480, textAlign: 'center', padding: 48 }}>
+            <div style={{ width: 64, height: 64, margin: '0 auto 24px', background: '#1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
+              ⚠️
+            </div>
+            <h1 style={{ color: '#f1f5f9', fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Something went wrong</h1>
+            <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 24 }}>
+              The application encountered an unexpected error. Try reloading — your data is safe in the cloud.
+            </p>
+            {this.state.error && (
+              <details style={{ textAlign: 'left', background: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+                <summary style={{ color: '#64748b', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Error details</summary>
+                <pre style={{ color: '#94a3b8', fontSize: 11, marginTop: 8, whiteSpace: 'pre-wrap', overflow: 'auto' }}>
+                  {this.state.error.message}
+                </pre>
+              </details>
+            )}
+            <button
+              onClick={() => window.location.reload()}
+              style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 32px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
@@ -178,6 +221,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [proposals, setProposals] = useState<any[]>([]);
   const [grants, setGrants] = useState<any[]>([]);
@@ -209,12 +253,12 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    if (activeWorkspace === 'personal' && !user.uid) return; // uid not yet resolved
+    if (activeWorkspace === 'personal' && !user?.uid) return; // uid not yet resolved
 
     // Load Notifications
     const notifPath = `organizations/${orgId}/notifications`;
     const notifRef = collection(db, notifPath);
-    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user.uid), where('read', '==', false), orderBy('timestamp', 'desc'), limit(10)), (snap) => {
+    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user?.uid || ''), where('read', '==', false), orderBy('timestamp', 'desc'), limit(10)), (snap) => {
       setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, notifPath);
@@ -398,7 +442,45 @@ CORE PROGRAMS:
     );
   }
 
+
+  // ── Keyboard Shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Skip if typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) return;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && e.key === '/') {
+        e.preventDefault();
+        setShowShortcuts(s => !s);
+      } else if (mod && e.key === 'k') {
+        e.preventDefault();
+        setActiveTab('grants');
+      } else if (mod && e.key === 'n') {
+        e.preventDefault();
+        setActiveTab('proposals');
+      } else if (mod && e.key === 'g') {
+        e.preventDefault();
+        setActiveTab('grants');
+      } else if (mod && e.key === 'p') {
+        e.preventDefault();
+        setActiveTab('proposals');
+      } else if (mod && e.key === 'b') {
+        e.preventDefault();
+        setIsSidebarOpen(s => !s);
+      } else if (e.key === 'Escape') {
+        setShowShortcuts(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
       <motion.aside 
@@ -700,7 +782,50 @@ CORE PROGRAMS:
           }} 
         />
       </main>
+
+      {/* Keyboard Shortcuts Overlay */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <kbd className="px-2 py-1 bg-slate-100 rounded text-xs font-mono">⌘/</kbd>
+                Keyboard Shortcuts
+              </h2>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { keys: '⌘ /', label: 'Show this help' },
+                { keys: '⌘ K', label: 'Go to Grant Matcher' },
+                { keys: '⌘ N', label: 'New Proposal' },
+                { keys: '⌘ G', label: 'Go to Grants' },
+                { keys: '⌘ P', label: 'Go to Proposals' },
+                { keys: '⌘ B', label: 'Toggle sidebar' },
+                { keys: 'Esc', label: 'Close overlays' },
+              ].map(({ keys, label }) => (
+                <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 transition-colors">
+                  <span className="text-sm text-slate-700">{label}</span>
+                  <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 shadow-sm">{keys}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </ErrorBoundary>
   );
 }
 
@@ -735,6 +860,31 @@ function NavItem({ icon, label, active, onClick, collapsed, id, highlighted }: {
       )}
     </button>
   );
+}
+
+
+// ── Deadline Urgency Badge Helper ────────────────────────────────────────────
+function DeadlineBadge({ deadline }: { deadline: string | Date }) {
+  const d = new Date(deadline);
+  const now = new Date();
+  const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysLeft < 0) {
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">EXPIRED</span>;
+  }
+  if (daysLeft <= 3) {
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500 text-white border border-red-600 animate-pulse">CRITICAL</span>;
+  }
+  if (daysLeft <= 7) {
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">URGENT</span>;
+  }
+  if (daysLeft <= 14) {
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">SOON</span>;
+  }
+  if (daysLeft <= 30) {
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">ON TRACK</span>;
+  }
+  return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">UPCOMING</span>;
 }
 
 function DashboardView({ 
@@ -788,10 +938,33 @@ function DashboardView({
           </div>
           <div className="space-y-4">
             {proposals.length > 0 ? proposals.slice(0, 3).map(p => (
-              <PriorityItem key={p.id} label={p.title} urgency="High" date={p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'Draft'} />
+              <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-100">
+                    {p.status || 'Draft'}
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">{p.title}</span>
+                </div>
+                <span className="text-xs text-gray-400">{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'Draft'}</span>
+              </div>
             )) : (
               <div className="text-center py-8 text-slate-400 text-sm italic">No active priorities. Start a new proposal.</div>
             )}
+            {grants && grants.length > 0 && grants.filter(g => g.deadline).slice(0, 4).map(g => {
+              const d = new Date(g.deadline);
+              const now = new Date();
+              const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysLeft < 0) return null;
+              return (
+                <div key={g.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <DeadlineBadge deadline={g.deadline} />
+                    <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{g.title}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{daysLeft}d left · {d.toLocaleDateString()}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -885,6 +1058,9 @@ function ProposalsView({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showGuide, setShowGuide] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelected, setCompareSelected] = useState<string[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
   
   const guideSteps = [
     { title: "Create a New Draft", content: "Click 'New Draft' in the top-right to open the proposal form. Enter the grant title, target funder, and a brief project description. The AI uses this to shape the entire proposal." },
@@ -1014,6 +1190,13 @@ function ProposalsView({
             >
               <Copy size={18} /> Templates
             </button>
+            <button
+              onClick={() => { setCompareMode(!compareMode); setCompareSelected([]); setShowCompareModal(false); }}
+              className={`flex items-center gap-2 font-medium px-4 py-2 rounded-lg transition-colors ${compareMode ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100'}`}
+            >
+              <GitCompare size={20} />
+              {compareMode ? 'Exit Compare' : 'Compare'}
+            </button>
             <button 
               onClick={() => setShowNewForm(!showNewForm)}
               className="flex items-center gap-2 bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -1091,6 +1274,25 @@ function ProposalsView({
             {filteredProposals.length > 0 ? filteredProposals.map(p => (
               <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
                 <td className="px-8 py-5">
+                  {compareMode && (
+                    <div className="flex items-center gap-2 mb-1">
+                      <button
+                        onClick={() => {
+                          if (compareSelected.includes(p.id)) {
+                            setCompareSelected(compareSelected.filter(id => id !== p.id));
+                          } else if (compareSelected.length < 2) {
+                            setCompareSelected([...compareSelected, p.id]);
+                          }
+                        }}
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${compareSelected.includes(p.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 hover:border-indigo-400'}`}
+                      >
+                        {compareSelected.includes(p.id) && <Check size={12} className="text-white" />}
+                      </button>
+                      {compareSelected.length >= 2 && !compareSelected.includes(p.id) && (
+                        <span className="text-[9px] text-slate-400 italic">Max 2</span>
+                      )}
+                    </div>
+                  )}
                   <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{p.title}</div>
                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{p.funder}</div>
                 </td>
@@ -1145,6 +1347,94 @@ function ProposalsView({
           </tbody>
         </table>
       </div>
+
+      {compareMode && compareSelected.length === 2 && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setShowCompareModal(true)}
+            className="flex items-center gap-2 bg-violet-600 text-white font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-violet-700 transition-colors"
+          >
+            <GitCompare size={18} />
+            Compare {compareSelected.length} Proposals
+          </button>
+        </div>
+      )}
+
+      {showCompareModal && compareSelected.length === 2 && (() => {
+        const p1 = proposals.find(p => p.id === compareSelected[0]);
+        const p2 = proposals.find(p => p.id === compareSelected[1]);
+        if (!p1 || !p2) return null;
+
+        const SECTION_KEYS = ['executiveSummary', 'needStatement', 'projectDescription', 'goalsObjectives', 'methodology', 'evaluationPlan', 'sustainability', 'organizationalCapacity', 'budgetNarrative'];
+        const SECTION_NAMES: Record<string, string> = {
+          executiveSummary: 'Executive Summary', needStatement: 'Need Statement', projectDescription: 'Project Description',
+          goalsObjectives: 'Goals & Objectives', methodology: 'Methodology', evaluationPlan: 'Evaluation Plan',
+          sustainability: 'Sustainability', organizationalCapacity: 'Org Capacity', budgetNarrative: 'Budget Narrative'
+        };
+
+        const wordCount = (sections: any) => {
+          if (!sections || !Array.isArray(sections)) return 0;
+          return sections.reduce((acc: number, s: any) => acc + (s.content ? s.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0), 0);
+        };
+        const wc1 = wordCount(p1.sections);
+        const wc2 = wordCount(p2.sections);
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCompareModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between rounded-t-2xl">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><GitCompare size={20} /> Proposal Comparison</h2>
+                <button onClick={() => setShowCompareModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+              </div>
+              <div className="p-8">
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  {[p1, p2].map((p, i) => (
+                    <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-indigo-200 bg-indigo-50/50' : 'border-violet-200 bg-violet-50/50'}`}>
+                      <h3 className="font-bold text-slate-900 mb-3">{p.title}</h3>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between"><span className="text-slate-500">Funder</span><span className="font-medium">{p.funder || '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Status</span><span className="font-medium capitalize">{p.status || 'draft'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Words</span><span className="font-medium">{(i === 0 ? wc1 : wc2).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Created by</span><span className="font-medium text-xs">{p.createdBy?.split('@')[0] || '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Last edit</span><span className="font-medium text-xs">{p.lastEditedBy?.split('@')[0] || '—'}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <h4 className="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Section-by-Section Breakdown</h4>
+                <div className="space-y-2">
+                  {SECTION_KEYS.map(key => {
+                    const s1 = Array.isArray(p1.sections) ? (p1.sections.find((s: any) => s.id === key || s.title === SECTION_NAMES[key])?.content || '') : '';
+                    const s2 = Array.isArray(p2.sections) ? (p2.sections.find((s: any) => s.id === key || s.title === SECTION_NAMES[key])?.content || '') : '';
+                    const len1 = s1.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
+                    const len2 = s2.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
+                    const max = Math.max(len1, len2, 1);
+                    const winner = len1 > len2 ? 0 : len2 > len1 ? 1 : -1;
+                    return (
+                      <div key={key} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                        <span className="text-xs font-medium text-slate-600 w-32 shrink-0">{SECTION_NAMES[key]}</span>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${winner === 0 ? 'bg-indigo-500' : 'bg-indigo-300'}`} style={{ width: `${(len1/max)*100}%` }} />
+                          </div>
+                          <span className="text-xs text-slate-500 w-12 text-right">{len1}w</span>
+                        </div>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${winner === 1 ? 'bg-violet-500' : 'bg-violet-300'}`} style={{ width: `${(len2/max)*100}%` }} />
+                          </div>
+                          <span className="text-xs text-slate-500 w-12 text-right">{len2}w</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <TemplateModal 
         isOpen={showTemplateModal}
