@@ -30,6 +30,7 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  Network,
   HelpCircle,
   Maximize,
   Minimize,
@@ -84,13 +85,13 @@ import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import 'react-quill/dist/quill.snow.css';
 
-type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar';
+type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network';
 
 const WALKTHROUGH_STEPS = [
   {
     title: "Welcome to ECADRN Grant Studio",
     tab: 'dashboard',
-    content: "Your AI-powered grant management OS. Switch between modules using the sidebar — Dashboard, Proposals, Funder Intelligence, Grant Matcher, Voice Lab, Outreach, and AI Advisor.",
+    content: "Your AI-powered grant management OS. Switch between modules using the sidebar — Dashboard, Proposals, Funder Intelligence, Grant Matcher, ADR Network, Voice Lab, Outreach, Calendar, and AI Advisor.",
     highlight: "sidebar-nav"
   },
   {
@@ -102,13 +103,13 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Strategic Dashboard",
     tab: 'dashboard',
-    content: "Your command center. See high-alignment grants (verified only — no hallucinated data), active proposals by stage, pipeline value, and upcoming deadlines at a glance. Use 'Export Portfolio MD' to download your full org profile as a document.",
+    content: "Your command center. See high-alignment grants (verified only — no hallucinated data), active proposals by stage, pipeline value, and upcoming deadlines at a glance. Deadline reminders fire automatically for grants due within 7 days.",
     highlight: "dashboard-overview"
   },
   {
-    title: "Proposal Studio",
+    title: "Proposal Studio + AI Comparison",
     tab: 'proposals',
-    content: "Click 'New Draft' to generate a complete 9-section proposal in seconds using your trained voice profile. Proposals are auto-stamped with 'Created By' and 'Last Edited By' so the whole team knows who's working on what.",
+    content: "Click 'New Draft' to generate a complete 9-section proposal in seconds. Use the Compare button to select two proposals side-by-side, then click 'Run AI Comparison' for section-by-section analysis — the AI identifies which version is stronger and suggests how to merge the best of both.",
     highlight: "proposals-view"
   },
   {
@@ -120,20 +121,20 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Grant Matcher + Autopilot",
     tab: 'grants',
-    content: "Run Discovery to surface real, verified grant opportunities matched to ECADRN's mission. Every result is checked against known real funders — unverified results are clearly flagged. Use the Verified Only toggle to filter out any uncertain results.",
+    content: "Run Discovery to surface real, verified grant opportunities matched to ECADRN's mission. Every result is checked against known real funders — unverified results are clearly flagged. Autopilot can discover, draft, and submit proposals automatically.",
     highlight: "grants-view"
   },
   {
-    title: "NEW: Grant Autopilot",
-    tab: 'grants',
-    content: "Hit the 'Autopilot' button in Grant Matcher to run the full grant cycle hands-free. Assisted Mode stops at review so you approve before anything is submitted. Full Agent Mode searches, drafts, and submits automatically — then sends you a confirmation notification.",
-    highlight: "grants-view"
-  },
-  {
-    title: "Funder Intelligence",
+    title: "Funder Intelligence + Web Search",
     tab: 'funders',
-    content: "Add any funder by website URL and our AI will research their giving priorities, mission alignment, and geographic focus. Use 'AI Re-Research' anytime to refresh intelligence. Track relationship stages from Prospect through Active.",
+    content: "Add any funder by website URL and the AI searches the web in real-time to research their actual giving priorities, recent grants, deadlines, and strategic priorities. Funder intelligence now feeds directly into Autopilot proposals — the AI uses real funder research to shape every section.",
     highlight: "funders-view"
+  },
+  {
+    title: "NEW: ADR Network Finder",
+    tab: 'network',
+    content: "Discover ADR organizations, university programs, law school dispute resolution clinics, and community mediation centers across the US that have donated to or partnered with nonprofits like ECADRN. Search by type, see contact info, and find potential funding partners and collaborators.",
+    highlight: "network-view"
   },
   {
     title: "Voice Lab",
@@ -148,6 +149,12 @@ const WALKTHROUGH_STEPS = [
     highlight: "outreach-view"
   },
   {
+    title: "Deadline Calendar",
+    tab: 'calendar',
+    content: "Track all grant deadlines with urgency color-coding (red for critical ≤7 days, amber for urgent ≤14, yellow for soon ≤30). Navigate between months, view in grid or weekly format, and toggle past deadlines. Summary stats show upcoming, critical, and this-week counts.",
+    highlight: "calendar-view"
+  },
+  {
     title: "AI Strategy Advisor",
     tab: 'chat',
     content: "Your on-demand grants strategist. Ask about funder landscapes, how to strengthen a proposal section, budget strategy, or mission alignment. It has full context on your org profile and pipeline.",
@@ -156,7 +163,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "You're ready — launch the OS",
     tab: 'dashboard',
-    content: "Start by setting up your Organization Profile, then train your Voice Lab. Once those are set, run a Grant Discovery or launch Autopilot and let the system work for you.",
+    content: "Start by setting up your Organization Profile, then train your Voice Lab. Run a Grant Discovery, research funders with web search, or explore the ADR Network for partnership opportunities. Let the system work for you.",
     highlight: "dashboard-overview"
   }
 ];
@@ -670,6 +677,16 @@ CORE PROGRAMS:
             id="nav-calendar"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'calendar'}
           />
+          <NavItem 
+            icon={<Network size={20} />} 
+            label="ADR Network" 
+            active={activeTab === 'network'} 
+            onClick={() => setActiveTab('network')} 
+            collapsed={!isSidebarOpen}
+            id="nav-network"
+            badge="NEW"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'network'}
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-slate-800">
@@ -783,6 +800,7 @@ CORE PROGRAMS:
             {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
+            {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
           </AnimatePresence>
         </div>
 
@@ -882,14 +900,15 @@ CORE PROGRAMS:
   );
 }
 
-function NavItem({ icon, label, active, onClick, collapsed, id, highlighted }: { 
+function NavItem({ icon, label, active, onClick, collapsed, id, highlighted, badge }: { 
   icon: React.ReactNode, 
   label: string, 
   active: boolean, 
   onClick: () => void,
   collapsed: boolean,
   id?: string,
-  highlighted?: boolean
+  highlighted?: boolean,
+  badge?: string
 }) {
   return (
     <button 
@@ -3160,14 +3179,15 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   ]));
 
   const guideSteps = [
-    { title: "Add a Funder", content: "Paste any funder's website URL into the search bar and click Research. The AI scrapes their public profile, extracts giving priorities, award ranges, geographic focus, and writes an ECADRN alignment rationale." },
+    { title: "Add a Funder", content: "Paste any funder's website URL into the search bar and click AI Research. The AI now searches the web in real-time to find their actual giving priorities, recent grants, deadlines, and strategic priorities — not just training data." },
+    { title: "Web-Powered Research", content: "Funder Intelligence now uses Google Search grounding. The AI searches for the funder's official pages, recent 990 filings, news about strategic shifts, and past grantees to build a comprehensive, current intelligence report." },
     { title: "Relationship Stages", content: "Each funder card has a stage selector. Move prospects through: Prospect → Initial Contact → LOI Submitted → Proposal Pending → Active → Declined. Keeps the whole team aligned." },
-    { title: "AI Intelligence Refresh", content: "Funder priorities change. Click the ✦ sparkles icon on any card to run a fresh AI analysis. The strategic intelligence report updates immediately with new data." },
+    { title: "AI Intelligence Refresh", content: "Funder priorities change. Click the ✦ sparkles icon on any card to run a fresh web-powered AI analysis. The strategic intelligence report updates immediately with the latest data from the web." },
     { title: "Filter & Search", content: "Use the relationship stage filter and keyword search bar to narrow your funder pipeline. Tags (auto-generated from giving areas) are also filterable." },
+    { title: "Funder → Autopilot", content: "Funder intelligence now feeds directly into Grant Autopilot. When autopilot drafts a proposal for a grant from a funder in your database, it uses that funder's real research data to shape every section." },
     { title: "Outreach Email from Funder", content: "From any funder card, jump directly to the Outreach tab with that funder pre-selected. The AI drafts a tailored cold intro, LOI, or follow-up email based on their intelligence profile." },
     { title: "Team Funder Database", content: "Switch to Team workspace and all @ecadrn.org members share a live funder list. Any notes, stage updates, or new funders added by your teammates are instantly visible." },
-    { title: "Funder → Proposal Link", content: "When drafting a proposal, pick a funder from your database and the AI uses that funder's stated priorities to shape every section — no generic language." },
-    { title: "Replay This Guide", content: "Click the ? icon at any time to reopen this guide. All steps are always available so you can review any feature at any point." }
+    { title: "Replay This Guide", content: "Click the ? icon at any time to reopen this guide. All steps are always available." }
   ];
 
   const STAGES = [
@@ -3396,7 +3416,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                   title="Run automated AI web scraping research"
                 >
                   {isResearchingNew ? <RefreshCw className="animate-spin" size={14} /> : <Sparkles size={14} />}
-                  <span>{isResearchingNew ? 'Analyzing...' : 'AI Research'}</span>
+                  <span>{isResearchingNew ? '🔍 Web Searching...' : 'AI Research'}</span>
                 </button>
               </div>
 
@@ -7815,6 +7835,271 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
         </div>
       </motion.div>
     </div>
+  );
+}
+
+// ── ADR Network Finder ─────────────────────────────────────────────────────────
+function AdrNetworkView({ organization, orgId, user }: { organization: any, orgId: string, user: any }) {
+  const [partners, setPartners] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [filterType, setFilterType] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<any>(null);
+  const [savingPartner, setSavingPartner] = useState<string | null>(null);
+
+  const guideSteps = [
+    { title: "Find ADR Partners", content: "Search for ADR organizations, university programs, law school dispute resolution clinics, community mediation centers, and foundations across the US that support or fund nonprofits in the ADR space." },
+    { title: "AI-Powered Discovery", content: "The AI searches the web in real-time to find real organizations with real contact information. Results include websites, locations, program details, and partnership potential analysis." },
+    { title: "Filter by Type", content: "Use the type filter to narrow results to Universities, Law Schools, Community Organizations, Bar Associations, Government Offices, Foundations, or Professional Associations." },
+    { title: "Partnership Potential", content: "Each result shows an alignment score (0-100) and a 2-3 sentence analysis of how ECADRN could partner with or seek funding from that organization." },
+    { title: "Save to Funder Database", content: "Click 'Save as Funder' on any result to add the organization to your Funder Intelligence database. From there you can run deeper research and track the relationship." },
+    { title: "Search by Focus Area", content: "Customize your search by entering specific focus areas like 'restorative justice', 'peer mediation', 'trauma-informed', or 'access to justice' to find partners aligned with specific programs." },
+    { title: "Replay This Guide", content: "Click the ? icon at any time to reopen this guide. All steps are always available." }
+  ];
+
+  const searchPartners = async () => {
+    setSearching(true);
+    setHasSearched(true);
+    try {
+      const results = await callAI('find-adr-partners', {
+        orgProfile: organization,
+        focusAreas: searchTerm || 'ADR, conflict resolution, restorative justice, access to justice, mediation',
+        geographicScope: 'United States',
+        partnerType: filterType === 'All' ? 'all' : filterType
+      });
+      if (Array.isArray(results)) {
+        // Sort by alignment score
+        const sorted = results.sort((a: any, b: any) => (b.alignmentScore || 0) - (a.alignmentScore || 0));
+        setPartners(sorted);
+      } else {
+        setPartners([]);
+      }
+    } catch (err: any) {
+      showToast('Search failed: ' + err.message, 'error');
+      setPartners([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const saveAsFunder = async (partner: any) => {
+    setSavingPartner(partner.name);
+    try {
+      const fundersPath = `organizations/${orgId}/funders`;
+      const fundersRef = collection(db, fundersPath);
+      await addDoc(fundersRef, {
+        funderName: partner.name,
+        website: partner.website || '',
+        contactName: '',
+        relationshipStage: 'Prospect',
+        tags: ['ADR Network', partner.type, ...(partner.adrFocus || [])].filter(Boolean),
+        notes: partner.partnershipPotential || '',
+        intelligence: {
+          funderOverview: partner.fundingHistory || 'ADR network partner — see partnership potential.',
+          funderType: partner.type || 'Foundation',
+          givingPriorities: partner.adrFocus || [],
+          fundingRanges: '',
+          geographicFocus: partner.location || 'United States',
+          applicationProcess: 'Contact directly — see contact info.',
+          missionAlignmentScore: partner.alignmentScore || 0,
+          missionAlignmentRationale: partner.partnershipPotential || '',
+          recentStrategicShifts: 'N/A',
+          whatTheyDontFund: [],
+          applicationTips: [],
+          recommendedApproach: partner.partnershipPotential || 'Initiate partnership conversation.'
+        },
+        lastAnalysisAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: 'adr-network'
+      }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
+      showToast('✓ Saved to Funder Database: ' + partner.name, 'success');
+    } catch (err: any) {
+      showToast('Failed to save: ' + err.message, 'error');
+    } finally {
+      setSavingPartner(null);
+    }
+  };
+
+  const filteredPartners = partners.filter((p: any) => {
+    if (filterType !== 'All' && p.type !== filterType) return false;
+    return true;
+  });
+
+  const typeColors: Record<string, string> = {
+    'University': 'bg-blue-50 text-blue-700 border-blue-200',
+    'Law School': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'Community Organization': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'Bar Association': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Government Office': 'bg-slate-50 text-slate-700 border-slate-200',
+    'Foundation': 'bg-violet-50 text-violet-700 border-violet-200',
+    'Professional Association': 'bg-rose-50 text-rose-700 border-rose-200',
+  };
+
+  return (
+    <motion.div id="network-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-slate-900 border-b border-slate-100 pb-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-2xl font-bold tracking-tight">ADR Network Finder</h3>
+            <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">New</span>
+            <button onClick={() => setShowGuide(true)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+              <HelpCircle size={14} />
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Find partners, funders & collaborators</p>
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search focus areas (e.g. restorative justice, peer mediation, trauma-informed)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') searchPartners(); }}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none cursor-pointer"
+          >
+            <option>All</option>
+            <option>University</option>
+            <option>Law School</option>
+            <option>Community Organization</option>
+            <option>Bar Association</option>
+            <option>Government Office</option>
+            <option>Foundation</option>
+            <option>Professional Association</option>
+          </select>
+          <button
+            onClick={searchPartners}
+            disabled={searching}
+            className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2 whitespace-nowrap cursor-pointer"
+          >
+            {searching ? <><Loader2 size={16} className="animate-spin" /> Searching...</> : <><Network size={16} /> Find Partners</>}
+          </button>
+        </div>
+        {!hasSearched && (
+          <p className="text-sm text-slate-500 text-center py-4">
+            Click "Find Partners" to search the web for ADR organizations, school programs, and foundations across the US that support nonprofits like ECADRN.
+          </p>
+        )}
+      </div>
+
+      {/* Results */}
+      {searching && (
+        <div className="flex items-center justify-center py-16">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 size={32} className="animate-spin text-indigo-500" />
+            <p className="text-sm text-slate-500">Searching the web for ADR partners...</p>
+          </div>
+        </div>
+      )}
+
+      {hasSearched && !searching && filteredPartners.length === 0 && (
+        <div className="text-center py-16">
+          <p className="text-sm text-slate-500">No partners found. Try a different search or filter.</p>
+        </div>
+      )}
+
+      {!searching && filteredPartners.length > 0 && (
+        <>
+          <div className="text-xs text-slate-500 font-medium">
+            Found {filteredPartners.length} ADR partner{filteredPartners.length !== 1 ? 's' : ''}
+          </div>
+          <div className="grid gap-4">
+            {filteredPartners.map((partner: any, i: number) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-bold text-slate-900">{partner.name || 'Unknown'}</h4>
+                      {partner.verified && (
+                        <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ VERIFIED</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${typeColors[partner.type] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                        {partner.type || 'Unknown'}
+                      </span>
+                      {partner.location && (
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <Globe size={10} /> {partner.location}
+                        </span>
+                      )}
+                      {partner.alignmentScore && (
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          partner.alignmentScore >= 75 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          partner.alignmentScore >= 50 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          'bg-slate-50 text-slate-500 border border-slate-200'
+                        }`}>
+                          {partner.alignmentScore}% aligned
+                        </span>
+                      )}
+                    </div>
+                    {partner.programOrDepartment && (
+                      <p className="text-sm text-slate-600 mb-2"><span className="font-medium">Program:</span> {partner.programOrDepartment}</p>
+                    )}
+                    {partner.adrFocus && partner.adrFocus.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {partner.adrFocus.map((focus: string, j: number) => (
+                          <span key={j} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{focus}</span>
+                        ))}
+                      </div>
+                    )}
+                    {partner.fundingHistory && (
+                      <p className="text-xs text-slate-500 mb-2"><span className="font-medium">Funding History:</span> {partner.fundingHistory}</p>
+                    )}
+                    {partner.partnershipPotential && (
+                      <p className="text-xs text-slate-600 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 mb-3">
+                        <span className="font-bold text-indigo-700">💡 Partnership:</span> {partner.partnershipPotential}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3">
+                      {partner.website && (
+                        <a href={partner.website} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+                          <Globe size={12} /> Website
+                        </a>
+                      )}
+                      {partner.contactInfo && (
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <Mail size={12} /> {partner.contactInfo}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => saveAsFunder(partner)}
+                    disabled={savingPartner === partner.name}
+                    className="shrink-0 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {savingPartner === partner.name ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                    Save as Funder
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {showGuide && <PageGuide isOpen={showGuide} onClose={() => setShowGuide(false)} title="ADR Network" steps={guideSteps} />}
+    </motion.div>
   );
 }
 
