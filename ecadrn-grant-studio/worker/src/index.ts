@@ -94,9 +94,15 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
 
 
     case 'research-grant-url':
-      return `You are a nonprofit grants researcher and web analyst. The user has provided a grant opportunity name and/or URL.
+      return `You are a nonprofit grants researcher and web analyst with access to web search. The user has provided a grant opportunity name and/or URL.
 
-TASK: Based on the grant name and any URL context provided, generate a comprehensive intelligence report on this specific grant opportunity — as if you researched its official program page.
+TASK: Research this grant opportunity thoroughly using web search. Find the REAL program page, actual deadlines, real eligibility requirements, and real award amounts. Do NOT rely solely on training data — search for current information.
+
+SEARCH INSTRUCTIONS:
+1. Search for the grant program by name to find its official page
+2. Search for recent news or announcements about this grant
+3. Search for past recipients to verify it's real and active
+4. Verify deadlines and amounts against the official source
 
 GRANT NAME: ${data.grantName}
 GRANT URL: ${data.grantUrl || 'Not provided'}
@@ -565,6 +571,43 @@ Voice Profile: ${JSON.stringify(data.voiceProfile || {}).slice(0, 2000)}
 Content: ${data.content || ''}`;
 
 
+    case 'find-adr-partners':
+      return `You are a research specialist in Alternative Dispute Resolution (ADR) organizations, university programs, and educational institutions in the United States that support or fund nonprofits in the ADR, conflict resolution, restorative justice, and access-to-justice space.
+
+TASK: Identify REAL, VERIFIABLE organizations, school programs, and schools in the US that have donated to, sponsored, or partnered with nonprofits like ECADRN. Focus on finding potential funding partners and collaboration opportunities.
+
+SEARCH PARAMETERS:
+Organization profile: ${JSON.stringify(data.orgProfile || {}).slice(0, 3000)}
+Focus areas: ${data.focusAreas || 'ADR, conflict resolution, restorative justice, access to justice, mediation, peer mediation'}
+Geographic scope: ${data.geographicScope || 'United States'}
+Partner type: ${data.partnerType || 'all'}
+
+ECADRN MISSION: Equity Center for Alternative Dispute Resolution & Negotiation — supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+
+⚠️ STRICT ANTI-HALLUCINATION RULES:
+1. ONLY include organizations that ACTUALLY EXIST. Include real names, real websites, real programs.
+2. Do NOT invent organizations or programs. If you are not certain, exclude it.
+3. Include REAL contact information where available — websites, email domains, program directors if known.
+4. Focus on US-based institutions: universities with ADR/mediation clinics, law schools with dispute resolution programs, community mediation centers, bar association dispute resolution sections, state ADR offices, and foundations that fund ADR work.
+5. For each result, explain HOW they could support ECADRN — funding, partnership, in-kind support, program collaboration.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+[
+  {
+    "name": "string — real organization/school/program name",
+    "type": "University | Law School | Community Organization | Bar Association | Government Office | Foundation | Professional Association",
+    "website": "string — real URL",
+    "location": "string — city, state",
+    "programOrDepartment": "string — specific ADR/dispute resolution program or department name",
+    "adrFocus": ["string — ADR-related focus areas"],
+    "fundingHistory": "string — known history of funding or supporting ADR nonprofits, or 'Unknown'",
+    "contactInfo": "string — email, phone, or contact page URL if known",
+    "partnershipPotential": "string — 2-3 sentences on how ECADRN could partner with or seek funding from this organization",
+    "alignmentScore": number — 0-100 how well aligned with ECADRN mission,
+    "verified": boolean
+  }
+]`;
+
     default:
       return 'INVALID';
   }
@@ -713,18 +756,32 @@ export default {
       const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
       const modelName = action === 'agent-write-proposal' ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
 
+      // Actions that get Google Search grounding for real-time web research
+      const searchGroundedActions = ['research-funder', 'research-grant-url', 'find-adr-partners'];
+      const useSearchGrounding = searchGroundedActions.includes(action);
+
       let resultText = '';
       let errorOccurred = false;
 
-      // Wrap generateContent call in a timeout of 25 seconds
+      // Wrap generateContent call in a timeout of 30 seconds (search-grounded calls need more time)
       const runGeneration = async (currentPrompt: string) => {
-        const generationPromise = ai.models.generateContent({
+        const generationConfig: any = {
           model: modelName,
           contents: currentPrompt,
-        });
+        };
 
+        // Add Google Search tool for research actions
+        if (useSearchGrounding) {
+          generationConfig.config = {
+            tools: [{ googleSearch: {} }],
+          };
+        }
+
+        const generationPromise = ai.models.generateContent(generationConfig);
+
+        const timeoutMs = useSearchGrounding ? 40000 : 25000;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('TIMEOUT')), 25000);
+          setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs);
         });
 
         const res = await Promise.race([generationPromise, timeoutPromise]);
