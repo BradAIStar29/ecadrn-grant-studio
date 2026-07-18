@@ -40,6 +40,7 @@ import {
   ArrowUp,
   ArrowDown,
   Sparkles,
+  Loader2,
   UserPlus,
   BookOpen,
   ChevronDown,
@@ -275,6 +276,21 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     if (activeWorkspace === 'personal' && !user?.uid) return; // uid not yet resolved
+
+    // Deadline reminder check — toast for critical upcoming deadlines
+    if (grants && grants.length > 0) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const critical = grants.filter(g => {
+        if (!g.deadline) return false;
+        const d = new Date(g.deadline);
+        const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return diff >= 0 && diff <= 7;
+      });
+      if (critical.length > 0) {
+        const titles = critical.map(g => g.title).join(', ');
+        showToast(`⏰ ${critical.length} grant deadline${critical.length > 1 ? 's' : ''} within 7 days: ${titles}`, 'error');
+      }
+    }
 
     // Load Notifications
     const notifPath = `organizations/${orgId}/notifications`;
@@ -762,7 +778,7 @@ CORE PROGRAMS:
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
@@ -1098,6 +1114,8 @@ function ProposalsView({
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [aiComparison, setAiComparison] = useState<any>(null);
+  const [aiComparisonLoading, setAiComparisonLoading] = useState(false);
   
   const guideSteps = [
     { title: "Create a New Draft", content: "Click 'New Draft' in the top-right to open the proposal form. Enter the grant title, target funder, and a brief project description. The AI uses this to shape the entire proposal." },
@@ -1547,6 +1565,114 @@ function ProposalsView({
                       {getSectionContent(p2, activeSection) || <span className="text-slate-400 italic">No content for this section</span>}
                     </div>
                   </div>
+                </div>
+
+                {/* AI-powered analysis */}
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">AI Analysis</h4>
+                    <button
+                      onClick={async () => {
+                        if (aiComparisonLoading) return;
+                        setAiComparisonLoading(true);
+                        setAiComparison(null);
+                        try {
+                          const result = await callAI('compare-proposals', {
+                            proposal1Title: p1.title,
+                            proposal1Funder: p1.funder,
+                            proposal1Sections: Object.fromEntries(
+                              SECTION_KEYS.map(k => [k, getSectionContent(p1, k)])
+                            ),
+                            proposal2Title: p2.title,
+                            proposal2Funder: p2.funder,
+                            proposal2Sections: Object.fromEntries(
+                              SECTION_KEYS.map(k => [k, getSectionContent(p2, k)])
+                            ),
+                            funderName: p1.funder || p2.funder,
+                            focusAreas: p1.focusAreas || p2.focusAreas || ''
+                          });
+                          setAiComparison(result);
+                        } catch (err: any) {
+                          showToast('AI comparison failed: ' + err.message, 'error');
+                        } finally {
+                          setAiComparisonLoading(false);
+                        }
+                      }}
+                      disabled={aiComparisonLoading}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${aiComparisonLoading ? 'bg-slate-200 text-slate-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                    >
+                      {aiComparisonLoading ? (
+                        <><Loader2 size={14} className="animate-spin" /> Analyzing...</>
+                      ) : (
+                        <><Sparkles size={14} /> Run AI Comparison</>
+                      )}
+                    </button>
+                  </div>
+
+                  {aiComparison && (
+                    <div className="space-y-4">
+                      {/* Overall winner banner */}
+                      <div className={`p-4 rounded-xl border ${aiComparison.overallWinner === 'tie' ? 'bg-amber-50 border-amber-200' : aiComparison.overallWinner === 'A' ? 'bg-indigo-50 border-indigo-200' : 'bg-violet-50 border-violet-200'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-black uppercase tracking-wider">
+                            Overall Recommendation: {aiComparison.overallWinner === 'tie' ? '🤝 Tie' : aiComparison.overallWinner === 'A' ? '🔵 Proposal A' : '🟣 Proposal B'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-600 leading-relaxed">{aiComparison.overallRationale}</p>
+                      </div>
+
+                      {/* Section-by-section analysis */}
+                      <div className="space-y-2">
+                        {Array.isArray(aiComparison.sections) && aiComparison.sections.map((s: any, i: number) => (
+                          <div key={i} className="p-3 rounded-lg border border-slate-200 bg-white">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-slate-700">{s.sectionName || s.section}</span>
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                s.winner === 'tie' ? 'bg-amber-100 text-amber-700' :
+                                s.winner === 'A' ? 'bg-indigo-100 text-indigo-700' :
+                                'bg-violet-100 text-violet-700'
+                              }`}>
+                                {s.winner === 'tie' ? 'TIE' : s.winner === 'A' ? 'A wins' : 'B wins'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 leading-relaxed mb-2">{s.rationale}</p>
+                            {(s.strengthsA?.length > 0 || s.strengthsB?.length > 0) && (
+                              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                <div>
+                                  {s.strengthsA?.length > 0 && (
+                                    <div className="text-indigo-600 font-bold mb-0.5">A strengths:</div>
+                                  )}
+                                  {s.strengthsA?.map((st: string, j: number) => (
+                                    <div key={j} className="text-slate-500">• {st}</div>
+                                  ))}
+                                </div>
+                                <div>
+                                  {s.strengthsB?.length > 0 && (
+                                    <div className="text-violet-600 font-bold mb-0.5">B strengths:</div>
+                                  )}
+                                  {s.strengthsB?.map((st: string, j: number) => (
+                                    <div key={j} className="text-slate-500">• {st}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Merge suggestions */}
+                      {Array.isArray(aiComparison.mergeSuggestions) && aiComparison.mergeSuggestions.length > 0 && (
+                        <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                          <div className="text-xs font-bold text-emerald-700 mb-2">💡 Merge Suggestions</div>
+                          <div className="space-y-1">
+                            {aiComparison.mergeSuggestions.map((s: string, i: number) => (
+                              <div key={i} className="text-xs text-slate-600">• {s}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -4698,14 +4824,16 @@ function GrantsView({
   voiceProfiles = [], 
   selectedVoiceProfileId = null,
   orgId = '',
-  user = null 
+  user = null,
+  funders = []
 }: { 
   grants: any[], 
   organization: any, 
   voiceProfiles?: any[], 
   selectedVoiceProfileId?: string | null,
   orgId?: string,
-  user?: any
+  user?: any,
+  funders?: any[]
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
@@ -4987,21 +5115,37 @@ Deadline: 2026-11-15`;
         log(`  ⏳ Writing full proposal: ${grant.title}...`);
         try {
           const activeVoice = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || voiceProfiles[0];
+          // Look up funder intelligence from the funders list
+          const matchedFunder = (funders || []).find(f =>
+            f.funderName?.toLowerCase() === grant.funderName?.toLowerCase()
+          );
+          const funderIntel = matchedFunder?.intelligence || null;
+
           const draft = await callAI('generate-draft', {
             orgProfile: organization,
             grantTitle: grant.title,
             funderName: grant.funderName,
-            funderType: grant.funderType || 'Foundation',
+            funderType: grant.funderType || matchedFunder?.funderType || 'Foundation',
             grantDescription: grant.description,
-            focusAreas: (grant.focusAreas || []).join(', '),
+            focusAreas: (grant.focusAreas || []).join(', ') || (funderIntel?.givingPriorities?.join(', ')) || '',
             amountMin: grant.amountMin || 25000,
             amountMax: grant.amountMax || 100000,
             eligibility: grant.eligibility || 'Nonprofits',
-            geographicFocus: grant.geographicFocus || 'National',
+            geographicFocus: grant.geographicFocus || (funderIntel?.geographicFocus) || 'National',
             toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || organization?.voiceProfile?.toneDescriptors?.join(', ') || '',
             keyPhrases: activeVoice?.keyPhrases?.join(', ') || organization?.voiceProfile?.keyPhrases?.join(', ') || '',
             voiceRules: activeVoice?.voiceRules?.join('; ') || organization?.voiceProfile?.voiceRules?.join('; ') || '',
-            writingSamples: activeVoice?.writingSamples?.join(' | ') || organization?.voiceProfile?.writingSamples?.join(' | ') || ''
+            writingSamples: activeVoice?.writingSamples?.join(' | ') || organization?.voiceProfile?.writingSamples?.join(' | ') || '',
+            funderIntelligence: funderIntel ? {
+              givingPriorities: funderIntel.givingPriorities,
+              whatTheyFund: funderIntel.whatTheyFund || [],
+              whatTheyDontFund: funderIntel.whatTheyDontFund || [],
+              applicationTips: funderIntel.applicationTips || [],
+              recommendedApproach: funderIntel.recommendedApproach || '',
+              missionAlignmentRationale: funderIntel.missionAlignmentRationale || '',
+              keySelectionCriteria: funderIntel.keySelectionCriteria || [],
+              typicalGrantees: funderIntel.typicalGrantees || []
+            } : null
           });
 
           const sections = [

@@ -343,6 +343,51 @@ Return JSON with:
 - "alignedContent" (string): the revised section content
 - "changes" (array of strings): summary of changes made`;
 
+    case 'compare-proposals':
+      return `You are an expert grant reviewer who evaluates competing proposal drafts and recommends the strongest version.
+
+PROPOSAL A:
+Title: ${data.proposal1Title || 'Proposal A'}
+Funder: ${data.proposal1Funder || 'Unknown'}
+Sections:
+${JSON.stringify(data.proposal1Sections || {})}
+
+PROPOSAL B:
+Title: ${data.proposal2Title || 'Proposal B'}
+Funder: ${data.proposal2Funder || 'Unknown'}
+Sections:
+${JSON.stringify(data.proposal2Sections || {})}
+
+GRANT CONTEXT:
+Funder: ${data.funderName || 'Unknown'}
+Focus areas: ${data.focusAreas || 'N/A'}
+
+For each of the 9 sections (executiveSummary, needStatement, projectDescription, goalsObjectives, methodology, evaluationPlan, sustainability, organizationalCapacity, budgetNarrative):
+1. Compare both versions
+2. Identify which is stronger and why
+3. Note specific strengths and weaknesses in each
+
+Also provide an overall recommendation.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "sections": [
+    {
+      "section": "string — section key",
+      "sectionName": "string — human-readable name",
+      "winner": "A" | "B" | "tie",
+      "rationale": "string — 2-3 sentences explaining why the winner is stronger",
+      "strengthsA": ["string"],
+      "strengthsB": ["string"],
+      "weaknessesA": ["string"],
+      "weaknessesB": ["string"]
+    }
+  ],
+  "overallWinner": "A" | "B" | "tie",
+  "overallRationale": "string — 3-4 sentences explaining the overall recommendation",
+  "mergeSuggestions": ["string — specific suggestions for combining the best of both proposals"]
+}`;
+
     case 'analyze-uploaded-grant':
       return `Analyze this grant document and extract key information. Return JSON with:
 - "title" (string): grant name
