@@ -966,6 +966,14 @@ function DashboardView({
 }) {
   const activeProposals = (proposals || []).filter(p => p.status === 'draft' || p.status === 'review').length;
   const pendingDeadlines = (grants || []).filter(g => g.deadline && new Date(g.deadline) > new Date()).length;
+  const grantPipeline = {
+    discovered: (grants || []).filter(g => (g.pipelineStage || 'Discovered') === 'Discovered').length,
+    researching: (grants || []).filter(g => g.pipelineStage === 'Researching').length,
+    drafting: (grants || []).filter(g => g.pipelineStage === 'Drafting').length,
+    submitted: (grants || []).filter(g => g.pipelineStage === 'Submitted').length,
+    awarded: (grants || []).filter(g => g.pipelineStage === 'Awarded').length,
+    declined: (grants || []).filter(g => g.pipelineStage === 'Declined').length,
+  };
 
   return (
     <motion.div 
@@ -1000,6 +1008,8 @@ function DashboardView({
         <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend="+12.4%" />
         <StatCard title="Verified Matches" value={(grants?.filter((g: any) => g.verified !== false)?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="Verified Only" />
         <StatCard title="Voice Maturity" value={`${organization?.voiceProfile?.maturityScore || 78}%`} icon={<Mic className="text-indigo-600" />} trend="Nominal State" />
+        <StatCard title="Grants Awarded" value={grantPipeline.awarded.toString()} icon={<CheckCircle className="text-emerald-600" />} trend={`${grantPipeline.submitted} submitted`} />
+        <StatCard title="In Pipeline" value={(grantPipeline.researching + grantPipeline.drafting).toString()} icon={<TrendingUp className="text-amber-600" />} trend={`${grantPipeline.discovered} discovered`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
@@ -1743,6 +1753,20 @@ function ProposalEditor({
   const [isEditingSection, setIsEditingSection] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [isAIWorking, setIsAIWorking] = useState<string | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
+
+  // Pre-submission checklist — compute completeness
+  const checklistItems = [
+    { label: 'All 9 sections filled', done: sections.filter(s => (s.content || '').trim().length > 50).length >= 9, detail: `${sections.filter(s => (s.content || '').trim().length > 50).length}/9 sections have substantive content` },
+    { label: 'Voice profile applied', done: !!(selectedVoiceProfileId || proposal.voiceProfileId), detail: selectedVoiceProfileId || proposal.voiceProfileId ? 'Voice profile selected' : 'No voice profile selected' },
+    { label: 'Funder alignment checked', done: !!(proposal.funderAlignmentChecked), detail: proposal.funderAlignmentChecked ? 'Align to Funder has been run' : 'Run "Align to Funder" on at least one section' },
+    { label: 'Budget created', done: !!(proposal.budgetItems && proposal.budgetItems.length > 0), detail: proposal.budgetItems && proposal.budgetItems.length > 0 ? `${proposal.budgetItems.length} budget line items` : 'No budget items — use Budget tab' },
+    { label: 'AI Review completed', done: !!(proposal.reviewScore), detail: proposal.reviewScore ? `Score: ${proposal.reviewScore}/100` : 'Run AI Review to get a quality score' },
+    { label: 'Humanizer applied', done: !!(proposal.humanized), detail: proposal.humanized ? 'Humanizer has been run' : 'Run Humanizer to reduce AI-sounding language' },
+    { label: 'Total word count adequate', done: sections.reduce((sum: number, s: any) => sum + (s.content || '').split(' ').filter((w: string) => w.length > 0).length, 0) >= 2000, detail: `${sections.reduce((sum: number, s: any) => sum + (s.content || '').split(' ').filter((w: string) => w.length > 0).length, 0)} words total (aim for 2000+)` },
+  ];
+  const completedCount = checklistItems.filter(c => c.done).length;
+  const checklistScore = Math.round((completedCount / checklistItems.length) * 100);
   const [reviewResults, setReviewResults] = useState<any>(null);
   const [showAIReview, setShowAIReview] = useState(false);
   const [showHumanizer, setShowHumanizer] = useState(false);
@@ -4858,6 +4882,16 @@ function GrantsView({
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
   const [autopilotMode, setAutopilotMode] = useState<'assisted' | 'full'>('assisted');
+  const [pipelineFilter, setPipelineFilter] = useState('All');
+
+  const PIPELINE_STAGES = ['Discovered', 'Researching', 'Drafting', 'Submitted', 'Awarded', 'Declined'];
+
+  const updateGrantStage = async (grantId: string, stage: string) => {
+    const grantsPath = `organizations/${orgId}/grants`;
+    const docRef = doc(db, grantsPath, grantId);
+    await setDoc(docRef, { pipelineStage: stage, updatedAt: new Date().toISOString() }, { merge: true })
+      .catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+  };
   const [autopilotRunning, setAutopilotRunning] = useState(false);
   const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
   const [autopilotOpen, setAutopilotOpen] = useState(false);
