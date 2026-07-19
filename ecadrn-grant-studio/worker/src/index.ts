@@ -61,12 +61,18 @@ STRICT REQUIREMENTS:
 1. Each section MUST be substantive, specific, and directly address the funder's stated priorities.
 2. Ground every claim in the org's actual programs, populations, and work — no vague filler.
 3. Apply the voice profile throughout — it must read as written by someone who deeply knows this org.
-4. Goals must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
-5. Evaluation plan must reference concrete metrics, data collection methods, and reporting timelines.
-6. Budget narrative must align with project description activities and realistic nonprofit costs.
-7. Executive summary must open with a compelling hook, not a boilerplate intro.
-8. Sustainability section must describe concrete plans beyond the grant period.
-9. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of".
+4. Goals must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound) — include baseline data and target metrics.
+5. Evaluation plan must reference concrete metrics, data collection methods, reporting timelines, and accountable staff.
+6. Budget narrative must align with project description activities and realistic nonprofit costs — show the math.
+7. Executive summary must open with a compelling, specific hook about the community need — not a boilerplate intro or mission restatement.
+8. Sustainability section must describe at least 3 concrete revenue diversification strategies beyond the grant period.
+9. Need statement must include at least 2 specific data points or statistics with source attribution.
+10. Methodology must describe a step-by-step implementation plan with phases and timelines.
+11. Organizational capacity must reference the org's ACTUAL track record, staff credentials, and program outcomes.
+12. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+13. DO NOT use generic nonprofit filler — every sentence should be specific to ECADRN's actual work in ADR, conflict resolution, and civic equity.
+14. Use active voice, not passive. "We will train 50 mediators" not "50 mediators will be trained."
+15. Include community voice — reference constituent perspectives, partner organizations, or direct quotes where appropriate.
 
 WORD COUNT GUIDANCE (aim for these ranges):
 - executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
@@ -164,15 +170,19 @@ Sample writing: ${data.writingSamples}
 
 STRICT REQUIREMENTS:
 1. Write EVERY section as a complete, polished, submission-ready piece — not a placeholder or outline.
-2. Mirror the funder's language and priorities directly in each section.
-3. Every goal must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
-4. Budget narrative must align exactly with described activities and realistic nonprofit costs.
+2. Mirror the funder's language and priorities directly in each section — use their exact terminology.
+3. Every goal must be SMART (Specific, Measurable, Achievable, Relevant, Time-bound) with baseline data and target metrics.
+4. Budget narrative must align exactly with described activities and realistic nonprofit costs — show the math.
 5. Apply ECADRN's voice throughout — it must read as written by a human who deeply knows this org.
-6. Evaluation plan must name specific metrics, data collection methods, and reporting timelines.
-7. Organizational capacity section must reference ECADRN's actual programs and credentials.
-8. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note".
-9. Executive summary must open with a compelling hook, not a boilerplate intro.
-10. sustainability section must describe concrete plans beyond grant period.
+6. Evaluation plan must name specific metrics, data collection methods, reporting timelines, and accountable staff.
+7. Organizational capacity section must reference ECADRN's actual programs, staff credentials, and outcomes.
+8. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+9. Executive summary must open with a compelling, specific hook about the community need — not a boilerplate intro.
+10. Sustainability section must describe at least 3 concrete revenue diversification strategies beyond grant period.
+11. Need statement must include at least 2 specific data points or statistics with source attribution.
+12. Methodology must describe a step-by-step implementation plan with phases and timelines.
+13. Use active voice, not passive. Include community voice — constituent perspectives, partner orgs, or direct quotes.
+14. ADDITIONAL INSTRUCTIONS FROM USER: ${data.userInstructions || 'None — write the strongest possible proposal.'}
 
 ADDITIONAL INSTRUCTIONS FROM USER: ${data.userInstructions || 'None — write the strongest possible proposal.'}
 
@@ -222,9 +232,17 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
 }`;
 
     case 'discover-grants':
-      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding.
+      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
 
-TASK: Identify up to ${data.count || 5} REAL, VERIFIABLE grant opportunities that are a strong mission fit for the organization below.
+TASK: Search the web to identify up to ${data.count || 5} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities that are a strong mission fit for the organization below.
+
+SEARCH INSTRUCTIONS:
+1. Search for current grant opportunities in ADR, conflict resolution, restorative justice, access to justice, mediation, and civic equity
+2. Search for foundations and government programs currently accepting applications in this space
+3. Search for recent RFPs and NOFAs (Notices of Funding Availability) related to dispute resolution
+4. Verify each grant program is real and currently active by checking its official page
+5. Search for real deadlines, real award amounts, and real eligibility requirements
+6. Prioritize grants with upcoming deadlines or rolling applications
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile)}
@@ -419,9 +437,15 @@ Documents:
 ${JSON.stringify(data.documents || []).slice(0, 8000)}`;
 
     case 'autopilot-search':
-      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, and civic equity funding.
+      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
 
-TASK: Identify up to ${data.count || 8} REAL, VERIFIABLE grant opportunities that are a strong mission fit for the organization below.
+TASK: Search the web to identify up to ${data.count || 8} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities that are a strong mission fit for the organization below.
+
+SEARCH INSTRUCTIONS:
+1. Search for current grant opportunities in ADR, conflict resolution, restorative justice, and access to justice
+2. Search for foundations currently accepting applications in the dispute resolution space
+3. Verify each program is real and currently active
+4. Find real deadlines and award amounts
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
@@ -757,7 +781,7 @@ export default {
       const modelName = action === 'agent-write-proposal' ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
 
       // Actions that get Google Search grounding for real-time web research
-      const searchGroundedActions = ['research-funder', 'research-grant-url', 'find-adr-partners'];
+      const searchGroundedActions = ['research-funder', 'research-grant-url', 'find-adr-partners', 'discover-grants', 'autopilot-search', 'search-grants'];
       const useSearchGrounding = searchGroundedActions.includes(action);
 
       let resultText = '';
