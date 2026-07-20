@@ -60,6 +60,8 @@ import {
   Link,
   Wand2,
   GitCompare,
+  Bookmark,
+  Save,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -4907,7 +4909,7 @@ function GrantsView({
       snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
       items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       setSavedSearches(items);
-    }, (err) => handleFirestoreError(err, OperationType.READ, searchPath));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, searchPath));
     return () => unsub();
   }, [orgId]);
 
