@@ -817,8 +817,6 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
-    try {
-
     // Verify Firebase auth token
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -839,8 +837,7 @@ export default {
       const action = path.replace('/ai/', '');
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-      let body: any;
-      try { body = await request.json(); } catch { return json({ error: 'Invalid or missing JSON body' }, 400); }
+      const body = await request.json() as any;
       const prompt = getPrompt(action, body);
       if (prompt === 'INVALID') return json({ error: `Unknown action: ${action}` }, 400);
 
@@ -974,16 +971,5 @@ export default {
     }
 
     return json({ error: 'Not found' }, 404);
-
-    } catch (globalError: any) {
-      console.error('Unhandled worker error:', globalError);
-      return new Response(JSON.stringify({ 
-        error: 'Internal Server Error', 
-        details: globalError.message || String(globalError) 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
   }
 };

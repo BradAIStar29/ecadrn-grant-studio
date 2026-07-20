@@ -248,29 +248,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
   }
 }
 
-// Safe localStorage access — won't crash in private browsing or blocked storage
-const safeLocalStorage = {
-  getItem: (key: string): string | null => {
-    try { return localStorage.getItem(key); } catch { return null; }
-  },
-  setItem: (key: string, value: string): void => {
-    try { localStorage.setItem(key, value); } catch {}
-  }
-};
-
-// Safe date parsing — returns 0 for invalid dates instead of NaN
-const parseTimeSafe = (dateStr: any): number => {
-  if (!dateStr) return 0;
-  const t = new Date(dateStr).getTime();
-  return isNaN(t) ? 0 : t;
-};
-
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const toasts = useToasts();
-
-const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
-    return (safeLocalStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
+  const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
+    return (localStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
   });
   // The Firestore org namespace to use for all data ops
   const orgId = activeWorkspace === 'shared' ? SHARED_ORG_ID : (user?.uid || '');
@@ -288,12 +270,12 @@ const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(()
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [importedDocs, setImportedDocs] = useState<Array<{name: string; content: string; importedAt: string}>>(() => {
-    try { return JSON.parse(safeLocalStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
 
   useEffect(() => {
-    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
+    const hasSeen = localStorage.getItem('hasSeenWalkthrough_v2');
     if (!hasSeen && user) {
       setWalkthroughStep(0);
     }
@@ -443,7 +425,6 @@ CORE PROGRAMS:
     });
 
     return () => {
-      unsubNotifs();
       unsubOrg();
       unsubProposals();
       unsubGrants();
@@ -625,7 +606,7 @@ CORE PROGRAMS:
                 <button
                   onClick={() => {
                     setActiveWorkspace('personal');
-                    safeLocalStorage.setItem('ecadrn_workspace', 'personal');
+                    localStorage.setItem('ecadrn_workspace', 'personal');
                   }}
                   className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
                     activeWorkspace === 'personal'
@@ -638,7 +619,7 @@ CORE PROGRAMS:
                 <button
                   onClick={() => {
                     setActiveWorkspace('shared');
-                    safeLocalStorage.setItem('ecadrn_workspace', 'shared');
+                    localStorage.setItem('ecadrn_workspace', 'shared');
                   }}
                   className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
                     activeWorkspace === 'shared'
@@ -662,7 +643,7 @@ CORE PROGRAMS:
                 onClick={() => {
                   const next = activeWorkspace === 'personal' ? 'shared' : 'personal';
                   setActiveWorkspace(next);
-                  safeLocalStorage.setItem('ecadrn_workspace', next);
+                  localStorage.setItem('ecadrn_workspace', next);
                 }}
                 title={activeWorkspace === 'personal' ? 'Switch to Team workspace' : 'Switch to Personal workspace'}
                 className={`w-full flex items-center justify-center py-2 rounded-xl transition-colors ${
@@ -893,7 +874,7 @@ CORE PROGRAMS:
             const newDoc = { name: fileName, content: docContent, importedAt: new Date().toISOString() };
             setImportedDocs(prev => {
               const updated = [newDoc, ...prev].slice(0, 20);
-              safeLocalStorage.setItem('ecadrn_imported_docs', JSON.stringify(updated));
+              localStorage.setItem('ecadrn_imported_docs', JSON.stringify(updated));
               return updated;
             });
             // Add a notification
@@ -913,7 +894,7 @@ CORE PROGRAMS:
           onSetActiveTab={setActiveTab}
           onClose={() => {
             setWalkthroughStep(null);
-            safeLocalStorage.setItem('hasSeenWalkthrough_v2', 'true');
+            localStorage.setItem('hasSeenWalkthrough_v2', 'true');
           }} 
         />
       </main>
@@ -1213,7 +1194,7 @@ function DashboardView({
           <div className="space-y-3 flex-1">
             {grants && grants.filter(g => g.deadline && new Date(g.deadline) > new Date()).length > 0 ? (
               grants.filter(g => g.deadline && new Date(g.deadline) > new Date())
-                .sort((a: any, b: any) => parseTimeSafe(a.deadline) - parseTimeSafe(b.deadline))
+                .sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
                 .slice(0, 5)
                 .map(g => {
                   const d = new Date(g.deadline);
@@ -1464,7 +1445,7 @@ function ProposalsView({
         updatedAt: new Date().toISOString(),
         createdBy: auth.currentUser?.email || '',
         lastEditedBy: auth.currentUser?.email || '',
-        collaborators: [auth.currentUser?.email || '']
+        collaborators: [auth.currentUser!.email]
       }).catch(e => handleFirestoreError(e, OperationType.WRITE, `organizations/${orgId}/proposals`));
       
       setShowNewForm(false);
@@ -1917,7 +1898,7 @@ function ProposalsView({
                         <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
                           <div className="text-xs font-bold text-emerald-700 mb-2">💡 Merge Suggestions</div>
                           <div className="space-y-1">
-                            {(aiComparison?.mergeSuggestions || []).map((s: string, i: number) => (
+                            {aiComparison.mergeSuggestions.map((s: string, i: number) => (
                               <div key={i} className="text-xs text-slate-600">• {s}</div>
                             ))}
                           </div>
@@ -2101,22 +2082,21 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     // Versions
     const unsubVersions = onSnapshot(query(collection(db, propPath, 'versions'), orderBy('timestamp', 'desc'), limit(20)), (snap) => {
       setVersions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, propPath + '/versions'));
+    });
 
     // Comments
     const unsubComments = onSnapshot(query(collection(db, propPath, 'comments'), orderBy('timestamp', 'asc')), (snap) => {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, propPath + '/comments'));
+    });
 
     // Presence
-    if (!auth.currentUser) return;
-    const presenceRef = doc(db, propPath, 'presence', auth.currentUser.uid);
+    const presenceRef = doc(db, propPath, 'presence', auth.currentUser!.uid);
     const updatePresence = async () => {
       if (!auth.currentUser) return;
       try {
         await setDoc(presenceRef, {
-          userId: auth.currentUser?.uid || '',
-          userEmail: auth.currentUser?.email || '',
+          userId: auth.currentUser!.uid,
+          userEmail: auth.currentUser!.email,
           sectionIndex: activeSectionIdx,
           isEditing: isEditingSection,
           lastSeen: new Date().toISOString()
@@ -2131,11 +2111,8 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
 
     const unsubPresence = onSnapshot(collection(db, propPath, 'presence'), (snap) => {
       const now = new Date().getTime();
-      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => {
-      const t = parseTimeSafe(p?.lastSeen);
-      return t > 0 && (now - t) < 45000;
-    }));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, propPath + '/presence'));
+      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => now - new Date(p.lastSeen).getTime() < 45000));
+    });
 
     return () => {
       unsubVersions();
@@ -2195,7 +2172,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
           content: sections,
           budget,
           timestamp: new Date().toISOString(),
-          author: auth.currentUser?.email || '',
+          author: auth.currentUser!.email,
           type: 'manual_save',
           message: customMsg.trim() || 'User explicitly saved a version.'
         }).catch(err => handleFirestoreError(err, OperationType.WRITE, versionsPath));
@@ -2217,7 +2194,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         description: proposal.description || "Custom template saved from draft.",
         sections: sections,
         createdAt: new Date().toISOString(),
-        creatorEmail: auth.currentUser?.email || ''
+        creatorEmail: auth.currentUser!.email
       }).catch(err => handleFirestoreError(err, OperationType.WRITE, templatesPath));
     } catch (e: any) {
       console.error(e);
@@ -2236,7 +2213,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     
     const notifPath = `organizations/${orgId}/notifications`;
     await addDoc(collection(db, notifPath), {
-      userId: auth.currentUser?.uid || '', // In real app, look up user's ID
+      userId: auth.currentUser!.uid, // In real app, look up user's ID
       type: 'assignment',
       message: `You've been assigned to section: ${sections[sectionIdx].title} in ${proposal.title}`,
       link: proposal.id,
@@ -2254,7 +2231,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       await addDoc(collection(db, propPath, 'comments'), {
         text: newComment,
-        author: auth.currentUser?.email || '',
+        author: auth.currentUser!.email,
         sectionIndex: activeSectionIdx,
         timestamp: new Date().toISOString(),
         resolved: false
@@ -2263,10 +2240,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       // Trigger Notification for other collaborators
       const collaborators = proposal.collaborators || [];
       for (const email of collaborators) {
-        if (email !== (auth.currentUser?.email || '')) {
+        if (email !== auth.currentUser!.email) {
           // In a real app we'd look up the UID by email. Here we'll stick to a simple org-wide alert for demo.
           await addDoc(collection(db, `organizations/${orgId}/notifications`), {
-            userId: auth.currentUser?.uid || '', // Simplified for AI Studio
+            userId: auth.currentUser!.uid, // Simplified for AI Studio
             type: 'comment',
             message: `New comment on ${proposal.title}: "${newComment.slice(0, 30)}..."`,
             link: proposal.id,
@@ -2378,7 +2355,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
             <button 
               onClick={() => {
                 const md = `# ${proposal.title}\n\nFunder: ${proposal.funder}\n\n` + 
-                  sections.map((s: any) => `## ${s.title}\n\n${(s.content || '').replace(/<[^>]*>/g, '')}`).join('\n\n');
+                  sections.map((s: any) => `## ${s.title}\n\n${s.content.replace(/<[^>]*>/g, '')}`).join('\n\n');
                 const blob = new Blob([md], { type: 'text/markdown' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -3295,7 +3272,7 @@ function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, 
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this template?')) {
       try {
-        const templateRef = doc(db, 'organizations', orgId, 'templates', id);
+        const templateRef = doc(db, 'organizations', auth.currentUser!.uid, 'templates', id);
         await deleteDoc(templateRef).catch(e => handleFirestoreError(e, OperationType.DELETE, templateRef.path));
       } catch (e) {
         console.error(e);
@@ -6349,7 +6326,7 @@ Deadline: 2026-11-15`;
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 font-mono">Extracted Focus Areas</span>
                         <div className="flex flex-wrap gap-1.5 row-gap-1">
                           {selectedAlignmentGrant.focusAreas && selectedAlignmentGrant.focusAreas.length > 0 ? (
-                            (selectedAlignmentGrant?.focusAreas || []).map((fa: string) => (
+                            selectedAlignmentGrant.focusAreas.map((fa: string) => (
                               <span key={fa} className="bg-white border border-slate-205 text-slate-750 text-[8.5px] font-extrabold uppercase px-2 py-0.5 rounded shadow-sm">
                                 🎯 {fa}
                               </span>
@@ -7405,7 +7382,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                       <span className="text-[9px] font-black text-orange-850 uppercase tracking-widest block mb-1.5 font-mono">1. Linguistic & Phraseology Priorities</span>
                       {funderAlignmentResults.keyPhrases && funderAlignmentResults.keyPhrases.length > 0 ? (
                         <div className="flex flex-wrap gap-1 mt-1 mb-2">
-                          {(funderAlignmentResults?.keyPhrases || []).map((phrase: string, idx: number) => (
+                          {funderAlignmentResults.keyPhrases.map((phrase: string, idx: number) => (
                             <span key={idx} className="bg-white border border-orange-200 text-orange-900 px-2 py-0.5 rounded text-[8.5px] font-bold italic">
                               "{phrase}"
                             </span>
