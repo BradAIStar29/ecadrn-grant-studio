@@ -63,15 +63,15 @@ service cloud.firestore {
     }
 
     function isValidGrant(data) {
-      return data.keys().hasAll(['title', 'updatedAt']) &&
-             data.title is string && data.title.size() <= 200 &&
+      return data.keys().hasAll(['updatedAt']) &&
+             data.get('title', '') is string && data.get('title', '').size() <= 200 &&
              data.updatedAt is string;
     }
 
     function isValidProposal(data) {
-      return data.keys().hasAll(['title', 'status', 'updatedAt']) &&
-             data.title is string && data.title.size() <= 200 &&
-             data.status in ['draft', 'review', 'submitted', 'awarded', 'declined'] &&
+      return data.keys().hasAll(['updatedAt']) &&
+             data.get('title', '') is string && data.get('title', '').size() <= 200 &&
+             data.get('status', 'draft') in ['draft', 'review', 'submitted', 'awarded', 'declined'] &&
              data.updatedAt is string;
     }
 
