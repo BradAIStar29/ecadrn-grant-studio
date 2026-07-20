@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  BarChart2, 
+  BarChart2,
+  BarChart3, 
   FileText, 
   Search, 
   MessageSquare, 
@@ -87,7 +88,7 @@ import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import 'react-quill/dist/quill.snow.css';
 
-type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network';
+type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics';
 
 const WALKTHROUGH_STEPS = [
   {
@@ -137,6 +138,12 @@ const WALKTHROUGH_STEPS = [
     tab: 'network',
     content: "Search the web to discover ADR organizations, university programs, law school clinics, community mediation centers, bar associations, and foundations across the US that have donated to or partnered with nonprofits like ECADRN. Results show funding type (direct grant, sponsorship, partnership), estimated funding ranges, contact info, and partnership potential. Save any result to your Funder Database or send it to Autopilot.",
     highlight: "network-view"
+  },
+  {
+    title: "✦ NEW: Grant Analytics",
+    tab: 'analytics',
+    content: "Track your success rate, pipeline conversion, awarded value, and win/loss breakdowns by funder type. See monthly activity trends, grant discovery sources, and AI-powered insights to optimize your grant strategy. The conversion funnel shows how grants move from discovery through submission to award.",
+    highlight: "analytics-view"
   },
   {
     title: "Voice Lab",
@@ -698,6 +705,15 @@ CORE PROGRAMS:
             badge="NEW"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'network'}
           />
+          <NavItem 
+            icon={<BarChart3 size={20} />} 
+            label="Analytics" 
+            active={activeTab === 'analytics'} 
+            onClick={() => setActiveTab('analytics')} 
+            collapsed={!isSidebarOpen}
+            id="nav-analytics"
+            badge="NEW"
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-slate-800">
@@ -812,6 +828,7 @@ CORE PROGRAMS:
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
             {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
+          {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}}
           </AnimatePresence>
         </div>
 
@@ -5134,7 +5151,7 @@ function GrantsView({
     showToast('✓ Search saved', 'success');
   };
 
-  const runSavedSearch = async (search: any) => {
+  const runSavedSearch = async (search: any, rerun = false) => {
     // Apply the saved filters
     if (search.filterText) setFilterText(search.filterText);
     if (search.filterTag) setFilterGrantTag(search.filterTag);
@@ -5142,7 +5159,45 @@ function GrantsView({
     if (search.pipelineFilter) setPipelineFilter(search.pipelineFilter);
     if (search.geographicFocus && search.geographicFocus !== 'All') setFilterGeoFocus(search.geographicFocus);
     setShowSavedSearches(false);
-    showToast(`Applied: ${search.name}`, 'success');
+    
+    if (rerun) {
+      // Re-run the actual AI discovery search with saved parameters
+      showToast(`Re-running: ${search.name}...`, 'info');
+      setIsDiscovering(true);
+      try {
+        const results = await callAI('discover-grants', {
+          orgProfile: organization,
+          focusAreas: (search.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice']).join(', '),
+          geographicFocus: search.geographicFocus || 'National',
+          amountMin: search.amountMin || 10000,
+          amountMax: search.amountMax || 100000,
+          searchQuery: search.searchQuery || ''
+        });
+        if (Array.isArray(results) && results.length > 0) {
+          const grantsPath = `organizations/${orgId}/grants`;
+          const grantsRef = collection(db, grantsPath);
+          const verifiedResults = results.filter((g: any) => g?.title && g?.funderName);
+          for (const g of verifiedResults) {
+            await addDoc(grantsRef, {
+              ...g, tags: Array.isArray(g.focusAreas) ? [...g.focusAreas] : [],
+              source: 'saved-search', status: 'discovery', pipelineStage: 'Discovered',
+              updatedAt: new Date().toISOString(),
+              discoveredBy: user?.email || 'saved-search',
+              searchName: search.name
+            });
+          }
+          showToast(`✓ Found ${verifiedResults.length} new grants from "${search.name}"`, 'success');
+        } else {
+          showToast('No new grants found for this saved search.', 'info');
+        }
+      } catch (err: any) {
+        showToast('Search failed: ' + err.message + '. Check connection and try again.', 'error');
+      } finally {
+        setIsDiscovering(false);
+      }
+    } else {
+      showToast(`Applied filters: ${search.name}`, 'success');
+    }
   };
 
   const deleteSavedSearch = async (searchId: string) => {
@@ -5417,6 +5472,15 @@ Deadline: 2026-11-15`;
         log(`  📌 ${g.title} (${g.funderName}) — ${g.matchScore}% match`);
       }
 
+      // Also fetch existing ADR Network grants from Firestore that haven't been drafted yet
+      const existingAdrGrants = (grants || []).filter(g => 
+        g.source === 'adr-network' && g.pipelineStage === 'Discovered'
+      );
+      if (existingAdrGrants.length > 0) {
+        log(`📋 Found ${existingAdrGrants.length} existing ADR Network grant(s) — including in draft queue.`);
+        savedGrants.push(...existingAdrGrants);
+      }
+
       // Pick top grants by alignment score — include both autopilot-discovered and ADR Network grants
       const allEligibleGrants = savedGrants.filter(g => 
         (g.matchScore >= 70 || g.ecadrnAlignmentScore >= 70 || g.source === 'adr-network')
@@ -5670,19 +5734,28 @@ Deadline: 2026-11-15`;
                 ) : (
                   savedSearches.map(s => (
                     <div key={s.id} className="flex items-center justify-between p-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 group">
-                      <div className="flex-1 cursor-pointer" onClick={() => runSavedSearch(s)}>
+                      <div className="flex-1 cursor-pointer" onClick={() => runSavedSearch(s, false)}>
                         <p className="text-xs font-bold text-slate-700">{s.name}</p>
                         <p className="text-[10px] text-slate-400">
                           {s.geographicFocus || 'All'} · {s.filterText || 'No filter'} · {s.pipelineFilter || 'All stages'}
                         </p>
                         <p className="text-[9px] text-slate-300">by {s.createdBy || 'unknown'} · {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : ''}</p>
                       </div>
-                      <button
-                        onClick={() => deleteSavedSearch(s.id)}
-                        className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 p-1 transition-opacity"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => runSavedSearch(s, true)}
+                          className="text-emerald-500 hover:text-emerald-700 p-1 transition-all"
+                          title="Re-run AI discovery search"
+                        >
+                          <RefreshCw size={12} />
+                        </button>
+                        <button
+                          onClick={() => deleteSavedSearch(s.id)}
+                          className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 p-1 transition-opacity"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -8225,6 +8298,332 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
 }
 
 // ── ADR Network Finder ─────────────────────────────────────────────────────────
+
+function AnalyticsView({ organization, proposals, grants, funders, orgId }: { organization: any, proposals: any[], grants: any[], funders: any[], orgId: string }) {
+  const safeGrants = grants || [];
+  const safeProposals = proposals || [];
+  const safeFunders = funders || [];
+
+  // Pipeline stages
+  const pipeline = {
+    discovered: safeGrants.filter(g => (g.pipelineStage || 'Discovered') === 'Discovered').length,
+    researching: safeGrants.filter(g => g.pipelineStage === 'Researching').length,
+    drafting: safeGrants.filter(g => g.pipelineStage === 'Drafting').length,
+    submitted: safeGrants.filter(g => g.pipelineStage === 'Submitted').length,
+    awarded: safeGrants.filter(g => g.pipelineStage === 'Awarded').length,
+    declined: safeGrants.filter(g => g.pipelineStage === 'Declined').length,
+  };
+
+  const totalDecided = pipeline.awarded + pipeline.declined;
+  const successRate = totalDecided > 0 ? Math.round((pipeline.awarded / totalDecided) * 100) : 0;
+  const totalPipeline = Object.values(pipeline).reduce((a: number, b: number) => a + b, 0);
+
+  // Award amounts
+  const awardedGrants = safeGrants.filter(g => g.pipelineStage === 'Awarded');
+  const totalAwardedValue = awardedGrants.reduce((sum: number, g: any) => sum + (g.amountMax || g.amount || 0), 0);
+  const avgAwardSize = awardedGrants.length > 0 ? Math.round(totalAwardedValue / awardedGrants.length) : 0;
+  const pipelineValue = safeGrants
+    .filter(g => g.pipelineStage !== 'Declined' && g.pipelineStage !== 'Awarded')
+    .reduce((sum: number, g: any) => sum + (g.amountMax || g.amount || 0), 0);
+
+  // Win/loss by funder type
+  const funderTypeStats: Record<string, { won: number; lost: number; pending: number; totalValue: number }> = {};
+  safeGrants.forEach(g => {
+    const type = g.funderType || 'Foundation';
+    if (!funderTypeStats[type]) funderTypeStats[type] = { won: 0, lost: 0, pending: 0, totalValue: 0 };
+    if (g.pipelineStage === 'Awarded') {
+      funderTypeStats[type].won++;
+      funderTypeStats[type].totalValue += (g.amountMax || g.amount || 0);
+    } else if (g.pipelineStage === 'Declined') {
+      funderTypeStats[type].lost++;
+    } else {
+      funderTypeStats[type].pending++;
+    }
+  });
+
+  // Proposal status breakdown
+  const proposalStatuses = {
+    draft: safeProposals.filter(p => p.status === 'draft').length,
+    review: safeProposals.filter(p => p.status === 'review').length,
+    submitted: safeProposals.filter(p => p.status === 'submitted').length,
+    awarded: safeProposals.filter(p => p.status === 'awarded').length,
+    declined: safeProposals.filter(p => p.status === 'declined').length,
+  };
+
+  // Source breakdown
+  const sourceStats = {
+    autopilot: safeGrants.filter(g => g.source === 'autopilot').length,
+    discovery: safeGrants.filter(g => g.source === 'discovery' || !g.source).length,
+    adrNetwork: safeGrants.filter(g => g.source === 'adr-network').length,
+    savedSearch: safeGrants.filter(g => g.source === 'saved-search').length,
+    manual: safeGrants.filter(g => g.source === 'manual' || g.source === 'upload').length,
+  };
+
+  // Funder relationship stages
+  const funderStages = {
+    prospect: safeFunders.filter(f => (f.relationshipStage || 'Prospect') === 'Prospect').length,
+    contacted: safeFunders.filter(f => f.relationshipStage === 'Initial Contact' || f.relationshipStage === 'LOI Submitted').length,
+    active: safeFunders.filter(f => f.relationshipStage === 'Active' || f.relationshipStage === 'Proposal Pending').length,
+  };
+
+  // Monthly activity (last 6 months)
+  const now = new Date();
+  const months: { label: string; grants: number; proposals: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleDateString('en', { month: 'short', year: '2-digit' });
+    const monthGrants = safeGrants.filter(g => {
+      const gd = g.updatedAt ? new Date(g.updatedAt) : null;
+      return gd && gd.getMonth() === d.getMonth() && gd.getFullYear() === d.getFullYear();
+    }).length;
+    const monthProposals = safeProposals.filter(p => {
+      const pd = p.createdAt ? new Date(p.createdAt) : null;
+      return pd && pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
+    }).length;
+    months.push({ label, grants: monthGrants, proposals: monthProposals });
+  }
+  const maxMonthly = Math.max(...months.map(m => Math.max(m.grants, m.proposals)), 1);
+
+  // Conversion funnel
+  const conversionRates = {
+    discoveryToSubmission: pipeline.submitted > 0 ? Math.round(((pipeline.submitted + pipeline.awarded + pipeline.declined) / Math.max(totalPipeline, 1)) * 100) : 0,
+    submissionToAward: totalDecided > 0 ? Math.round((pipeline.awarded / totalDecided) * 100) : 0,
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      className="space-y-6"
+    >
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Grant Analytics</h1>
+        <p className="text-slate-500 mt-2">Success rates, pipeline conversion, and funding insights for {organization?.name || 'ECADRN'}.</p>
+      </div>
+
+      {/* Key Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Success Rate</span>
+            <CheckCircle className={successRate >= 50 ? 'text-emerald-500' : successRate > 0 ? 'text-amber-500' : 'text-slate-300'} size={18} />
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{totalDecided > 0 ? `${successRate}%` : '—'}</p>
+          <p className="text-xs text-slate-400 mt-1">{pipeline.awarded} won · {pipeline.declined} declined</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Awarded</span>
+            <TrendingUp className="text-emerald-500" size={18} />
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{totalAwardedValue > 0 ? `$${(totalAwardedValue / 1000).toFixed(0)}K` : '—'}</p>
+          <p className="text-xs text-slate-400 mt-1">{awardedGrants.length} grants · avg ${avgAwardSize > 0 ? `${(avgAwardSize / 1000).toFixed(0)}K` : '—'}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pipeline Value</span>
+            <TrendingUp className="text-amber-500" size={18} />
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{pipelineValue > 0 ? `$${(pipelineValue / 1000).toFixed(0)}K` : '—'}</p>
+          <p className="text-xs text-slate-400 mt-1">{pipeline.submitted} submitted · {pipeline.drafting} drafting</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Conversion</span>
+            <BarChart3 className="text-indigo-500" size={18} />
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{conversionRates.discoveryToSubmission}%</p>
+          <p className="text-xs text-slate-400 mt-1">Discovery → Submission</p>
+        </div>
+      </div>
+
+      {/* Conversion Funnel */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <h3 className="font-bold text-slate-900 text-sm mb-4">Pipeline Conversion Funnel</h3>
+        <div className="space-y-3">
+          {[
+            { label: 'Discovered', count: pipeline.discovered, pct: totalPipeline > 0 ? Math.round((pipeline.discovered / totalPipeline) * 100) : 0, color: 'bg-slate-400' },
+            { label: 'Researching', count: pipeline.researching, pct: totalPipeline > 0 ? Math.round((pipeline.researching / totalPipeline) * 100) : 0, color: 'bg-blue-400' },
+            { label: 'Drafting', count: pipeline.drafting, pct: totalPipeline > 0 ? Math.round((pipeline.drafting / totalPipeline) * 100) : 0, color: 'bg-indigo-400' },
+            { label: 'Submitted', count: pipeline.submitted, pct: totalPipeline > 0 ? Math.round((pipeline.submitted / totalPipeline) * 100) : 0, color: 'bg-amber-400' },
+            { label: 'Awarded', count: pipeline.awarded, pct: totalPipeline > 0 ? Math.round((pipeline.awarded / totalPipeline) * 100) : 0, color: 'bg-emerald-500' },
+          ].map(stage => (
+            <div key={stage.label} className="flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-600 w-24">{stage.label}</span>
+              <div className="flex-1 bg-slate-100 rounded-full h-7 overflow-hidden relative">
+                <div className={`${stage.color} h-full rounded-full transition-all duration-500 flex items-center justify-end px-2`} style={{ width: `${Math.max(stage.pct, 5)}%` }}>
+                  <span className="text-[10px] font-bold text-white">{stage.count}</span>
+                </div>
+              </div>
+              <span className="text-xs text-slate-400 w-10 text-right">{stage.pct}%</span>
+            </div>
+          ))}
+        </div>
+        {totalDecided > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">Submission → Award Rate</span>
+            <span className={`text-sm font-bold ${successRate >= 50 ? 'text-emerald-600' : successRate >= 25 ? 'text-amber-600' : 'text-rose-600'}`}>{successRate}%</span>
+          </div>
+        )}
+      </div>
+
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Win/Loss by Funder Type */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-bold text-slate-900 text-sm mb-4">Win/Loss by Funder Type</h3>
+          {Object.keys(funderTypeStats).length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-4">No grant outcomes recorded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(funderTypeStats).map(([type, stats]) => {
+                const total = stats.won + stats.lost + stats.pending;
+                const wonPct = total > 0 ? (stats.won / total) * 100 : 0;
+                const lostPct = total > 0 ? (stats.lost / total) * 100 : 0;
+                const pendingPct = total > 0 ? (stats.pending / total) * 100 : 0;
+                return (
+                  <div key={type}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-700">{type}</span>
+                      <span className="text-xs text-slate-400">{stats.won}W · {stats.lost}L · {stats.pending}P{stats.totalValue > 0 && ` · $${(stats.totalValue / 1000).toFixed(0)}K`}</span>
+                    </div>
+                    <div className="flex h-4 rounded-full overflow-hidden bg-slate-100">
+                      <div className="bg-emerald-500" style={{ width: `${wonPct}%` }} />
+                      <div className="bg-rose-400" style={{ width: `${lostPct}%` }} />
+                      <div className="bg-amber-400" style={{ width: `${pendingPct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100">
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Won</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" />Lost</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" />Pending</span>
+          </div>
+        </div>
+
+        {/* Grant Sources */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-bold text-slate-900 text-sm mb-4">Grant Discovery Sources</h3>
+          <div className="space-y-3">
+            {[
+              { label: 'AI Discovery', count: sourceStats.discovery, color: 'bg-indigo-500' },
+              { label: 'Autopilot', count: sourceStats.autopilot, color: 'bg-violet-500' },
+              { label: 'ADR Network', count: sourceStats.adrNetwork, color: 'bg-blue-500' },
+              { label: 'Saved Searches', count: sourceStats.savedSearch, color: 'bg-emerald-500' },
+              { label: 'Manual / Upload', count: sourceStats.manual, color: 'bg-slate-400' },
+            ].filter(s => s.count > 0).map(s => {
+              const pct = totalPipeline > 0 ? Math.round((s.count / totalPipeline) * 100) : 0;
+              return (
+                <div key={s.label} className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-600 w-28">{s.label}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                    <div className={`${s.color} h-full rounded-full transition-all duration-500`} style={{ width: `${Math.max(pct, 3)}%` }} />
+                  </div>
+                  <span className="text-xs text-slate-400 w-16 text-right">{s.count} ({pct}%)</span>
+                </div>
+              );
+            })}
+            {totalPipeline === 0 && <p className="text-xs text-slate-400 text-center py-4">No grants tracked yet.</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Activity Chart */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <h3 className="font-bold text-slate-900 text-sm mb-4">Monthly Activity (Last 6 Months)</h3>
+        <div className="flex items-end justify-between gap-3 h-40">
+          {months.map(m => (
+            <div key={m.label} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full flex items-end justify-center gap-1 h-32">
+                <div
+                  className="w-1/2 bg-indigo-500 rounded-t transition-all duration-500"
+                  style={{ height: `${(m.grants / maxMonthly) * 100}%`, minHeight: m.grants > 0 ? '8px' : '0' }}
+                  title={`${m.grants} grants`}
+                />
+                <div
+                  className="w-1/2 bg-emerald-400 rounded-t transition-all duration-500"
+                  style={{ height: `${(m.proposals / maxMonthly) * 100}%`, minHeight: m.proposals > 0 ? '8px' : '0' }}
+                  title={`${m.proposals} proposals`}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-slate-500">{m.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100">
+          <span className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="w-2.5 h-2.5 rounded bg-indigo-500" />Grants Discovered</span>
+          <span className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="w-2.5 h-2.5 rounded bg-emerald-400" />Proposals Created</span>
+        </div>
+      </div>
+
+      {/* Proposal Status + Funder Pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-bold text-slate-900 text-sm mb-4">Proposal Status Breakdown</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Draft', count: proposalStatuses.draft, color: 'text-slate-600 bg-slate-50 border-slate-200' },
+              { label: 'In Review', count: proposalStatuses.review, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+              { label: 'Submitted', count: proposalStatuses.submitted, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+              { label: 'Awarded', count: proposalStatuses.awarded, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+              { label: 'Declined', count: proposalStatuses.declined, color: 'text-rose-600 bg-rose-50 border-rose-200' },
+            ].map(s => (
+              <div key={s.label} className={`p-3 rounded-lg border ${s.color}`}>
+                <p className="text-xs font-bold uppercase tracking-wider opacity-70">{s.label}</p>
+                <p className="text-xl font-bold mt-1">{s.count}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-bold text-slate-900 text-sm mb-4">Funder Relationship Pipeline</h3>
+          <div className="space-y-3">
+            {[
+              { label: 'Prospects', count: funderStages.prospect, color: 'bg-slate-400' },
+              { label: 'Contacted / LOI', count: funderStages.contacted, color: 'bg-blue-400' },
+              { label: 'Active / Proposal Pending', count: funderStages.active, color: 'bg-emerald-500' },
+            ].map(s => {
+              const total = safeFunders.length || 1;
+              const pct = Math.round((s.count / total) * 100);
+              return (
+                <div key={s.label} className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-600 w-36">{s.label}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                    <div className={`${s.color} h-full rounded-full transition-all duration-500`} style={{ width: `${Math.max(pct, 3)}%` }} />
+                  </div>
+                  <span className="text-xs text-slate-400 w-10 text-right">{s.count}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">{safeFunders.length} total funders tracked</p>
+        </div>
+      </div>
+
+      {/* Insights */}
+      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl border border-indigo-100 p-6">
+        <h3 className="font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
+          <Sparkles size={16} className="text-indigo-600" /> AI Insights
+        </h3>
+        <div className="space-y-2">
+          {totalPipeline === 0 && <p className="text-xs text-slate-600">Start by running Grant Discovery to populate your pipeline. Analytics will update automatically as you track grants and proposals.</p>}
+          {totalPipeline > 0 && conversionRates.discoveryToSubmission < 30 && <p className="text-xs text-slate-600">⚠️ Only {conversionRates.discoveryToSubmission}% of discovered grants make it to submission. Consider using Autopilot to draft proposals faster.</p>}
+          {totalDecided > 0 && successRate < 30 && <p className="text-xs text-slate-600">⚠️ Your win rate is {successRate}%. Focus on funders with higher alignment scores and use Funder Intelligence to strengthen proposals.</p>}
+          {totalDecided > 0 && successRate >= 50 && <p className="text-xs text-slate-600">✅ Strong win rate of {successRate}%. Keep tracking outcomes to identify which funder types perform best.</p>}
+          {pipeline.submitted > 5 && <p className="text-xs text-slate-600">📋 You have {pipeline.submitted} grants awaiting decision. Follow up with funders to check status.</p>}
+          {sourceStats.adrNetwork > 0 && <p className="text-xs text-slate-600">🌐 ADR Network has surfaced {sourceStats.adrNetwork} grant opportunities. These partners often have higher conversion rates.</p>}
+          {pipeline.drafting > 0 && <p className="text-xs text-slate-600">✍️ {pipeline.drafting} grants are in the drafting stage. Use the Pre-Submission Checklist to ensure quality before submitting.</p>}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function AdrNetworkView({ organization, orgId, user }: { organization: any, orgId: string, user: any }) {
   const [partners, setPartners] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
