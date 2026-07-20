@@ -71,7 +71,7 @@ service cloud.firestore {
     function isValidProposal(data) {
       return data.keys().hasAll(['title', 'status', 'updatedAt']) &&
              data.title is string && data.title.size() <= 200 &&
-             data.status in ['draft', 'review', 'submitted'] &&
+             data.status in ['draft', 'review', 'submitted', 'awarded', 'declined'] &&
              data.updatedAt is string;
     }
 
@@ -91,7 +91,10 @@ service cloud.firestore {
     function isValidNotification(data) {
       return data.keys().hasAll(['userId', 'type', 'message', 'read', 'timestamp']) &&
              data.userId == request.auth.uid &&
-             (data.type == 'comment' || data.type == 'assignment' || data.type == 'mention') &&
+             (data.type == 'comment' || data.type == 'assignment' || data.type == 'mention' ||
+              data.type == 'autopilot_submission' || data.type == 'deadline_reminder' ||
+              data.type == 'error' || data.type == 'manual_save' || data.type == 'grant' ||
+              data.type == 'proposal' || data.type == 'spring') &&
              data.message is string && data.message.size() <= 1000 &&
              data.read is bool &&
              data.timestamp is string;
@@ -104,7 +107,9 @@ service cloud.firestore {
       allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
       allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) &&
                        incoming().diff(existing()).affectedKeys()
-                         .hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt', 'members']);
+                         .hasOnly(['name', 'profileText', 'voiceProfile', 'updatedAt', 'members',
+                                   'focusAreas', 'geographicFocus', 'typicalGrantMin', 'typicalGrantMax',
+                                   'discoveryKeywords']);
       allow delete: if false; // orgs are never deleted through the app
 
       // ── Funders ─────────────────────────────────────────────────────────────
@@ -115,7 +120,8 @@ service cloud.firestore {
         allow update: if isOrgMember(orgId) && isValidId(funderId) && isValidFunder(incoming()) &&
                          incoming().diff(existing()).affectedKeys()
                            .hasOnly(['funderName', 'website', 'contactName', 'relationshipStage',
-                                     'notes', 'intelligence', 'lastAnalysisAt', 'updatedAt']);
+                                     'notes', 'intelligence', 'lastAnalysisAt', 'updatedAt',
+                                     'tags', 'source']);
         allow delete: if isOrgMember(orgId) && isValidId(funderId);
       }
 
@@ -156,7 +162,9 @@ service cloud.firestore {
                          incoming().diff(existing()).affectedKeys()
                            .hasOnly(['title', 'status', 'sections', 'updatedAt',
                                      'reviewResults', 'collaborators', 'budget',
-                                     'createdBy', 'lastEditedBy', 'funder', 'assignee']);
+                                     'createdBy', 'lastEditedBy', 'funder', 'assignee',
+                                     'description', 'source', 'autopilot', 'matchScore',
+                                     'createdAt']);
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);
 
         // Comments — any org member can read/write
@@ -165,7 +173,7 @@ service cloud.firestore {
           allow get:    if isOrgMember(orgId) && isValidId(commentId);
           allow create: if isOrgMember(orgId) && isValidId(commentId);
           allow update: if isOrgMember(orgId) && isValidId(commentId) &&
-                           resource.data.userId == request.auth.uid; // only edit own comments
+                           resource.data.userId == request.auth.uid;
           allow delete: if isOrgMember(orgId) && isValidId(commentId) &&
                            resource.data.userId == request.auth.uid;
         }
@@ -198,6 +206,15 @@ service cloud.firestore {
                          incoming().diff(existing()).affectedKeys().hasOnly(['read']);
         allow delete: if isOrgMember(orgId) && isValidId(notificationId) &&
                          resource.data.userId == request.auth.uid;
+      }
+
+      // ── Saved Searches ────────────────────────────────────────────────────
+      match /savedSearches/{searchId} {
+        allow get:    if isOrgMember(orgId) && isValidId(searchId);
+        allow list:   if isOrgMember(orgId);
+        allow create: if isOrgMember(orgId) && isValidId(searchId);
+        allow update: if isOrgMember(orgId) && isValidId(searchId);
+        allow delete: if isOrgMember(orgId) && isValidId(searchId);
       }
     }
   }
