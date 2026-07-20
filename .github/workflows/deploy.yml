@@ -46,6 +46,8 @@ jobs:
     name: Deploy Firestore Rules
     runs-on: ubuntu-latest
     continue-on-error: true
+    # This job uses GitHub OIDC + Google Workload Identity Federation
+    # No service account key file needed — uses OIDC token exchange
     steps:
       - uses: actions/checkout@v4
 
@@ -56,41 +58,42 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # Try WIF auth first (preferred method)
-      - name: Authenticate via WIF
+      # Authenticate using GitHub OIDC → Google WIF token exchange
+      - name: Authenticate to Google Cloud (WIF)
         id: wif-auth
-        if: ${{ secrets.WIF_PROVIDER != '' && secrets.WIF_SERVICE_ACCOUNT != '' }}
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER || 'projects/457031665165/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT || 'github-deployer@gen-lang-client-0456143672.iam.gserviceaccount.com' }}
           export_google_credentials: true
 
       - name: Deploy Firestore Rules (WIF)
-        if: steps.wif-auth.outcome == 'success'
-        run: firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
+        if: success()
+        run: |
+          echo "Deploying rules to project: ${{ secrets.FIREBASE_PROJECT_ID }}"
+          firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
         working-directory: ecadrn-grant-studio
 
-      # Fall back to service account key if WIF not configured
-      - name: Write service account key
-        if: steps.wif-auth.outcome != 'success'
+      - name: WIF Failed — Try Service Account Key Fallback
+        if: failure() && steps.wif-auth.outcome == 'failure'
         run: |
           if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
-            echo "⚠️ Neither WIF nor FIREBASE_SERVICE_ACCOUNT is configured — skipping Firestore Rules deploy"
-            echo "To fix: Add FIREBASE_SERVICE_ACCOUNT secret (service account JSON key from Google Cloud Console)"
-            echo "OR: Add WIF_PROVIDER and WIF_SERVICE_ACCOUNT secrets for Workload Identity Federation"
-            echo "SKIP_FIRESTORE=true" >> $GITHUB_ENV
+            echo "⚠️ Neither WIF nor FIREBASE_SERVICE_ACCOUNT is configured."
+            echo "Firestore rules NOT deployed. The app will show empty data after login."
+            echo ""
+            echo "To fix, do ONE of:"
+            echo "  1. Set WIF_PROVIDER and WIF_SERVICE_ACCOUNT GitHub secrets"
+            echo "  2. Set FIREBASE_SERVICE_ACCOUNT GitHub secret (service account JSON key)"
+            echo "  3. Run: node ecadrn-grant-studio/deploy-firestore-rules.mjs locally"
+            echo ""
+            echo "See: ecadrn-grant-studio/FIRESTORE_FIX.md for detailed instructions"
+            exit 1
           else
             echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json
+            firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
           fi
         working-directory: ecadrn-grant-studio
-
-      - name: Deploy Firestore Rules (Service Account)
-        if: env.SKIP_FIRESTORE != 'true' && steps.wif-auth.outcome != 'success'
-        run: firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
-        working-directory: ecadrn-grant-studio
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
 
   deploy-pages:
     name: Deploy GitHub Pages
