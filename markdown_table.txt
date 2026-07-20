@@ -1,0 +1,214 @@
+Total elements: 213
+| 230 | `button` | Reload Application | `<button               onClick={() => window.location.relo...` |
+| 480 | `button` | Sign in with Google | `<button              onClick={login}             classNam...` |
+| 566 | `button` | Personal | `<button                   onClick={() => {               ...` |
+| 579 | `button` | Team | `<button                   onClick={() => {               ...` |
+| 602 | `button` | Icon / Nested content | `<button                 onClick={() => {                 ...` |
+| 715 | `button` | Icon / Nested content | `<button              onClick={() => setIsSidebarOpen(!isS...` |
+| 739 | `button` | Icon / Nested content | `<button                   id="notif-bell"                ...` |
+| 755 | `button` | Mark all read | `<button                           onClick={async () => { ...` |
+| 781 | `input` | Icon / Nested content | `<input type="text" placeholder="Search..." className="pl-...` |
+| 784 | `button` | Icon / Nested content | `<button                onClick={() => setDrivePanel({ ope...` |
+| 791 | `button` | Icon / Nested content | `<button                onClick={() => setDrivePanel({ ope...` |
+| 798 | `button` | Icon / Nested content | `<button className="p-2 text-slate-400 hover:text-slate-60...` |
+| 867 | `button` | ✕ | `<button                 onClick={() => setShowShortcuts(f...` |
+| 1053 | `button` | Get Help | `<button              onClick={onStartTour}             cl...` |
+| 1059 | `button` | Export Portfolio MD | `<button              onClick={onExportMaster}            ...` |
+| 1415 | `button` | Icon / Nested content | `<button              onClick={() => setShowGuide(true)}  ...` |
+| 1426 | `input` | Icon / Nested content | `<input                type="text"                placehol...` |
+| 1434 | `select` | All Statuses Draft In Review Submitted Approved | `<select             value={statusFilter}             onCh...` |
+| 1446 | `button` | Templates | `<button                onClick={() => setShowTemplateModa...` |
+| 1452 | `button` | Icon / Nested content | `<button               onClick={() => { setCompareMode(!co...` |
+| 1459 | `button` | Icon / Nested content | `<button                onClick={() => setShowNewForm(!sho...` |
+| 1481 | `input` | Icon / Nested content | `<input                    type="text"                    ...` |
+| 1491 | `input` | Icon / Nested content | `<input                    type="text"                    ...` |
+| 1509 | `button` | Icon / Nested content | `<button                onClick={() => startNewProposal()}...` |
+| 1538 | `button` | Icon / Nested content | `<button                         onClick={() => {         ...` |
+| 1593 | `button` | Open Editor | `<button                      onClick={() => setSelectedPr...` |
+| 1612 | `button` | Compare Proposals | `<button             onClick={() => setShowCompareModal(tr...` |
+| 1667 | `button` | ✕ | `<button onClick={() => setShowCompareModal(false)} classN...` |
+| 1707 | `button` | Icon / Nested content | `<button                         key={s.key}              ...` |
+| 1756 | `button` | Icon / Nested content | `<button                       onClick={async () => {     ...` |
+| 2272 | `button` | Icon / Nested content | `<button onClick={onBack} className="p-2 hover:bg-slate-50...` |
+| 2292 | `button` | Focus Mode | `<button                onClick={() => setFocusMode(true)}...` |
+| 2298 | `button` | Save as Template | `<button                onClick={() => setShowTemplateConf...` |
+| 2304 | `button` | Export MD | `<button                onClick={() => {                 c...` |
+| 2319 | `button` | History | `<button                onClick={() => setShowVersions(!sh...` |
+| 2327 | `button` | Draft | `<button                   onClick={() => setActiveSubTab(...` |
+| 2333 | `button` | Budget | `<button                   onClick={() => setActiveSubTab(...` |
+| 2339 | `button` | Timeline | `<button                   onClick={() => setActiveSubTab(...` |
+| 2348 | `button` | Humanizer Review | `<button                  onClick={() => runAIAction('huma...` |
+| 2362 | `button` | Icon / Nested content | `<button                  onClick={() => runAIAction('revi...` |
+| 2371 | `select` | )} | `<select                    value={selectedVoiceProfileId ...` |
+| 2380 | `button` | Icon / Nested content | `<button                  onClick={() => runAIAction('voic...` |
+| 2388 | `button` | Icon / Nested content | `<button                  onClick={() => runAIAction('alig...` |
+| 2397 | `button` | Export to Drive | `<button               onClick={() => setShowDriveExport(t...` |
+| 2404 | `button` | Icon / Nested content | `<button                onClick={() => setIsSaveModalOpen(...` |
+| 2422 | `button` | Icon / Nested content | `<button               onClick={() => setShowEditorGuide(t...` |
+| 2459 | `select` | Select Target Funder... ))} | `<select                    onChange={(e) => handleFunderC...` |
+| 2483 | `button` | Icon / Nested content | `<button                        onClick={async () => {    ...` |
+| 2523 | `button` | Icon / Nested content | `<button                        onClick={() => setActiveSe...` |
+| 2556 | `button` | Icon / Nested content | `<button                onClick={() => setFocusMode(false)...` |
+| 2694 | `button` | Icon / Nested content | `<button                           onClick={async () => { ...` |
+| 2786 | `input` | Icon / Nested content | `<input                        type="text"                ...` |
+| 2801 | `button` | Chat & Comments | `<button                          onClick={() => setShowCo...` |
+| 2826 | `select` | Unassigned Bradley G. Nexus AI Advisor | `<select                            className="bg-transpar...` |
+| 2848 | `button` | Icon / Nested content | `<button                            onClick={splitSection}...` |
+| 2855 | `button` | Icon / Nested content | `<button                            onClick={() => mergeSe...` |
+| 2863 | `button` | Icon / Nested content | `<button                            onClick={() => mergeSe...` |
+| 2980 | `input` | Icon / Nested content | `<input                        type="text"                ...` |
+| 2988 | `button` | Icon / Nested content | `<button onClick={addComment} className="p-2.5 bg-indigo-6...` |
+| 3013 | `button` | Revert | `<button                              onClick={() => { if(...` |
+| 3041 | `button` | Cancel | `<button                      onClick={() => setShowTempla...` |
+| 3047 | `button` | Save Template | `<button                      onClick={async () => {      ...` |
+| 3073 | `button` | Cancel | `<button                      onClick={() => { setShowAssi...` |
+| 3079 | `button` | Confirm | `<button                      onClick={handleConfirmAssign...` |
+| 3127 | `button` | Cancel | `<button                      onClick={() => { setIsSaveMo...` |
+| 3133 | `button` | Confirm Save | `<button                      onClick={async () => {      ...` |
+| 3159 | `button` | : w | `<button                     key={s.id}                   ...` |
+| 3242 | `button` | Icon / Nested content | `<button onClick={onClose} className="p-2 hover:bg-slate-1...` |
+| 3257 | `button` | Icon / Nested content | `<button                        onClick={(e) => deleteTemp...` |
+| 3532 | `button` | Icon / Nested content | `<button                onClick={() => setShowGuide(true)}...` |
+| 3544 | `input` | Icon / Nested content | `<input                type="text"                placehol...` |
+| 3553 | `select` | All Stages )} | `<select                value={filterStage}               ...` |
+| 3562 | `select` | All Tags )} | `<select                value={filterTag}               on...` |
+| 3571 | `select` | All Time Last 30 Days Last 90 Days Last 180 Days | `<select                value={filterDateRange}           ...` |
+| 3585 | `input` | Icon / Nested content | `<input                    type="text"                    ...` |
+| 3597 | `button` | Icon / Nested content | `<button                    onClick={() => researchFunder(...` |
+| 3608 | `button` | Icon / Nested content | `<button                  onClick={() => setShowAddManualF...` |
+| 3643 | `input` | Icon / Nested content | `<input                  type="text"                  requ...` |
+| 3654 | `input` | Icon / Nested content | `<input                  type="text"                  requ...` |
+| 3668 | `select` | ))} | `<select                  value={manualStage}             ...` |
+| 3680 | `input` | Icon / Nested content | `<input                  type="text"                  valu...` |
+| 3690 | `input` | Icon / Nested content | `<input                  type="text"                  valu...` |
+| 3703 | `input` | Icon / Nested content | `<input                  type="text"                  valu...` |
+| 3714 | `input` | Icon / Nested content | `<input                    type="text"                    ...` |
+| 3731 | `button` | Add | `<button                   type="button"                  ...` |
+| 3750 | `button` | × | `<button                        type="button"             ...` |
+| 3763 | `button` | + | `<button                         type="button"            ...` |
+| 3789 | `button` | Cancel | `<button                type="button"                onCli...` |
+| 3796 | `button` | Icon / Nested content | `<button                type="submit"                disab...` |
+| 3814 | `button` | Clear Filters | `<button              onClick={() => {               setSe...` |
+| 3913 | `input` | Icon / Nested content | `<input                type="text"                value={e...` |
+| 3922 | `input` | Icon / Nested content | `<input                type="text"                value={e...` |
+| 3937 | `button` | Accept & Run Funder Research | `<button                   type="button"                  ...` |
+| 3950 | `input` | Icon / Nested content | `<input                  type="text"                  valu...` |
+| 3959 | `select` | ))} | `<select                  value={editData.relationshipStag...` |
+| 3976 | `button` | × | `<button                      type="button"               ...` |
+| 3992 | `select` | Add Preset Tag... ))} | `<select                 onChange={(e) => {               ...` |
+| 4009 | `input` | Icon / Nested content | `<input                 type="text"                 placeh...` |
+| 4026 | `button` | Add | `<button                 type="button"                 onC...` |
+| 4051 | `button` | Save Changes | `<button onClick={onSaveEdit} className="flex-1 bg-indigo-...` |
+| 4052 | `button` | Cancel | `<button onClick={onCancelEdit} className="flex-1 bg-slate...` |
+| 4061 | `a` | Icon / Nested content | `<a href={f.website.startsWith('http') ? f.website : `http...` |
+| 4064 | `button` | Icon / Nested content | `<button                    onClick={(e) => { e.stopPropag...` |
+| 4077 | `button` | Icon / Nested content | `<button                    onClick={onResearch}          ...` |
+| 4085 | `button` | Icon / Nested content | `<button                    onClick={onEdit}              ...` |
+| 4112 | `button` | Icon / Nested content | `<button onClick={() => onTagClick(t)} className="hover:un...` |
+| 4113 | `button` | × | `<button                      onClick={async (e) => {     ...` |
+| 4153 | `input` | Icon / Nested content | `<input                  type="text"                 place...` |
+| 4164 | `button` | Auto Tag | `<button                 onClick={async () => {           ...` |
+| 4226 | `button` | + | `<button                         key={sug}                ...` |
+| 4264 | `button` | Icon / Nested content | `<button                 onClick={(e) => { e.stopPropagati...` |
+| 4383 | `button` | Re-Analyze | `<button                  onClick={onResearch}            ...` |
+| 4773 | `button` | Icon / Nested content | `<button                   onClick={copyAllSections}      ...` |
+| 4780 | `button` | Download .docx | `<button                   onClick={downloadProposal}     ...` |
+| 4789 | `button` | Icon / Nested content | `<button onClick={onClose} className="p-2 text-slate-400 h...` |
+| 4814 | `input` | Icon / Nested content | `<input                     value={grantName}             ...` |
+| 4826 | `input` | Icon / Nested content | `<input                     value={grantUrl}              ...` |
+| 4874 | `button` | Research & Write Full Proposal | `<button                 onClick={runAgentWrite}          ...` |
+| 4956 | `button` | Icon / Nested content | `<button                       key={key}                  ...` |
+| 4971 | `button` | + New Proposal | `<button                     onClick={() => { setStep('inp...` |
+| 4987 | `button` | Icon / Nested content | `<button                       onClick={() => {           ...` |
+| 5035 | `input` | Icon / Nested content | `<input                       value={chatInput}           ...` |
+| 5042 | `button` | Icon / Nested content | `<button                       onClick={sendChat}         ...` |
+| 5610 | `button` | Icon / Nested content | `<button              onClick={() => setShowGuide(true)}  ...` |
+| 5619 | `button` | ✦ Agent Write | `<button             onClick={() => { setAgentPrefillGrant...` |
+| 5627 | `button` | Icon / Nested content | `<button             onClick={() => setHideUnverified(h =>...` |
+| 5636 | `button` | Match | `<button                onClick={() => { setSortBy('match'...` |
+| 5642 | `button` | Deadline | `<button                onClick={() => { setSortBy('deadli...` |
+| 5648 | `button` | Funder | `<button                onClick={() => { setSortBy('name')...` |
+| 5658 | `button` | Saved } | `<button               onClick={() => setShowSavedSearches...` |
+| 5680 | `button` | Icon / Nested content | `<button                         onClick={() => deleteSave...` |
+| 5693 | `button` | Save Search | `<button             onClick={() => setShowSaveSearch(!sho...` |
+| 5700 | `button` | Icon / Nested content | `<button              onClick={runDiscovery}             d...` |
+| 5708 | `button` | Autopilot | `<button             onClick={() => setAutopilotOpen(o => ...` |
+| 5723 | `button` | Icon / Nested content | `<button onClick={() => setShowSaveSearch(false)} classNam...` |
+| 5727 | `input` | Icon / Nested content | `<input               type="text"               placeholde...` |
+| 5735 | `button` | Save | `<button               onClick={saveSearch}               ...` |
+| 5766 | `button` | Icon / Nested content | `<button onClick={() => setAutopilotOpen(false)} className...` |
+| 5775 | `button` | 👤 Assisted — Stop at Review | `<button                 onClick={() => setAutopilotMode('...` |
+| 5781 | `button` | 🤖 Full Agent — Auto Submit | `<button                 onClick={() => setAutopilotMode('...` |
+| 5808 | `button` | Icon / Nested content | `<button             onClick={runAutopilot}             di...` |
+| 5853 | `input` | Icon / Nested content | `<input                    type="file"                    ...` |
+| 5865 | `button` | Paste RFP Text | `<button                 onClick={() => {                 ...` |
+| 5957 | `button` | Icon / Nested content | `<button                onClick={runVoiceSuggestions}     ...` |
+| 5971 | `input` | Icon / Nested content | `<input              type="text"              value={filte...` |
+| 5984 | `select` | All Regions ))} | `<select               value={filterGeoFocus}             ...` |
+| 5998 | `select` | All Tags ))} | `<select               value={filterGrantTag}             ...` |
+| 6078 | `button` | Icon / Nested content | `<button                        onClick={(e) => { e.stopPr...` |
+| 6092 | `button` | Icon / Nested content | `<button                   onClick={() => setSelectedAlign...` |
+| 6141 | `button` | ✦ Agent Write Full Proposal | `<button                 onClick={() => {                 ...` |
+| 6177 | `button` | Icon / Nested content | `<button                  onClick={() => setSelectedAlignm...` |
+| 6300 | `button` | Close Context | `<button                   type="button"                  ...` |
+| 6307 | `button` | Icon / Nested content | `<button                   type="button"                  ...` |
+| 6764 | `button` | Icon / Nested content | `<button                  onClick={() => setShowGuide(true...` |
+| 6776 | `button` | Import Web Hook | `<button              onClick={() => setTextToAnalyze(`ECA...` |
+| 6787 | `button` | Train All ecadrn.org Resources | `<button              onClick={() => {               const...` |
+| 6801 | `select` | ))} | `<select                value={selectedProfileId || ''}   ...` |
+| 6815 | `input` | Icon / Nested content | `<input                type="file"                classNam...` |
+| 6841 | `button` | Clear Buffer | `<button                onClick={() => setTextToAnalyze(''...` |
+| 6851 | `button` | 📝 Paste Raw Text | `<button               type="button"               onClick...` |
+| 6858 | `button` | 📎 Upload Document | `<button               type="button"               onClick...` |
+| 6865 | `button` | 📚 Predefined Guides | `<button               type="button"               onClick...` |
+| 6898 | `input` | Icon / Nested content | `<input                    type="file"                    ...` |
+| 6925 | `button` | Icon / Nested content | `<button                     key={r.id}                   ...` |
+| 6944 | `button` | Icon / Nested content | `<button                onClick={() => analyzeVoice()}    ...` |
+| 7009 | `select` | ))} | `<select                  value={selectedProfileId || ''} ...` |
+| 7028 | `button` | Icon / Nested content | `<button                onClick={rewriteText}             ...` |
+| 7127 | `input` | Icon / Nested content | `<input                      type="text"                  ...` |
+| 7134 | `button` | Icon / Nested content | `<button                      onClick={handleSaveProfile} ...` |
+| 7214 | `button` | Icon / Nested content | `<button                           onClick={handleSyncSugg...` |
+| 7343 | `button` | Icon / Nested content | `<button                 onClick={analyzeFunderAlignment} ...` |
+| 7453 | `button` | Icon / Nested content | `<button                      onClick={() => setExpandedRe...` |
+| 7462 | `button` | Use Draft Scratch | `<button                        onClick={() => injectResou...` |
+| 7469 | `button` | Auto-Calibrate ⚡ | `<button                        onClick={() => {          ...` |
+| 7592 | `button` | Icon / Nested content | `<button              onClick={() => setShowGuide(true)}  ...` |
+| 7599 | `button` | Icon / Nested content | `<button            onClick={checkMissing}           disab...` |
+| 7626 | `button` | Icon / Nested content | `<button                   key={type}                   on...` |
+| 7642 | `select` | Select a funder from your database... ))} | `<select               value={selectedFunderId}           ...` |
+| 7658 | `select` | No proposal linked — ))} | `<select                 value={relatedProposalId}        ...` |
+| 7671 | `button` | Icon / Nested content | `<button             onClick={generateEmail}             d...` |
+| 7689 | `button` | Icon / Nested content | `<button               onClick={copyToClipboard}          ...` |
+| 7783 | `button` | Icon / Nested content | `<button className="text-slate-400 hover:text-white transi...` |
+| 7804 | `input` | Icon / Nested content | `<input              type="text"              value={input...` |
+| 7812 | `button` | Send | `<button              onClick={sendMessage}             cl...` |
+| 7949 | `button` | Calendar Grid | `<button               onClick={() => setActiveTab('grid')...` |
+| 7957 | `button` | Monthly Track | `<button               onClick={() => setActiveTab('monthl...` |
+| 7965 | `button` | Weekly Columns | `<button               onClick={() => setActiveTab('weekly...` |
+| 7975 | `button` | Icon / Nested content | `<button             onClick={() => setShowPast(!showPast)...` |
+| 8010 | `button` | Icon / Nested content | `<button onClick={goPrevMonth} className="p-2 rounded-lg h...` |
+| 8016 | `button` | Icon / Nested content | `<button onClick={goNextMonth} className="p-2 rounded-lg h...` |
+| 8180 | `button` | Icon / Nested content | `<button onClick={onClose} className="p-2 text-indigo-200 ...` |
+| 8187 | `button` | Icon / Nested content | `<button                 key={i}                 onClick={...` |
+| 8203 | `button` | ← Back | `<button                 onClick={() => setStep(step - 1)}...` |
+| 8210 | `button` | Icon / Nested content | `<button               onClick={() => {                 if...` |
+| 8387 | `button` | Icon / Nested content | `<button onClick={() => setShowGuide(true)} className="p-1...` |
+| 8405 | `button` | Icon / Nested content | `<button               key={mode.id}               onClick...` |
+| 8439 | `select` | Icon / Nested content | `<select             value={filterType}             onChan...` |
+| 8453 | `select` | Sort: Alignment Sort: Name Sort: Type | `<select             value={sortBy}             onChange={...` |
+| 8462 | `button` | Icon / Nested content | `<button             onClick={searchPartners}             ...` |
+| 8571 | `a` | Website | `<a href={partner.website} target="_blank" rel="noopener n...` |
+| 8583 | `button` | Save as Funder | `<button                       onClick={() => saveAsFunder...` |
+| 8591 | `button` | Autopilot | `<button                       onClick={() => sendToAutopi...` |
+| 8645 | `button` | Icon / Nested content | `<button            onClick={onClose}            className...` |
+| 8673 | `button` | Back | `<button              onClick={() => onStepChange(currentS...` |
+| 8680 | `button` | {currentStep | `<button            onClick={() => {             if (curre...` |
+| 8748 | `button` | AI Generate Full Budget | `<button              onClick={async () => {              ...` |
+| 8791 | `input` | Icon / Nested content | `<input                      type="text"                  ...` |
+| 8800 | `input` | Icon / Nested content | `<input                      type="number"                ...` |
+| 8809 | `input` | Icon / Nested content | `<input                        type="text"                ...` |
+| 8816 | `button` | Icon / Nested content | `<button                        onClick={() => generateJus...` |
+| 8827 | `button` | Icon / Nested content | `<button onClick={() => removeLineItem(item.id)} className...` |
+| 8835 | `button` | Add Line Item | `<button            onClick={addLineItem}           classN...` |
+| 8887 | `button` | Restore This Version | `<button                    onClick={() => onRevert(v)}   ...` |

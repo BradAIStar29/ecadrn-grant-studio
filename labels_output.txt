@@ -1,0 +1,59 @@
+Total Labels: 32
+Total Inputs/Selects/Textareas: 61
+Inputs missing labels: 56
+Line 781: <input> id=None placeholder=Search... tag=<input type="text" placeholder="Search..." className="pl-10 pr-4 py-2 bg-slate-1
+Line 1426: <input> id=None placeholder=Search proposals... tag=<input                type="text"                placeholder="Search proposals..
+Line 1434: <select> id=None placeholder=None tag=<select             value={statusFilter}             onChange={(e) => setStatusF
+Line 1481: <input> id=None placeholder=e.g. ADR Growth Initiative tag=<input                    type="text"                    value={newProposalData.
+Line 1491: <input> id=None placeholder=e.g. Ford Foundation tag=<input                    type="text"                    value={newProposalData.
+Line 1502: <textarea> id=None placeholder=What is this grant for? (Programs, populations, etc.) tag=<textarea                  value={newProposalData.description}                 o
+Line 2371: <select> id=None placeholder=None tag=<select                    value={selectedVoiceProfileId || ''}                 
+Line 2459: <select> id=None placeholder=None tag=<select                    onChange={(e) => handleFunderChange(e.target.value)} 
+Line 2786: <input> id=None placeholder=None tag=<input                        type="text"                        value={currentS
+Line 2826: <select> id=None placeholder=None tag=<select                            className="bg-transparent border-none outline
+Line 2980: <input> id=None placeholder=Type a team chat message... tag=<input                        type="text"                        value={newComme
+Line 3117: <textarea> id=None placeholder=e.g. Budget alignment, fixed section summaries... tag=<textarea                     rows={3}                     className="w-full tex
+Line 3544: <input> id=None placeholder=Search name, web, stage, or sync... tag=<input                type="text"                placeholder="Search name, web, 
+Line 3553: <select> id=None placeholder=None tag=<select                value={filterStage}               onChange={(e) => setFil
+Line 3562: <select> id=None placeholder=None tag=<select                value={filterTag}               onChange={(e) => setFilte
+Line 3571: <select> id=None placeholder=None tag=<select                value={filterDateRange}               onChange={(e) => se
+Line 3585: <input> id=None placeholder=Analyze funder domain... tag=<input                    type="text"                    value={newFunderUrl}   
+Line 3643: <input> id=None placeholder=e.g. The Hewlett Foundation tag=<input                  type="text"                  required                 va
+Line 3654: <input> id=None placeholder=e.g. hewlett.org tag=<input                  type="text"                  required                 va
+Line 3668: <select> id=None placeholder=None tag=<select                  value={manualStage}                  onChange={(e) => s
+Line 3680: <input> id=None placeholder=e.g. Dr. Arthur Pendelton tag=<input                  type="text"                  value={manualContact}      
+Line 3690: <input> id=None placeholder=e.g. $25,000 - $100,000 tag=<input                  type="text"                  value={manualRange}        
+Line 3703: <input> id=None placeholder=e.g. National, California, Global tag=<input                  type="text"                  value={manualGeo}          
+Line 3714: <input> id=None placeholder=Type tag & press enter tag=<input                    type="text"                    value={newTagInput}    
+Line 3780: <textarea> id=None placeholder=Strategic dialogue, upcoming calls, alignment details... tag=<textarea                value={manualNotes}                onChange={(e) => set
+Line 3886: <textarea> id=None placeholder=Add internal notes... tag=<textarea          value={notes}         onChange={(e) => setNotes(e.target.valu
+Line 3913: <input> id=None placeholder=None tag=<input                type="text"                value={editData.funderName}    
+Line 3922: <input> id=None placeholder=None tag=<input                type="text"                value={editData.website}       
+Line 3950: <input> id=None placeholder=None tag=<input                  type="text"                  value={editData.contactName
+Line 3959: <select> id=None placeholder=None tag=<select                  value={editData.relationshipStage || 'Prospect'}       
+Line 3992: <select> id=None placeholder=None tag=<select                 onChange={(e) => {                   const val = e.targe
+Line 4009: <input> id=None placeholder=Type tag... tag=<input                 type="text"                 placeholder="Type tag..."    
+Line 4043: <textarea> id=None placeholder=Strategic context, relationship history... tag=<textarea                value={editData.notes || ''}                onChange={(
+Line 4153: <input> id=None placeholder=+ Tag tag=<input                  type="text"                 placeholder="+ Tag"         
+Line 4814: <input> id=None placeholder=e.g. Hewlett Foundation — Conflict Resolution Program Grant tag=<input                     value={grantName}                     onChange={e => 
+Line 4826: <input> id=None placeholder=https://www.hewlett.org/grants/conflict-resolution-program/ tag=<input                     value={grantUrl}                     onChange={e => s
+Line 4839: <textarea> id=None placeholder=Any known details: focus areas, award amount, deadline, specific programs they fund, prior context you have... tag=<textarea                     value={additionalContext}                     onCh
+Line 4852: <textarea> id=None placeholder=e.g.  tag=<textarea                     value={userInstructions}                     onCha
+Line 5035: <input> id=None placeholder=Ask for edits, clarifications, or additional questions to answer... (Enter to send) tag=<input                       value={chatInput}                       onChange={e
+Line 5727: <input> id=None placeholder=Search name (e.g.  tag=<input               type="text"               placeholder="Search name (e.g. 'N
+Line 5971: <input> id=None placeholder=Filter opportunities by funder, focus area, or tag... tag=<input              type="text"              value={filterText}             onCh
+Line 5984: <select> id=None placeholder=None tag=<select               value={filterGeoFocus}               onChange={(e) => setF
+Line 5998: <select> id=None placeholder=None tag=<select               value={filterGrantTag}               onChange={(e) => setF
+Line 6801: <select> id=None placeholder=None tag=<select                value={selectedProfileId || ''}                onChange={
+Line 6878: <textarea> id=None placeholder=PRO TIP: Directly paste 3-5 paragraphs of your BEST writing—letters, press releases, draft proposals, standard guides, or organizational statements. Bypasses file uploads or pre-defined resources completely! tag=<textarea                  value={textToAnalyze}                 onChange={(e) =
+Line 7009: <select> id=None placeholder=None tag=<select                  value={selectedProfileId || ''}                  onChan
+Line 7021: <textarea> id=None placeholder=Paste raw text to translate here... tag=<textarea                value={textToRewrite}               onChange={(e) => se
+Line 7127: <input> id=None placeholder=e.g. ECADRN High-Impact Academy tag=<input                      type="text"                      value={customProfil
+Line 7642: <select> id=None placeholder=None tag=<select               value={selectedFunderId}               onChange={(e) => se
+Line 7658: <select> id=None placeholder=None tag=<select                 value={relatedProposalId}                 onChange={(e) 
+Line 7804: <input> id=None placeholder=Search projects or request strategic insight... tag=<input              type="text"              value={input}             onChange=
+Line 8439: <select> id=None placeholder=None tag=<select             value={filterType}             onChange={(e) => setFilterTyp
+Line 8453: <select> id=None placeholder=None tag=<select             value={sortBy}             onChange={(e) => setSortBy(e.targ
+Line 8791: <input> id=None placeholder=e.g. Program Coordinator Salary tag=<input                      type="text"                      value={item.descrip
+Line 8800: <input> id=None placeholder=None tag=<input                      type="number"                      value={item.amoun
+Line 8809: <input> id=None placeholder=Briefly justify this expense... tag=<input                        type="text"                        value={item.jus
