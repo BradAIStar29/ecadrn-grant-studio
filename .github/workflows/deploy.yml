@@ -27,14 +27,14 @@ jobs:
 
       - name: Install worker dependencies
         run: npm install
-        working-directory: worker
+        working-directory: ecadrn-grant-studio/worker
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
+          workingDirectory: ecadrn-grant-studio/worker
           secrets: |
             GEMINI_API_KEY
             FIREBASE_PROJECT_ID
@@ -55,8 +55,13 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Write service account key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
+
       - name: Deploy Firestore Rules
-        run: firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --token ${{ secrets.FIREBASE_TOKEN }} --non-interactive
+        run: firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
 
   deploy-pages:
     name: Deploy GitHub Pages
@@ -72,12 +77,15 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: ecadrn-grant-studio/package-lock.json
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+        working-directory: ecadrn-grant-studio
 
       - name: Build frontend
         run: npm run build
+        working-directory: ecadrn-grant-studio
         env:
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
@@ -86,7 +94,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ecadrn-grant-studio/dist
 
       - uses: actions/deploy-pages@v4
         id: deployment
