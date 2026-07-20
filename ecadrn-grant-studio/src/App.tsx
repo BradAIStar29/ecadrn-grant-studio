@@ -527,45 +527,6 @@ CORE PROGRAMS:
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="text-gray-500 text-sm font-medium">Loading ECADRN Grant Studio…</p>
-        <button onClick={() => window.location.reload()} className="text-gray-400 text-xs underline mt-2">
-          Taking too long? Reload
-        </button>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center"
-        >
-          <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <BarChart2 className="w-8 h-8 text-blue-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">ECADRN Grant Studio</h1>
-          <p className="text-gray-600 mb-8">
-            The AI-powered command center for ADR professionals to win more grants.
-          </p>
-          <button 
-            onClick={login}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            Sign in with Google
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
-
-
   // ── Keyboard Shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -613,6 +574,45 @@ CORE PROGRAMS:
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 text-sm font-medium">Loading ECADRN Grant Studio…</p>
+        <button onClick={() => window.location.reload()} className="text-gray-400 text-xs underline mt-2">
+          Taking too long? Reload
+        </button>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center"
+        >
+          <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <BarChart2 className="w-8 h-8 text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">ECADRN Grant Studio</h1>
+          <p className="text-gray-600 mb-8">
+            The AI-powered command center for ADR professionals to win more grants.
+          </p>
+          <button 
+            onClick={login}
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            Sign in with Google
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
 
   return (
     <ErrorBoundary>
