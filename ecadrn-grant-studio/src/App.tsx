@@ -2082,8 +2082,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
           voiceProfile: activeProfile,
           content: sections[activeSectionIdx].content
         });
+        const rewrittenContent = typeof result === 'string' ? result : (result?.content || result?.alignedContent || '');
+        if (!rewrittenContent) throw new Error('AI returned empty content for voice rewrite');
         const newSections = [...sections];
-        newSections[activeSectionIdx].content = result;
+        newSections[activeSectionIdx].content = rewrittenContent;
         setSections(newSections);
       } else if (action === 'align') {
         const funder = funders.find((f: any) => 
@@ -2094,8 +2096,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
           funderIntelligence: funder?.intelligence || {},
           content: sections[activeSectionIdx].content
         });
+        const alignedContent = typeof result === 'string' ? result : (result?.alignedContent || result?.content || '');
+        if (!alignedContent) throw new Error('AI returned empty content for funder alignment');
         const newSections = [...sections];
-        newSections[activeSectionIdx].content = result;
+        newSections[activeSectionIdx].content = alignedContent;
         setSections(newSections);
       }
     } catch (e) {
@@ -2337,8 +2341,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                             },
                             content: sections[activeSectionIdx].content
                           });
+                          const alignedContent = typeof result === 'string' ? result : (result?.alignedContent || result?.content || '');
+                          if (!alignedContent) throw new Error('AI returned empty content for funder alignment');
                           const newSections = [...sections];
-                          newSections[activeSectionIdx].content = result;
+                          newSections[activeSectionIdx].content = alignedContent;
                           setSections(newSections);
                         } catch (err: any) {
                           console.error(err);
@@ -2545,8 +2551,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                                 voiceProfile: activeProfile,
                                 content: `REWRITE THIS CONTENT TO PASS AI DETECTION FILTERS PERFECTLY (Make words simple, sentences varying length, natural/organic tone): ${targetSection.content}`
                               });
+                              const rewrittenContent = typeof result === 'string' ? result : (result?.content || result?.alignedContent || '');
+                              if (!rewrittenContent) throw new Error('AI returned empty content for voice rewrite');
                               const newSections = [...sections];
-                              newSections[activeSectionIdx].content = result;
+                              newSections[activeSectionIdx].content = rewrittenContent;
                               setSections(newSections);
                               
                               // Re-run humanizer audit to see updated score!
