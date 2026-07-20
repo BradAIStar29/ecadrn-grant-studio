@@ -57,9 +57,11 @@ jobs:
 
       - name: Write service account key
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
+        working-directory: ecadrn-grant-studio
 
       - name: Deploy Firestore Rules
         run: firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
+        working-directory: ecadrn-grant-studio
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
 
