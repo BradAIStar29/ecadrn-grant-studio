@@ -290,7 +290,7 @@ export default function App() {
     try {
       unsubscribe = onAuthStateChanged(auth, (u) => {
         setUser(u);
-        if (!u) setLoading(false);
+        setLoading(false);  // Clear loading immediately on auth state change (both signed-in and signed-out)
       }, (error) => {
         console.error('Auth state error (clearing stale session):', error);
         // Clear any stale Firebase auth state and reset to login screen
@@ -335,8 +335,10 @@ export default function App() {
     // Load Notifications
     const notifPath = `organizations/${orgId}/notifications`;
     const notifRef = collection(db, notifPath);
-    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user?.uid || ''), where('read', '==', false), orderBy('timestamp', 'desc'), limit(10)), (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user?.uid || ''), orderBy('timestamp', 'desc'), limit(20)), (snap) => {
+      // Filter 'read' client-side to avoid needing a composite index
+      const unread = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((n: any) => !n.read);
+      setNotifications(unread);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, notifPath);
     });
@@ -487,8 +489,12 @@ CORE PROGRAMS:
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 text-sm font-medium">Loading ECADRN Grant Studio…</p>
+        <button onClick={() => window.location.reload()} className="text-gray-400 text-xs underline mt-2">
+          Taking too long? Reload
+        </button>
       </div>
     );
   }
@@ -7076,7 +7082,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                 <div>
                   <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Tone Descriptors</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {organization.voiceProfile?.toneDescriptors?.map((t: string) => (
+                    {organization?.voiceProfile?.toneDescriptors?.map((t: string) => (
                       <span key={t} className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md text-[9px] font-extrabold border border-indigo-100 uppercase">{t}</span>
                     ))}
                   </div>
@@ -7085,9 +7091,9 @@ We bridge the gap between ADR theory and transformative community practice by fo
                   <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1.5">Writing Maturity Score</span>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
-                      <div className="bg-indigo-600 h-full" style={{ width: `${organization.voiceProfile?.maturityScore || 80}%` }}></div>
+                      <div className="bg-indigo-600 h-full" style={{ width: `${organization?.voiceProfile?.maturityScore || 80}%` }}></div>
                     </div>
-                    <span className="font-bold text-slate-700 text-xs">{organization.voiceProfile?.maturityScore || 80}%</span>
+                    <span className="font-bold text-slate-700 text-xs">{organization?.voiceProfile?.maturityScore || 80}%</span>
                   </div>
                 </div>
               </div>
