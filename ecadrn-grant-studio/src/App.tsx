@@ -8073,6 +8073,9 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
   const [showGuide, setShowGuide] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<any>(null);
   const [savingPartner, setSavingPartner] = useState<string | null>(null);
+  const [searchMode, setSearchMode] = useState<'all' | 'funders' | 'schools' | 'partnerships'>('all');
+  const [stateFilter, setStateFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'alignment' | 'name' | 'type'>('alignment');
 
   const guideSteps = [
     { title: "Find ADR Partners", content: "Search for ADR organizations, university programs, law school dispute resolution clinics, community mediation centers, and foundations across the US that support or fund nonprofits in the ADR space." },
@@ -8088,11 +8091,20 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
     setSearching(true);
     setHasSearched(true);
     try {
+      const modeLabels: Record<string, string> = {
+        all: 'all types',
+        funders: 'organizations that have donated to or funded ADR nonprofits',
+        schools: 'universities, law schools, and school programs that fund or sponsor ADR nonprofits',
+        partnerships: 'organizations open to partnerships, in-kind support, or program collaboration'
+      };
+      const geoScope = stateFilter ? `${stateFilter}, United States` : 'United States';
       const results = await callAI('find-adr-partners', {
         orgProfile: organization,
         focusAreas: searchTerm || 'ADR, conflict resolution, restorative justice, access to justice, mediation',
-        geographicScope: 'United States',
-        partnerType: filterType === 'All' ? 'all' : filterType
+        geographicScope: geoScope,
+        partnerType: filterType === 'All' ? (searchMode === 'funders' ? 'Foundation' : searchMode === 'schools' ? 'University' : 'all') : filterType,
+        searchMode: searchMode,
+        searchModeLabel: modeLabels[searchMode]
       });
       if (Array.isArray(results)) {
         // Sort by alignment score
@@ -8185,7 +8197,13 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
 
   const filteredPartners = partners.filter((p: any) => {
     if (filterType !== 'All' && p.type !== filterType) return false;
+    if (stateFilter && p.location && !p.location.toLowerCase().includes(stateFilter.toLowerCase())) return false;
     return true;
+  }).sort((a: any, b: any) => {
+    if (sortBy === 'alignment') return (b.alignmentScore || 0) - (a.alignmentScore || 0);
+    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+    if (sortBy === 'type') return (a.type || '').localeCompare(b.type || '');
+    return 0;
   });
 
   const typeColors: Record<string, string> = {
@@ -8215,6 +8233,27 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
 
       {/* Search bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+        {/* Search mode tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { id: 'all', label: '🔍 All Partners', },
+            { id: 'funders', label: '💰 Funders & Donors' },
+            { id: 'schools', label: '🎓 Schools & Universities' },
+            { id: 'partnerships', label: '🤝 Partnership Ops' },
+          ].map(mode => (
+            <button
+              key={mode.id}
+              onClick={() => setSearchMode(mode.id as any)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                searchMode === mode.id
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -8227,6 +8266,13 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
+          <input
+            type="text"
+            placeholder="State (e.g. NY, CA, TX)..."
+            value={stateFilter}
+            onChange={(e) => setStateFilter(e.target.value)}
+            className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none w-32"
+          />
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
@@ -8241,6 +8287,15 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
             <option>Foundation</option>
             <option>Professional Association</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none cursor-pointer"
+          >
+            <option value="alignment">Sort: Alignment</option>
+            <option value="name">Sort: Name</option>
+            <option value="type">Sort: Type</option>
+          </select>
           <button
             onClick={searchPartners}
             disabled={searching}
@@ -8251,7 +8306,10 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
         </div>
         {!hasSearched && (
           <p className="text-sm text-slate-500 text-center py-4">
-            Click "Find Partners" to search the web for ADR organizations, school programs, and foundations across the US that support nonprofits like ECADRN.
+            {searchMode === 'funders' ? 'Search for foundations and organizations that have donated to ADR nonprofits.' :
+             searchMode === 'schools' ? 'Search for universities, law schools, and educational programs that fund or sponsor ADR work.' :
+             searchMode === 'partnerships' ? 'Search for organizations open to partnerships, in-kind support, and program collaboration.' :
+             'Click "Find Partners" to search the web for ADR organizations, school programs, and foundations across the US that support nonprofits like ECADRN.'}
           </p>
         )}
       </div>
