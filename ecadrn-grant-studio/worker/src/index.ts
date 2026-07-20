@@ -971,5 +971,16 @@ export default {
     }
 
     return json({ error: 'Not found' }, 404);
+
+    } catch (globalError: any) {
+      console.error('Unhandled worker error:', globalError);
+      return new Response(JSON.stringify({ 
+        error: 'Internal Server Error', 
+        details: globalError.message || String(globalError) 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
   }
 };

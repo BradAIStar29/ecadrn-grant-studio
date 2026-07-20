@@ -248,10 +248,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
   }
 }
 
-export default function App() {
-  const [user, setUser] = useState<any>(null);
-  const toasts = useToasts();
-  // Safe localStorage access — won't crash in private browsing or blocked storage
+// Safe localStorage access — won't crash in private browsing or blocked storage
 const safeLocalStorage = {
   getItem: (key: string): string | null => {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -267,6 +264,10 @@ const parseTimeSafe = (dateStr: any): number => {
   const t = new Date(dateStr).getTime();
   return isNaN(t) ? 0 : t;
 };
+
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const toasts = useToasts();
 
 const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
     return (safeLocalStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
@@ -2130,7 +2131,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
 
     const unsubPresence = onSnapshot(collection(db, propPath, 'presence'), (snap) => {
       const now = new Date().getTime();
-      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any => p?.lastSeen && !isNaN(new Date(p.lastSeen).getTime())) && (now - new Date(p.lastSeen).getTime() < 45000))));
+      setPresence(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => {
+      const t = parseTimeSafe(p?.lastSeen);
+      return t > 0 && (now - t) < 45000;
+    }));
     }, (err) => handleFirestoreError(err, OperationType.LIST, propPath + '/presence'));
 
     return () => {
