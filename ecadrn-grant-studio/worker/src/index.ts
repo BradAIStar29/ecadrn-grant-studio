@@ -583,7 +583,7 @@ INSTRUCTIONS:
 6. If a proposal is referenced, mention its title and how it aligns with the funder.
 
 OUTPUT FORMAT — Return ONLY this JSON. No markdown fences.
-{"subject": "string — compelling subject line", "body": "string — the email body, with proper paragraph breaks using \n\n"};
+{"subject": "string — compelling subject line", "body": "string — the email body, with proper paragraph breaks using \n\n"}`;
 
     case 'humanize-proposal':
       return `You are a grant writing editor who specializes in making proposals sound authentic, compelling, and human — not like AI-generated text.
