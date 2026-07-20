@@ -81,7 +81,8 @@ import {
   addDoc, 
   deleteDoc,
   orderBy,
-  limit
+  limit,
+  getDoc
 } from 'firebase/firestore';
 import { callAI } from './services/api';
 import ReactQuill from 'react-quill';
@@ -274,6 +275,7 @@ export default function App() {
   // The Firestore org namespace to use for all data ops
   const orgId = activeWorkspace === 'shared' ? SHARED_ORG_ID : (user?.uid || '');
   const [loading, setLoading] = useState(true);
+  const [firestoreHealth, setFirestoreHealth] = useState<null | "ok" | "error">(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -333,6 +335,27 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     if (activeWorkspace === 'personal' && !user?.uid) return; // uid not yet resolved
+
+    // ── Firestore Health Check ──────────────────────────────────────────────
+    // Detect if Firestore security rules are deployed. If the rules are
+    // locked down (production mode with no rules), every read returns 403.
+    // We probe with a lightweight read and set a flag so the UI can show
+    // a helpful banner instead of a silent empty dashboard.
+    {
+      const healthPath = `organizations/${orgId}`;
+      getDoc(doc(db, healthPath)).then(snap => {
+        setFirestoreHealth('ok');
+      }).catch(err => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('permission') || msg.includes('403') || msg.includes('insufficient')) {
+          setFirestoreHealth('error');
+        } else {
+          // Non-permission error (e.g. network) — don't show the rules banner
+          setFirestoreHealth('ok');
+        }
+      });
+    }
+
 
     // Deadline reminder check — toast for critical upcoming deadlines
     if (grants && grants.length > 0) {
@@ -471,7 +494,7 @@ CORE PROGRAMS:
       md += `### Proposal ${i+1}: ${p.title}\n`;
       md += `**Funder:** ${p.funder}\n`;
       md += `**Description:** ${p.description}\n\n`;
-      if (p.sections) {
+      if (p.sections && Array.isArray(p.sections)) {
         p.sections.forEach((s: any) => {
           md += `#### ${s.title}\n\n${s.content.replace(/<[^>]*>/g, '')}\n\n`;
         });
@@ -593,6 +616,30 @@ CORE PROGRAMS:
 
   return (
     <ErrorBoundary>
+        {/* Firestore Health Warning */}
+        {firestoreHealth === 'error' && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.7-3L13.7 4a2 2 0 00-3.4 0L3.3 16A2 2 0 005 19z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-amber-800">Firestore security rules not deployed</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Data can't load until rules are deployed. Run{" "}
+                  <code className="bg-amber-100 px-1 rounded text-xs">firebase deploy --only firestore:rules --project gen-lang-client-0456143672</code>{" "}
+                  locally, or see <code className="bg-amber-100 px-1 rounded text-xs">FIRESTORE_FIX.md</code> in the repo.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => window.open('https://github.com/BradAIStar29/ecadrn-grant-studio/blob/main/FIRESTORE_FIX.md', '_blank')}
+              className="text-xs text-amber-700 hover:text-amber-900 underline flex-shrink-0 ml-4"
+            >
+              View guide →
+            </button>
+          </div>
+        )}
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
       <motion.aside 
