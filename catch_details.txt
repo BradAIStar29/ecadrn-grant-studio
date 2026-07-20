@@ -1,0 +1,245 @@
+=== LINE 266 ===
+catch {{ return []; }
+======================
+
+=== LINE 450 ===
+catch (e: any) {{
+      if (e.code !== 'auth/popup-closed-by-user') {
+        alert('Sign in failed: ' + e.message);
+      }
+    }
+======================
+
+=== LINE 1402 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Failed to generate draft. Check your internet connection and try again.');
+    }
+======================
+
+=== LINE 1777 ===
+catch (err: any) {{
+                          showToast('AI comparison failed: ' + err.message, 'error');
+                        }
+======================
+
+=== LINE 2053 ===
+catch (e) {{
+        // Non-critical — presence update failure shouldn't crash the editor
+        console.warn('Presence update failed:', e);
+      }
+======================
+
+=== LINE 2129 ===
+catch (e) {{
+      console.error(e);
+    }
+======================
+
+=== LINE 2148 ===
+catch (e: any) {{
+      console.error(e);
+      showToast(e?.message || 'Save failed.');
+    }
+======================
+
+=== LINE 2206 ===
+catch (e) {{
+      console.error(e);
+    }
+======================
+
+=== LINE 2256 ===
+catch (e) {{
+      console.error(e);
+    }
+======================
+
+=== LINE 2500 ===
+catch (err: any) {{
+                          console.error(err);
+                          showToast(err?.message || 'AI rewrite failed.');
+                        }
+======================
+
+=== LINE 2717 ===
+catch (err: any) {{
+                              console.error(err);
+                              showToast(err?.message || 'Humanizer failed.');
+                            }
+======================
+
+=== LINE 3226 ===
+catch (e) {{
+        console.error(e);
+      }
+======================
+
+=== LINE 3353 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Failed to add funder. Make sure the website URL is valid.');
+    }
+======================
+
+=== LINE 3392 ===
+catch (e) {{
+      return false;
+    }
+======================
+
+=== LINE 3473 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Funder research failed. The AI may be busy — try again in a moment.');
+    }
+======================
+
+=== LINE 4524 ===
+catch (err: any) {{
+      addLog('');
+      addLog('❌ Error: ' + (err?.message || 'Unknown error'));
+      addLog('   Please try again or add more context about the grant.');
+      setStep('input');
+    }
+======================
+
+=== LINE 4560 ===
+catch {{
+      setChatHistory(prev => [...prev, { role: 'agent', text: 'Sorry, I hit an error. Try again.' }]);
+    }
+======================
+
+=== LINE 5194 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Voice suggestion failed. Try adding more writing samples first.');
+    }
+======================
+
+=== LINE 5285 ===
+catch (err: any) {{
+          console.error(err);
+          setUploadError(`Failed to analyze uploaded grant: ${err.message}`);
+          showToast(err?.message || 'Upload analysis failed.');
+          setIsUploading(false);
+        }
+======================
+
+=== LINE 5297 ===
+catch (err: any) {{
+      console.error(err);
+      setUploadError(err.message);
+      showToast(err?.message || 'Could not read file. Make sure it is a supported format (txt, pdf, docx).');
+      setIsUploading(false);
+    }
+======================
+
+=== LINE 5351 ===
+catch (err) {{
+      console.error("Failed to compute ECADRN alignment:", err);
+    }
+======================
+
+=== LINE 5504 ===
+catch (err: any) {{
+          log(`  ❌ Failed: ${grant.title}: ${err.message}`);
+        }
+======================
+
+=== LINE 5513 ===
+catch (err: any) {{
+      log(`❌ Autopilot error: ${err.message}`);
+    }
+======================
+
+=== LINE 5568 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Discovery failed.');
+    }
+======================
+
+=== LINE 6555 ===
+catch (err: any) {{
+      console.error(err);
+      showToast(err?.message || 'Funder alignment analysis failed.');
+    }
+======================
+
+=== LINE 6637 ===
+catch (err: any) {{
+      clearInterval(interval);
+      console.error(err);
+      showToast(err?.message || 'Voice analysis failed.');
+    }
+======================
+
+=== LINE 6701 ===
+catch (err: any) {{
+      console.error(err);
+      setFunderSyncMsg(`Error saving funder profile: ${err.message}`);
+    }
+======================
+
+=== LINE 6722 ===
+catch (e) {{
+      console.error(e);
+    }
+======================
+
+=== LINE 6738 ===
+catch (err) {{
+      console.error(err);
+    }
+======================
+
+=== LINE 7529 ===
+catch (err) {{
+      console.error(err);
+    }
+======================
+
+=== LINE 7560 ===
+catch (err) {{
+      console.error(err);
+    }
+======================
+
+=== LINE 7759 ===
+catch (err) {{
+      setMessages(prev => [...prev, { role: 'assistant', text: "Strategic uplink interrupted. Please retry your request." }]);
+    }
+======================
+
+=== LINE 8270 ===
+catch (err: any) {{
+      showToast('Search failed: ' + err.message, 'error');
+      setPartners([]);
+    }
+======================
+
+=== LINE 8309 ===
+catch (err: any) {{
+      showToast('Failed to save funder: ' + err.message + '. Check your connection and try again.', 'error');
+    }
+======================
+
+=== LINE 8347 ===
+catch (err: any) {{
+      showToast('Failed to send to Autopilot: ' + err.message + '. Try saving as a funder first.', 'error');
+    }
+======================
+
+=== LINE 8718 ===
+catch (err) {{
+      console.error(err);
+    }
+======================
+
+=== LINE 8751 ===
+catch (err) {{
+                console.error(err);
+              }
+======================
+
