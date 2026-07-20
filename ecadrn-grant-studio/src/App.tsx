@@ -183,7 +183,7 @@ const SHARED_ORG_ID = 'ecadrn-shared';
 // ── Toast notification system ────────────────────────────────────────────────
 let _toastId = 0;
 let _toastSetter: ((toasts: any[] | ((prev: any[]) => any[])) => void) | null = null;
-export function showToast(msg: string, type: 'error' | 'success' = 'error') {
+export function showToast(msg: string, type: 'error' | 'success' | 'info' = 'error') {
   const id = ++_toastId;
   if (_toastSetter) {
     _toastSetter((prev: any[]) => [...prev, { id, msg, type }]);
@@ -529,6 +529,9 @@ CORE PROGRAMS:
       } else if (mod && e.key === 'a') {
         e.preventDefault();
         setActiveTab('network');
+      } else if (mod && e.key === 'y') {
+        e.preventDefault();
+        setActiveTab('analytics');
       } else if (mod && e.key === 'b') {
         e.preventDefault();
         setIsSidebarOpen(s => !s);
@@ -828,7 +831,7 @@ CORE PROGRAMS:
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
             {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
-          {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}}
+          {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}
           </AnimatePresence>
         </div>
 
@@ -898,6 +901,7 @@ CORE PROGRAMS:
                 { keys: '⌘ F', label: 'Go to Funder Intelligence' },
                 { keys: '⌘ C', label: 'Go to Calendar' },
                 { keys: '⌘ A', label: 'Go to ADR Network' },
+                { keys: '⌘ Y', label: 'Go to Analytics' },
                 { keys: '⌘ B', label: 'Toggle sidebar' },
                 { keys: 'Esc', label: 'Close overlays' },
               ].map(({ keys, label }) => (
@@ -920,9 +924,9 @@ CORE PROGRAMS:
               initial={{ opacity: 0, y: 20, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.9 }}
-              className={`pointer-events-auto px-5 py-3 rounded-xl shadow-lg font-medium text-sm ${t.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}
+              className={`pointer-events-auto px-5 py-3 rounded-xl shadow-lg font-medium text-sm ${t.type === 'error' ? 'bg-red-600 text-white' : t.type === 'info' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'}`}
             >
-              {t.type === 'error' && '⚠️ '}{t.msg}
+              {t.type === 'error' && '⚠️ '}{t.type === 'info' && 'ℹ️ '}{t.msg}
             </motion.div>
           ))}
         </AnimatePresence>
