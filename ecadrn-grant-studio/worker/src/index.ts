@@ -200,9 +200,18 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
 }`;
 
     case 'research-funder':
-      return `You are a nonprofit fundraising strategist specializing in foundation research and ADR/conflict resolution sector funding.
+      return `You are a nonprofit fundraising strategist specializing in foundation research and ADR/conflict resolution sector funding. You have access to web search — USE IT EXTENSIVELY.
 
-TASK: Generate a comprehensive strategic intelligence report on the funder below.
+TASK: Conduct a DEEP WEB-RESEARCHED intelligence report on the funder below. Search the web for real, current information — do NOT rely on training data alone.
+
+SEARCH INSTRUCTIONS — perform these searches:
+1. Search for the funder's official website and their "grant" or "funding" page — read their actual giving priorities, eligibility, and application requirements.
+2. Search for the funder's most recent IRS Form 990 or annual report — find their actual grant amounts, grantee names, and total giving.
+3. Search for recent news about the funder's strategic priorities, leadership changes, or new initiatives.
+4. Search for profiles of this funder on grantcenter.org, candid.org, or charitynavigator.org.
+5. Search for nonprofits similar to ECADRN that have received funding from this funder — find past grantees in the ADR, mediation, restorative justice, or access-to-justice space.
+6. Search for the funder's application deadlines, LOI requirements, and submission process.
+7. Search for any recent RFPs, funding announcements, or giving guidelines published by this funder.
 
 FUNDER:
 Name: ${data.funderName}
@@ -214,21 +223,33 @@ Notes: ${data.funderNotes}
 APPLYING ORGANIZATION:
 ${JSON.stringify(data.orgProfile)}
 
+ECADRN MISSION: Equity Center for Alternative Dispute Resolution & Negotiation — supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+
+⚠️ STRICT ANTI-HALLUCINATION RULES:
+1. ONLY report information you found via web search or can verify from the funder's official sources.
+2. If you cannot find specific data (e.g., exact grant amounts from 990s), state "Not publicly available" rather than guessing.
+3. Past grantees must be REAL organizations — do not fabricate grantee names.
+4. Application deadlines must be from the funder's official site or known grant databases — do not invent dates.
+5. If the funder's website is not accessible or you cannot find reliable info, note this in "funderOverview".
+
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
 {
-  "funderOverview": "string",
+  "funderOverview": "string — 2-3 paragraph summary based on web research, including their mission, history, and current strategic direction",
   "funderType": "Foundation | Corporation | University | Government | Community Foundation",
-  "givingPriorities": ["string"],
-  "typicalGrantees": ["string"],
-  "fundingRanges": "string",
+  "givingPriorities": ["string — actual giving priorities from their website or 990"],
+  "typicalGrantees": ["string — REAL past grantees found via web search, especially ADR/mediation/restorative justice orgs"],
+  "fundingRanges": "string — actual grant ranges from 990s or website, with source attribution",
   "geographicFocus": "string",
-  "applicationProcess": "string",
+  "applicationProcess": "string — actual process from their website: LOI required? Full proposal? Rolling or cyclical? Deadline dates?",
   "missionAlignmentScore": number,
-  "missionAlignmentRationale": "string",
-  "recentStrategicShifts": "string",
-  "whatTheyDontFund": ["string"],
-  "applicationTips": ["string"],
-  "recommendedApproach": "string"
+  "missionAlignmentRationale": "string — 3-4 sentences on specific alignment with ECADRN's ADR mission, citing the funder's actual priorities",
+  "recentStrategicShifts": "string — any recent changes in leadership, priorities, or giving patterns found via web search",
+  "whatTheyDontFund": ["string — from their website or guidelines"],
+  "applicationTips": ["string — 5-8 actionable tips based on research, e.g., 'Emphasize measurable outcomes' or 'LOI due in February'"],
+  "recommendedApproach": "string — 3-4 sentence strategy on how ECADRN should approach this funder",
+  "recentGrants": [{"grantee": "string — real org name", "amount": "string — real amount if known", "year": "string", "purpose": "string"}],
+  "deadlineInfo": "string — upcoming deadlines or application windows, or 'Rolling/No fixed deadline'",
+  "researchConfidence": "high | medium | low — based on how much verifiable info was found via web search"
 }`;
 
     case 'discover-grants':
@@ -596,9 +617,19 @@ Content: ${data.content || ''}`;
 
 
     case 'find-adr-partners':
-      return `You are a research specialist in Alternative Dispute Resolution (ADR) organizations, university programs, and educational institutions in the United States that support or fund nonprofits in the ADR, conflict resolution, restorative justice, and access-to-justice space.
+      return `You are a research specialist in Alternative Dispute Resolution (ADR) organizations, university programs, and educational institutions in the United States. You have access to web search — USE IT EXTENSIVELY to find REAL organizations.
 
-TASK: Identify REAL, VERIFIABLE organizations, school programs, and schools in the US that have donated to, sponsored, or partnered with nonprofits like ECADRN. Focus on finding potential funding partners and collaboration opportunities.
+TASK: Search the web to identify REAL, VERIFIABLE organizations, school programs, and schools in the US that have donated to, sponsored, or partnered with nonprofits like ECADRN. Focus on finding potential funding partners and collaboration opportunities.
+
+SEARCH INSTRUCTIONS — perform these searches:
+1. Search for "university dispute resolution program funding nonprofit" and "law school ADR clinic community partnership"
+2. Search for "community mediation center grant funding" and "bar association dispute resolution section nonprofit support"
+3. Search for foundations that specifically fund ADR, restorative justice, or conflict resolution work
+4. Search for "alternative dispute resolution education program donation" and "restorative justice university program funding"
+5. Search for state-level ADR offices and government programs that support community mediation
+6. Search for professional associations (ACR, ABA Section of Dispute Resolution, etc.) that offer grants or partnerships
+7. For each result, search for their specific funding/partnership history with nonprofits
+8. Search for "ADR nonprofit funding sources" and "conflict resolution organization grants"
 
 SEARCH PARAMETERS:
 Organization profile: ${JSON.stringify(data.orgProfile || {}).slice(0, 3000)}
@@ -609,26 +640,30 @@ Partner type: ${data.partnerType || 'all'}
 ECADRN MISSION: Equity Center for Alternative Dispute Resolution & Negotiation — supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
 
 ⚠️ STRICT ANTI-HALLUCINATION RULES:
-1. ONLY include organizations that ACTUALLY EXIST. Include real names, real websites, real programs.
-2. Do NOT invent organizations or programs. If you are not certain, exclude it.
-3. Include REAL contact information where available — websites, email domains, program directors if known.
+1. ONLY include organizations that ACTUALLY EXIST and can be verified via web search. Include real names, real websites, real programs.
+2. Do NOT invent organizations or programs. If you are not certain an organization exists, exclude it.
+3. Include REAL contact information found via web search — websites, email addresses, phone numbers, program directors if known.
 4. Focus on US-based institutions: universities with ADR/mediation clinics, law schools with dispute resolution programs, community mediation centers, bar association dispute resolution sections, state ADR offices, and foundations that fund ADR work.
-5. For each result, explain HOW they could support ECADRN — funding, partnership, in-kind support, program collaboration.
+5. For each result, explain HOW they could support ECADRN — funding, partnership, in-kind support, program collaboration, internship hosting, research collaboration.
+6. Include specific details about past funding or partnerships with ADR nonprofits if found via web search.
+7. Prioritize organizations that have a HISTORY of donating to or funding nonprofits in the ADR/conflict resolution space.
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 [
   {
     "name": "string — real organization/school/program name",
     "type": "University | Law School | Community Organization | Bar Association | Government Office | Foundation | Professional Association",
-    "website": "string — real URL",
+    "website": "string — real URL verified via web search",
     "location": "string — city, state",
     "programOrDepartment": "string — specific ADR/dispute resolution program or department name",
     "adrFocus": ["string — ADR-related focus areas"],
-    "fundingHistory": "string — known history of funding or supporting ADR nonprofits, or 'Unknown'",
-    "contactInfo": "string — email, phone, or contact page URL if known",
+    "fundingHistory": "string — known history of funding or supporting ADR nonprofits found via web search, or 'No public funding history found'",
+    "contactInfo": "string — email, phone, or contact page URL if known from web search",
     "partnershipPotential": "string — 2-3 sentences on how ECADRN could partner with or seek funding from this organization",
     "alignmentScore": number — 0-100 how well aligned with ECADRN mission,
-    "verified": boolean
+    "verified": boolean,
+    "fundingType": "string — 'Direct Grant' | 'Sponsorship' | 'Partnership' | 'In-kind Support' | 'Program Collaboration' | 'Internship/Training' | 'Unknown'",
+    "estimatedFundingRange": "string — estimated or known funding range, e.g., '$5,000-$25,000' or 'Unknown'"
   }
 ]`;
 
