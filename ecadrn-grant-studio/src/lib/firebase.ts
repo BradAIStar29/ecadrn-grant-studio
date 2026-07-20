@@ -30,9 +30,13 @@ export interface FirestoreErrorInfo {
       providerId?: string | null;
       email?: string | null;
     }[];
-  }
+  };
 }
 
+/**
+ * Logs a Firestore error with full context. Does NOT throw — returns null
+ * so callers can degrade gracefully instead of crashing the React tree.
+ */
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -49,8 +53,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     },
     operationType,
     path
-  }
+  };
   const errorJson = JSON.stringify(errInfo);
   console.error('Firestore Error: ', errorJson);
-  throw new Error(errorJson);
+  return null;
 }
