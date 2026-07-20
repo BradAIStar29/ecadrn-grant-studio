@@ -1,20 +1,14 @@
 {
-  "functions": [
+  "firestore": [
     {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "*.local"
-      ]
+      "database": "(default)",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "ai-studio-bad18069-1a94-4ead-b188-10dcbdd2eee2",
+      "rules": "firestore.rules"
     }
   ],
-  "firestore": {
-    "rules": "firestore.rules"
-  },
   "hosting": {
     "public": "dist",
     "ignore": [
