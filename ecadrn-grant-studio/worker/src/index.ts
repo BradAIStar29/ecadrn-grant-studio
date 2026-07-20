@@ -636,6 +636,11 @@ Organization profile: ${JSON.stringify(data.orgProfile || {}).slice(0, 3000)}
 Focus areas: ${data.focusAreas || 'ADR, conflict resolution, restorative justice, access to justice, mediation, peer mediation'}
 Geographic scope: ${data.geographicScope || 'United States'}
 Partner type: ${data.partnerType || 'all'}
+Search mode: ${data.searchMode || 'all'} — ${data.searchModeLabel || 'Find all types of partners'}
+
+If searchMode is 'funders', PRIORITIZE organizations with a known history of donating to or funding ADR nonprofits.
+If searchMode is 'schools', PRIORITIZE universities, law schools, and educational programs that have sponsored or partnered with ADR nonprofits.
+If searchMode is 'partnerships', PRIORITIZE organizations open to program collaboration, in-kind support, and research partnerships.
 
 ECADRN MISSION: Equity Center for Alternative Dispute Resolution & Negotiation — supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
 
