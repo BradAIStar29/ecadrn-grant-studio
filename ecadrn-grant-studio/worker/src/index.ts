@@ -14,7 +14,7 @@ function getPrompt(action: string, data: any): string {
     case 'generate-draft':
       const funderIntelSection = data.funderIntelligence
         ? `
-FUNDER INTELLIGENCE (from prior research — use this to tailor the proposal):
+FUNDER INTELLIGENCE (from prior web research — use this to tailor the proposal):
 Giving Priorities: ${JSON.stringify(data.funderIntelligence.givingPriorities || [])}
 What They Fund: ${JSON.stringify(data.funderIntelligence.whatTheyFund || [])}
 What They DON'T Fund: ${JSON.stringify(data.funderIntelligence.whatTheyDontFund || [])}
@@ -23,6 +23,9 @@ Recommended Approach: ${data.funderIntelligence.recommendedApproach || 'N/A'}
 Mission Alignment Rationale: ${data.funderIntelligence.missionAlignmentRationale || 'N/A'}
 Key Selection Criteria: ${JSON.stringify(data.funderIntelligence.keySelectionCriteria || [])}
 Typical Grantees: ${JSON.stringify(data.funderIntelligence.typicalGrantees || [])}
+Recent Grants (from 990s/web): ${JSON.stringify(data.funderIntelligence.recentGrants || [])}
+Deadline Info: ${data.funderIntelligence.deadlineInfo || 'N/A'}
+Research Confidence: ${data.funderIntelligence.researchConfidence || 'medium'}
 
 IMPORTANT: Use the funder intelligence above to:
 - Mirror their giving priorities language directly in each section
@@ -30,7 +33,10 @@ IMPORTANT: Use the funder intelligence above to:
 - Follow their application tips explicitly
 - Frame the proposal using their recommended approach
 - Reference their typical grantees as comparables when relevant
-- Address each key selection criterion systematically`
+- Address each key selection criterion systematically
+- Reference their recent grants to show you understand their giving patterns
+- If research confidence is 'low', keep claims general and avoid asserting specific facts about the funder
+- If recent grants show a pattern (e.g. preference for community-based programs), emphasize that alignment`
         : '';
 
       return `You are an expert nonprofit grant writer with deep experience in Alternative Dispute Resolution, conflict resolution, access to justice, and civic equity funding.
