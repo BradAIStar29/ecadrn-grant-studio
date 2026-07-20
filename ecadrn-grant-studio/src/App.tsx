@@ -1228,7 +1228,10 @@ function ProposalsView({
             recommendedApproach: funderIntel.recommendedApproach || '',
             missionAlignmentRationale: funderIntel.missionAlignmentRationale || '',
             keySelectionCriteria: funderIntel.keySelectionCriteria || [],
-            typicalGrantees: funderIntel.typicalGrantees || []
+            typicalGrantees: funderIntel.typicalGrantees || [],
+            recentGrants: funderIntel.recentGrants || [],
+            deadlineInfo: funderIntel.deadlineInfo || '',
+            researchConfidence: funderIntel.researchConfidence || 'medium'
           } : null
         });
         sections = data;
@@ -5310,7 +5313,10 @@ Deadline: 2026-11-15`;
               recommendedApproach: funderIntel.recommendedApproach || '',
               missionAlignmentRationale: funderIntel.missionAlignmentRationale || '',
               keySelectionCriteria: funderIntel.keySelectionCriteria || [],
-              typicalGrantees: funderIntel.typicalGrantees || []
+              typicalGrantees: funderIntel.typicalGrantees || [],
+              recentGrants: funderIntel.recentGrants || [],
+              deadlineInfo: funderIntel.deadlineInfo || '',
+              researchConfidence: funderIntel.researchConfidence || 'medium'
             } : null
           });
 
