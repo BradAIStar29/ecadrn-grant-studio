@@ -4883,6 +4883,10 @@ function GrantsView({
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
   const [autopilotMode, setAutopilotMode] = useState<'assisted' | 'full'>('assisted');
   const [pipelineFilter, setPipelineFilter] = useState('All');
+  const [savedSearches, setSavedSearches] = useState<any[]>([]);
+  const [showSaveSearch, setShowSaveSearch] = useState(false);
+  const [newSearchName, setNewSearchName] = useState('');
+  const [showSavedSearches, setShowSavedSearches] = useState(false);
 
   const PIPELINE_STAGES = ['Discovered', 'Researching', 'Drafting', 'Submitted', 'Awarded', 'Declined'];
 
@@ -4892,6 +4896,62 @@ function GrantsView({
     await setDoc(docRef, { pipelineStage: stage, updatedAt: new Date().toISOString() }, { merge: true })
       .catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
   };
+
+  // Load saved searches from Firestore
+  useEffect(() => {
+    if (!orgId) return;
+    const searchPath = `organizations/${orgId}/savedSearches`;
+    const q = query(collection(db, searchPath));
+    const unsub = onSnapshot(q, (snap) => {
+      const items: any[] = [];
+      snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+      items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      setSavedSearches(items);
+    }, (err) => handleFirestoreError(err, OperationType.READ, searchPath));
+    return () => unsub();
+  }, [orgId]);
+
+  const saveSearch = async () => {
+    if (!newSearchName.trim() || !orgId) return;
+    const searchPath = `organizations/${orgId}/savedSearches`;
+    const searchData = {
+      name: newSearchName.trim(),
+      focusAreas: organization?.voiceProfile?.focusAreas || organization?.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice'],
+      geographicFocus: organization?.geographicFocus || filterGeoFocus !== 'All' ? filterGeoFocus : 'National',
+      amountMin: organization?.typicalGrantMin || 10000,
+      amountMax: organization?.typicalGrantMax || 100000,
+      searchQuery: organization?.discoveryKeywords || '',
+      filterText: filterText,
+      filterTag: filterGrantTag,
+      hideUnverified: hideUnverified,
+      pipelineFilter: pipelineFilter,
+      createdBy: user?.email || 'unknown',
+      createdAt: new Date().toISOString()
+    };
+    await addDoc(collection(db, searchPath), searchData)
+      .catch(e => handleFirestoreError(e, OperationType.WRITE, searchPath));
+    setNewSearchName('');
+    setShowSaveSearch(false);
+    showToast('✓ Search saved', 'success');
+  };
+
+  const runSavedSearch = async (search: any) => {
+    // Apply the saved filters
+    if (search.filterText) setFilterText(search.filterText);
+    if (search.filterTag) setFilterGrantTag(search.filterTag);
+    if (search.hideUnverified !== undefined) setHideUnverified(search.hideUnverified);
+    if (search.pipelineFilter) setPipelineFilter(search.pipelineFilter);
+    if (search.geographicFocus && search.geographicFocus !== 'All') setFilterGeoFocus(search.geographicFocus);
+    setShowSavedSearches(false);
+    showToast(`Applied: ${search.name}`, 'success');
+  };
+
+  const deleteSavedSearch = async (searchId: string) => {
+    const searchPath = `organizations/${orgId}/savedSearches`;
+    await deleteDoc(doc(db, searchPath, searchId))
+      .catch(e => handleFirestoreError(e, OperationType.DELETE, searchPath));
+  };
+
   const [autopilotRunning, setAutopilotRunning] = useState(false);
   const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
   const [autopilotOpen, setAutopilotOpen] = useState(false);
@@ -5158,7 +5218,11 @@ Deadline: 2026-11-15`;
         log(`  📌 ${g.title} (${g.funderName}) — ${g.matchScore}% match`);
       }
 
-      const topGrants = savedGrants.filter(g => g.matchScore >= 75).slice(0, 3);
+      // Pick top grants by alignment score — include both autopilot-discovered and ADR Network grants
+      const allEligibleGrants = savedGrants.filter(g => 
+        (g.matchScore >= 70 || g.ecadrnAlignmentScore >= 70 || g.source === 'adr-network')
+      );
+      const topGrants = allEligibleGrants.slice(0, 5);
       log(`
 ✍️ Drafting proposals for top ${topGrants.length} grant(s)...`);
 
@@ -5387,6 +5451,50 @@ Deadline: 2026-11-15`;
             </button>
           </div>
           </div>
+          {/* Saved Searches Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSavedSearches(!showSavedSearches)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-slate-300 transition-all"
+            >
+              <Bookmark size={14} />
+              Saved
+              {savedSearches.length > 0 && <span className="text-[9px] bg-indigo-600 text-white px-1.5 rounded-full">{savedSearches.length}</span>}
+            </button>
+            {showSavedSearches && (
+              <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto">
+                {savedSearches.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">No saved searches yet. Apply filters and save your current search.</div>
+                ) : (
+                  savedSearches.map(s => (
+                    <div key={s.id} className="flex items-center justify-between p-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 group">
+                      <div className="flex-1 cursor-pointer" onClick={() => runSavedSearch(s)}>
+                        <p className="text-xs font-bold text-slate-700">{s.name}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {s.geographicFocus || 'All'} · {s.filterText || 'No filter'} · {s.pipelineFilter || 'All stages'}
+                        </p>
+                        <p className="text-[9px] text-slate-300">by {s.createdBy || 'unknown'} · {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : ''}</p>
+                      </div>
+                      <button
+                        onClick={() => deleteSavedSearch(s.id)}
+                        className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 p-1 transition-opacity"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          {/* Save Current Search Button */}
+          <button
+            onClick={() => setShowSaveSearch(!showSaveSearch)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-slate-300 transition-all"
+          >
+            <Save size={14} />
+            Save Search
+          </button>
           <button 
             onClick={runDiscovery}
             disabled={isDiscovering}
@@ -5405,6 +5513,41 @@ Deadline: 2026-11-15`;
         </div>
       </div>
 
+      {/* ── Save Search Modal ── */}
+      {showSaveSearch && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Save size={14} /> Save Current Search</h4>
+            <button onClick={() => setShowSaveSearch(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+          </div>
+          <p className="text-[11px] text-slate-500">Saves your current filters, geographic focus, tag filter, pipeline stage, and verification toggle. Anyone on the team can re-apply it later.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search name (e.g. 'National ADR grants 50k-150k')"
+              value={newSearchName}
+              onChange={(e) => setNewSearchName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveSearch(); }}
+              className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              onClick={saveSearch}
+              disabled={!newSearchName.trim()}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              Save
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
+            <span className="bg-white px-2 py-1 rounded-full border border-slate-200">Geo: {filterGeoFocus}</span>
+            <span className="bg-white px-2 py-1 rounded-full border border-slate-200">Tag: {filterGrantTag}</span>
+            <span className="bg-white px-2 py-1 rounded-full border border-slate-200">Stage: {pipelineFilter}</span>
+            <span className="bg-white px-2 py-1 rounded-full border border-slate-200">Verified: {hideUnverified ? 'Only' : 'All'}</span>
+            {filterText && <span className="bg-white px-2 py-1 rounded-full border border-slate-200">Text: "{filterText}"</span>}
+          </div>
+        </div>
+      )}
+
       {/* ── Autopilot Panel ── */}
       {autopilotOpen && (
         <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-2xl p-6 space-y-4">
@@ -5415,7 +5558,7 @@ Deadline: 2026-11-15`;
               </div>
               <div>
                 <h4 className="font-black text-slate-900 text-sm">Grant Autopilot</h4>
-                <p className="text-[11px] text-slate-500">Search → Draft → Review/Submit. Full cycle, hands-free.</p>
+                <p className="text-[11px] text-slate-500">Search → Draft → Review/Submit. Full cycle, hands-free. Includes grants from Discovery, Voice Suggestions, and ADR Network.</p>
               </div>
             </div>
             <button onClick={() => setAutopilotOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -7956,6 +8099,42 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
     }
   };
 
+  const sendToAutopilot = async (partner: any) => {
+    // Save as a grant in the grants collection with source 'adr-network'
+    // and tag it for autopilot pickup
+    try {
+      const grantsPath = `organizations/${orgId}/grants`;
+      const grantsRef = collection(db, grantsPath);
+      const grantData = {
+        title: partner.name + ' — Partnership Opportunity',
+        funderName: partner.name,
+        funderType: partner.type || 'Foundation',
+        description: partner.partnershipPotential || partner.fundingHistory || 'ADR network partner — see partnership potential.',
+        focusAreas: partner.adrFocus || ['ADR', 'Conflict Resolution'],
+        geographicFocus: partner.location || 'United States',
+        amountMin: 5000,
+        amountMax: 50000,
+        deadline: null,
+        url: partner.website || null,
+        alignmentRationale: partner.partnershipPotential || 'ADR Network partner with alignment to ECADRN mission.',
+        verified: !!partner.verified,
+        ecadrnAlignmentScore: partner.alignmentScore || 50,
+        tags: ['ADR Network', partner.type || 'Partner', ...(partner.adrFocus || [])].filter(Boolean),
+        status: 'discovery',
+        pipelineStage: 'Discovered',
+        source: 'adr-network',
+        partnerType: partner.type,
+        partnerContact: partner.contactInfo || '',
+        updatedAt: new Date().toISOString(),
+        discoveredBy: user?.email || 'adr-network'
+      };
+      const ref = await addDoc(grantsRef, grantData);
+      showToast(`✓ Sent to Grant Matcher: ${partner.name}. Go to Grants → Autopilot to draft a proposal.`, 'success');
+    } catch (err: any) {
+      showToast('Failed to send to Autopilot: ' + err.message, 'error');
+    }
+  };
+
   const filteredPartners = partners.filter((p: any) => {
     if (filterType !== 'All' && p.type !== filterType) return false;
     return true;
@@ -8117,14 +8296,23 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => saveAsFunder(partner)}
-                    disabled={savingPartner === partner.name}
-                    className="shrink-0 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {savingPartner === partner.name ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                    Save as Funder
-                  </button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      onClick={() => saveAsFunder(partner)}
+                      disabled={savingPartner === partner.name}
+                      className="bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {savingPartner === partner.name ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                      Save as Funder
+                    </button>
+                    <button
+                      onClick={() => sendToAutopilot(partner)}
+                      className="bg-violet-50 hover:bg-violet-100 text-violet-600 px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border border-violet-100"
+                    >
+                      <Sparkles size={12} />
+                      Autopilot
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             ))}
