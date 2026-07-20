@@ -129,13 +129,13 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Funder Intelligence + Web Search",
     tab: 'funders',
-    content: "Add any funder by website URL and the AI searches the web in real-time to research their actual giving priorities, recent grants, deadlines, and strategic priorities. Funder intelligence now feeds directly into Autopilot proposals — the AI uses real funder research to shape every section.",
+    content: "Add any funder by website URL and the AI performs deep web research — searching their official site, IRS 990 filings, past grantee records, recent strategic shifts, and upcoming deadlines. Each report includes real recent grants with amounts, deadline windows, and a research confidence rating. This intelligence feeds directly into Autopilot proposals.",
     highlight: "funders-view"
   },
   {
     title: "NEW: ADR Network Finder",
     tab: 'network',
-    content: "Discover ADR organizations, university programs, law school dispute resolution clinics, and community mediation centers across the US that have donated to or partnered with nonprofits like ECADRN. Search by type, see contact info, and find potential funding partners and collaborators.",
+    content: "Search the web to discover ADR organizations, university programs, law school clinics, community mediation centers, bar associations, and foundations across the US that have donated to or partnered with nonprofits like ECADRN. Results show funding type (direct grant, sponsorship, partnership), estimated funding ranges, contact info, and partnership potential. Save any result to your Funder Database or send it to Autopilot.",
     highlight: "network-view"
   },
   {
@@ -3214,7 +3214,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
 
   const guideSteps = [
     { title: "Add a Funder", content: "Paste any funder's website URL into the search bar and click AI Research. The AI now searches the web in real-time to find their actual giving priorities, recent grants, deadlines, and strategic priorities — not just training data." },
-    { title: "Web-Powered Research", content: "Funder Intelligence now uses Google Search grounding. The AI searches for the funder's official pages, recent 990 filings, news about strategic shifts, and past grantees to build a comprehensive, current intelligence report." },
+    { title: "Deep Web-Powered Research", content: "Funder Intelligence uses Google Search grounding to research each funder's official website, recent IRS 990 filings, past grantee records, strategic priorities, and upcoming deadlines. The report now includes real recent grants with amounts, deadline windows, and a research confidence rating (high/medium/low) so you know how much was web-verified." },
     { title: "Relationship Stages", content: "Each funder card has a stage selector. Move prospects through: Prospect → Initial Contact → LOI Submitted → Proposal Pending → Active → Declined. Keeps the whole team aligned." },
     { title: "AI Intelligence Refresh", content: "Funder priorities change. Click the ✦ sparkles icon on any card to run a fresh web-powered AI analysis. The strategic intelligence report updates immediately with the latest data from the web." },
     { title: "Filter & Search", content: "Use the relationship stage filter and keyword search bar to narrow your funder pipeline. Tags (auto-generated from giving areas) are also filterable." },
@@ -4167,6 +4167,44 @@ function FunderCard({
                     <p className="text-[10.5px] text-slate-600 leading-relaxed font-semibold font-sans italic">
                       "{f.intelligence.recentStrategicShifts}"
                     </p>
+                  </div>
+                )}
+                
+                {f.intelligence?.deadlineInfo && f.intelligence.deadlineInfo !== "N/A" && f.intelligence.deadlineInfo !== "Rolling/No fixed deadline" && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left">
+                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest block mb-1 font-mono">⏰ Upcoming Deadlines</span>
+                    <p className="text-[10.5px] text-amber-700 leading-relaxed font-semibold font-sans">
+                      {f.intelligence.deadlineInfo}
+                    </p>
+                  </div>
+                )}
+
+                {f.intelligence?.recentGrants && Array.isArray(f.intelligence.recentGrants) && f.intelligence.recentGrants.length > 0 && (
+                  <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-left">
+                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block mb-2 font-mono">💰 Recent Grants (from 990s/web)</span>
+                    <div className="space-y-1.5">
+                      {f.intelligence.recentGrants.slice(0, 5).map((grant: any, gi: number) => (
+                        <div key={gi} className="flex items-start justify-between gap-2 text-[10px]">
+                          <div className="flex-1">
+                            <span className="font-bold text-slate-700">{grant.grantee || 'Unknown'}</span>
+                            {grant.purpose && <span className="text-slate-400 block text-[9px]">{grant.purpose}</span>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            {grant.amount && <span className="font-bold text-emerald-600">{grant.amount}</span>}
+                            {grant.year && <span className="text-slate-400 block text-[9px]">{grant.year}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {f.intelligence?.researchConfidence && (
+                  <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest">
+                    <span className="text-slate-400">Research confidence:</span>
+                    <span className={f.intelligence.researchConfidence === 'high' ? 'text-emerald-600' : f.intelligence.researchConfidence === 'medium' ? 'text-amber-600' : 'text-slate-400'}>
+                      {f.intelligence.researchConfidence === 'high' ? '● High (web-verified)' : f.intelligence.researchConfidence === 'medium' ? '● Medium' : '○ Low'}
+                    </span>
                   </div>
                 )}
                 
@@ -8292,6 +8330,20 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
                       <p className="text-xs text-slate-600 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 mb-3">
                         <span className="font-bold text-indigo-700">💡 Partnership:</span> {partner.partnershipPotential}
                       </p>
+                    )}
+                    {(partner.fundingType || partner.estimatedFundingRange) && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {partner.fundingType && (
+                          <span className="text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full">
+                            💵 {partner.fundingType}
+                          </span>
+                        )}
+                        {partner.estimatedFundingRange && partner.estimatedFundingRange !== 'Unknown' && (
+                          <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            {partner.estimatedFundingRange}
+                          </span>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-center gap-3">
                       {partner.website && (
