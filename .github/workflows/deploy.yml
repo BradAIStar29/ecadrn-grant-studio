@@ -45,9 +45,7 @@ jobs:
   deploy-firestore-rules:
     name: Deploy Firestore Rules
     runs-on: ubuntu-latest
-    continue-on-error: true
-    # This job uses GitHub OIDC + Google Workload Identity Federation
-    # No service account key file needed — uses OIDC token exchange
+    # NOTE: continue-on-error removed so failures are visible in GitHub Actions UI
     steps:
       - uses: actions/checkout@v4
 
@@ -58,41 +56,24 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # Authenticate using GitHub OIDC → Google WIF token exchange
+      - name: Debug — Print OIDC token audience
+        run: |
+          echo "Repo: $GITHUB_REPOSITORY"
+          echo "Run ID: $GITHUB_RUN_ID"
+          echo "WIF Provider: projects/457031665165/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+          echo "Service Account: github-deployer@gen-lang-client-0456143672.iam.gserviceaccount.com"
+
       - name: Authenticate to Google Cloud (WIF)
         id: wif-auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER || 'projects/457031665165/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT || 'github-deployer@gen-lang-client-0456143672.iam.gserviceaccount.com' }}
+          workload_identity_provider: 'projects/457031665165/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-deployer@gen-lang-client-0456143672.iam.gserviceaccount.com'
           export_google_credentials: true
 
-      - name: Deploy Firestore Rules (WIF)
-        if: success()
+      - name: Deploy Firestore Rules
         run: |
-          echo "Deploying rules to project: ${{ secrets.FIREBASE_PROJECT_ID }}"
-          firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
-        working-directory: ecadrn-grant-studio
-
-      - name: WIF Failed — Try Service Account Key Fallback
-        if: failure() && steps.wif-auth.outcome == 'failure'
-        run: |
-          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
-            echo "⚠️ Neither WIF nor FIREBASE_SERVICE_ACCOUNT is configured."
-            echo "Firestore rules NOT deployed. The app will show empty data after login."
-            echo ""
-            echo "To fix, do ONE of:"
-            echo "  1. Set WIF_PROVIDER and WIF_SERVICE_ACCOUNT GitHub secrets"
-            echo "  2. Set FIREBASE_SERVICE_ACCOUNT GitHub secret (service account JSON key)"
-            echo "  3. Run: node ecadrn-grant-studio/deploy-firestore-rules.mjs locally"
-            echo ""
-            echo "See: ecadrn-grant-studio/FIRESTORE_FIX.md for detailed instructions"
-            exit 1
-          else
-            echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/service-account.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json
-            firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} --non-interactive
-          fi
+          firebase deploy --only firestore:rules --project gen-lang-client-0456143672 --non-interactive
         working-directory: ecadrn-grant-studio
 
   deploy-pages:
