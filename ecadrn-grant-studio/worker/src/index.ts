@@ -559,13 +559,31 @@ Line Item: ${data.description || ''}
 Amount: $${data.amount || 0}`;
 
     case 'generate-outreach-email':
-      return `Write a professional outreach email. Return JSON: {"subject": "string", "body": "string"}
+      return `Write a professional outreach email for a nonprofit fundraising context. You have access to web search — use it to research the funder if needed.
 
 Email Type: ${data.emailType || 'introduction'}
 Funder: ${JSON.stringify(data.funder || {})}
-Organization: ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation)
+Organization: ${JSON.stringify(data.organization || { name: 'ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation)' })}
+${data.proposal ? 'Related Proposal: ' + JSON.stringify(data.proposal) : ''}
+${data.voiceProfile ? 'Voice Profile (match this tone): ' + JSON.stringify(data.voiceProfile) : ''}
+${data.funderIntelligence ? 'FUNDER INTELLIGENCE (from research): ' + JSON.stringify(data.funderIntelligence) : ''}
 
-Keep the email concise, professional, and tailored to the funder's priorities.`;
+EMAIL TYPE GUIDELINES:
+- introduction (Cold Intro): 250-300 words. Introduce ECADRN, reference the funder's giving priorities, propose a brief call. Tone: warm but professional.
+- loi (Letter of Inquiry): 350-400 words. Formal structure: org intro, program description, alignment to funder priorities, specific ask amount range, next steps.
+- followup (Follow-Up): 150-200 words. Reference prior contact, reiterate alignment, suggest next step. Tone: gracious, not pushy.
+- thankyou (Thank You): 100-150 words. Express gratitude, mention impact, keep door open for future.
+
+INSTRUCTIONS:
+1. If funder intelligence is provided, reference their ACTUAL giving priorities, recent grants, or strategic focus areas — not generic language.
+2. Match the organization's voice profile tone if provided.
+3. Be specific about ECADRN's programs: early-career ADR professional support, trauma-informed mediation, peer networks, restorative circles, access to justice.
+4. Do NOT use generic fundraising cliches ("we are writing to...", "we hope this email finds you well").
+5. Include a clear, specific call-to-action appropriate to the email type.
+6. If a proposal is referenced, mention its title and how it aligns with the funder.
+
+OUTPUT FORMAT — Return ONLY this JSON. No markdown fences.
+{"subject": "string — compelling subject line", "body": "string — the email body, with proper paragraph breaks using \n\n"};
 
     case 'humanize-proposal':
       return `You are a grant writing editor who specializes in making proposals sound authentic, compelling, and human — not like AI-generated text.

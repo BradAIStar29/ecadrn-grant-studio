@@ -1,0 +1,172 @@
+Total catch blocks: 37
+--- Line 266 ---
+   return []; }
+--- Line 450 ---
+  
+        if (e.code !== 'auth/popup-closed-by-user') {
+          alert('Sign in failed: ' + e.message);
+        }
+      }
+--- Line 1399 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Failed to generate draft. Check your internet connection and try again.');
+      }
+--- Line 1774 ---
+  
+                            showToast('AI comparison failed: ' + err.message, 'error');
+                          }
+--- Line 2050 ---
+  
+          // Non-critical — presence update failure shouldn't crash the editor
+          console.warn('Presence update failed:', e);
+        }
+--- Line 2126 ---
+  
+        console.error(e);
+      }
+--- Line 2145 ---
+  
+        console.error(e);
+        showToast(e?.message || 'Save failed.');
+      }
+--- Line 2203 ---
+  
+        console.error(e);
+      }
+--- Line 2253 ---
+  
+        console.error(e);
+      }
+--- Line 2497 ---
+  
+                            console.error(err);
+                            showToast(err?.message || 'AI rewrite failed.');
+                          }
+--- Line 2714 ---
+  
+                                console.error(err);
+                                showToast(err?.message || 'Humanizer failed.');
+                              }
+--- Line 3223 ---
+  
+          console.error(e);
+        }
+--- Line 3350 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Failed to add funder. Make sure the website URL is valid.');
+      }
+--- Line 3389 ---
+  
+        return false;
+      }
+--- Line 3470 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Funder research failed. The AI may be busy — try again in a moment.');
+      }
+--- Line 4521 ---
+  
+        addLog('');
+        addLog('❌ Error: ' + (err?.message || 'Unknown error'));
+        addLog('   Please try again or add more context about the grant.');
+        setStep('input');
+  ...
+--- Line 4557 ---
+  
+        setChatHistory(prev => [...prev, { role: 'agent', text: 'Sorry, I hit an error. Try again.' }]);
+      }
+--- Line 5191 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Voice suggestion failed. Try adding more writing samples first.');
+      }
+--- Line 5282 ---
+  
+            console.error(err);
+            setUploadError(`Failed to analyze uploaded grant: ${err.message}`);
+            showToast(err?.message || 'Upload analysis failed.');
+            setIsUploading(false);
+  ...
+--- Line 5294 ---
+  
+        console.error(err);
+        setUploadError(err.message);
+        showToast(err?.message || 'Could not read file. Make sure it is a supported format (txt, pdf, docx).');
+        setIsUploading(false);
+  ...
+--- Line 5348 ---
+  
+        console.error("Failed to compute ECADRN alignment:", err);
+      }
+--- Line 5501 ---
+  
+            log(`  ❌ Failed: ${grant.title}: ${err.message}`);
+          }
+--- Line 5510 ---
+  
+        log(`❌ Autopilot error: ${err.message}`);
+      }
+--- Line 5565 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Discovery failed.');
+      }
+--- Line 6552 ---
+  
+        console.error(err);
+        showToast(err?.message || 'Funder alignment analysis failed.');
+      }
+--- Line 6634 ---
+  
+        clearInterval(interval);
+        console.error(err);
+        showToast(err?.message || 'Voice analysis failed.');
+      }
+--- Line 6698 ---
+  
+        console.error(err);
+        setFunderSyncMsg(`Error saving funder profile: ${err.message}`);
+      }
+--- Line 6719 ---
+  
+        console.error(e);
+      }
+--- Line 6735 ---
+  
+        console.error(err);
+      }
+--- Line 7526 ---
+  
+        console.error(err);
+      }
+--- Line 7557 ---
+  
+        console.error(err);
+      }
+--- Line 7756 ---
+  
+        setMessages(prev => [...prev, { role: 'assistant', text: "Strategic uplink interrupted. Please retry your request." }]);
+      }
+--- Line 8267 ---
+  
+        showToast('Search failed: ' + err.message, 'error');
+        setPartners([]);
+      }
+--- Line 8306 ---
+  
+        showToast('Failed to save funder: ' + err.message + '. Check your connection and try again.', 'error');
+      }
+--- Line 8344 ---
+  
+        showToast('Failed to send to Autopilot: ' + err.message + '. Try saving as a funder first.', 'error');
+      }
+--- Line 8715 ---
+  
+        console.error(err);
+      }
+--- Line 8748 ---
+  
+                  console.error(err);
+                }

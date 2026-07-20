@@ -513,6 +513,15 @@ CORE PROGRAMS:
       } else if (mod && e.key === 'p') {
         e.preventDefault();
         setActiveTab('proposals');
+      } else if (mod && e.key === 'f') {
+        e.preventDefault();
+        setActiveTab('funders');
+      } else if (mod && e.key === 'c') {
+        e.preventDefault();
+        setActiveTab('calendar');
+      } else if (mod && e.key === 'a') {
+        e.preventDefault();
+        setActiveTab('network');
       } else if (mod && e.key === 'b') {
         e.preventDefault();
         setIsSidebarOpen(s => !s);
@@ -794,7 +803,7 @@ CORE PROGRAMS:
 
         <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
           <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
+            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
             {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} />}
@@ -869,6 +878,9 @@ CORE PROGRAMS:
                 { keys: '⌘ N', label: 'New Proposal' },
                 { keys: '⌘ G', label: 'Go to Grants' },
                 { keys: '⌘ P', label: 'Go to Proposals' },
+                { keys: '⌘ F', label: 'Go to Funder Intelligence' },
+                { keys: '⌘ C', label: 'Go to Calendar' },
+                { keys: '⌘ A', label: 'Go to ADR Network' },
                 { keys: '⌘ B', label: 'Toggle sidebar' },
                 { keys: 'Esc', label: 'Close overlays' },
               ].map(({ keys, label }) => (
@@ -916,6 +928,8 @@ function NavItem({ icon, label, active, onClick, collapsed, id, highlighted, bad
     <button 
       id={id}
       onClick={onClick}
+      aria-label={label}
+      aria-current={active ? 'page' : undefined}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative ${
         highlighted 
           ? 'bg-indigo-600/30 text-indigo-400 ring-4 ring-indigo-500/80 ring-offset-2 ring-offset-slate-900 shadow-[0_0_25px_rgba(99,102,241,0.6)] animate-pulse scale-105 z-30'
@@ -962,9 +976,9 @@ function DeadlineBadge({ deadline }: { deadline: string | Date }) {
 }
 
 function DashboardView({ 
-  organization, proposals, grants, onStartTour, onExportMaster 
+  organization, proposals, grants, funders = [], onStartTour, onExportMaster 
 }: { 
-  organization: any, proposals: any[], grants: any[], onStartTour: () => void, onExportMaster: () => void 
+  organization: any, proposals: any[], grants: any[], funders?: any[], onStartTour: () => void, onExportMaster: () => void 
 }) {
   const activeProposals = (proposals || []).filter(p => p.status === 'draft' || p.status === 'review').length;
   const pendingDeadlines = (grants || []).filter(g => g.deadline && new Date(g.deadline) > new Date()).length;
@@ -976,6 +990,51 @@ function DashboardView({
     awarded: (grants || []).filter(g => g.pipelineStage === 'Awarded').length,
     declined: (grants || []).filter(g => g.pipelineStage === 'Declined').length,
   };
+
+  // Success rate: awarded / (awarded + declined)
+  const totalDecided = grantPipeline.awarded + grantPipeline.declined;
+  const successRate = totalDecided > 0 ? Math.round((grantPipeline.awarded / totalDecided) * 100) : 0;
+
+  // Pipeline value: sum of amountMax for grants that have amounts
+  const pipelineValue = (grants || [])
+    .filter(g => g.pipelineStage !== 'Declined' && g.pipelineStage !== 'Awarded')
+    .reduce((sum: number, g: any) => sum + (g.amountMax || g.amount || 0), 0);
+  const awardedValue = (grants || [])
+    .filter(g => g.pipelineStage === 'Awarded')
+    .reduce((sum: number, g: any) => sum + (g.amountMax || g.amount || 0), 0);
+
+  // Deadline urgency breakdown
+  const now = new Date();
+  const urgentDeadlines = (grants || []).filter(g => {
+    if (!g.deadline) return false;
+    const days = Math.ceil((new Date(g.deadline).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 7;
+  }).length;
+  const upcomingDeadlines = (grants || []).filter(g => {
+    if (!g.deadline) return false;
+    const days = Math.ceil((new Date(g.deadline).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 30;
+  }).length;
+
+  // Funder breakdown by stage
+  const funderStages = {
+    prospect: (funders || []).filter(f => (f.relationshipStage || 'Prospect') === 'Prospect').length,
+    contacted: (funders || []).filter(f => f.relationshipStage === 'Initial Contact' || f.relationshipStage === 'LOI Submitted').length,
+    active: (funders || []).filter(f => f.relationshipStage === 'Active' || f.relationshipStage === 'Proposal Pending').length,
+  };
+
+  // Pipeline stage percentages for visual bar
+  const totalPipeline = grantPipeline.discovered + grantPipeline.researching + grantPipeline.drafting + grantPipeline.submitted + grantPipeline.awarded + grantPipeline.declined;
+  const stagePct = (count: number) => totalPipeline > 0 ? Math.round((count / totalPipeline) * 100) : 0;
+
+  const pipelineStages = [
+    { label: 'Discovered', count: grantPipeline.discovered, color: 'bg-slate-400', pct: stagePct(grantPipeline.discovered) },
+    { label: 'Researching', count: grantPipeline.researching, color: 'bg-blue-400', pct: stagePct(grantPipeline.researching) },
+    { label: 'Drafting', count: grantPipeline.drafting, color: 'bg-indigo-400', pct: stagePct(grantPipeline.drafting) },
+    { label: 'Submitted', count: grantPipeline.submitted, color: 'bg-amber-400', pct: stagePct(grantPipeline.submitted) },
+    { label: 'Awarded', count: grantPipeline.awarded, color: 'bg-emerald-500', pct: stagePct(grantPipeline.awarded) },
+    { label: 'Declined', count: grantPipeline.declined, color: 'bg-rose-300', pct: stagePct(grantPipeline.declined) },
+  ];
 
   return (
     <motion.div 
@@ -1007,48 +1066,137 @@ function DashboardView({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend="+12.4%" />
+        <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend={`${(proposals || []).length} total drafts`} />
         <StatCard title="Verified Matches" value={(grants?.filter((g: any) => g.verified !== false)?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="Verified Only" />
+        <StatCard title="Success Rate" value={totalDecided > 0 ? `${successRate}%` : '—'} icon={<CheckCircle className="text-emerald-600" />} trend={`${grantPipeline.awarded} won / ${totalDecided} decided`} />
+        <StatCard title="Pipeline Value" value={pipelineValue > 0 ? `$${(pipelineValue / 1000).toFixed(0)}K` : '—'} icon={<TrendingUp className="text-amber-600" />} trend={`${grantPipeline.discovered + grantPipeline.researching + grantPipeline.drafting} in progress`} />
+        <StatCard title="Awarded Value" value={awardedValue > 0 ? `$${(awardedValue / 1000).toFixed(0)}K` : '—'} icon={<CheckCircle className="text-emerald-600" />} trend={`${grantPipeline.awarded} grants won`} />
+        <StatCard title="Funders Tracked" value={(funders || []).length.toString()} icon={<Search className="text-indigo-600" />} trend={`${funderStages.prospect} prospects · ${funderStages.active} active`} />
+        <StatCard title="Urgent Deadlines" value={urgentDeadlines.toString()} icon={<Calendar className="text-rose-500" />} trend={`${upcomingDeadlines} within 30 days`} />
         <StatCard title="Voice Maturity" value={`${organization?.voiceProfile?.maturityScore || 78}%`} icon={<Mic className="text-indigo-600" />} trend="Nominal State" />
-        <StatCard title="Grants Awarded" value={grantPipeline.awarded.toString()} icon={<CheckCircle className="text-emerald-600" />} trend={`${grantPipeline.submitted} submitted`} />
-        <StatCard title="In Pipeline" value={(grantPipeline.researching + grantPipeline.drafting).toString()} icon={<TrendingUp className="text-amber-600" />} trend={`${grantPipeline.discovered} discovered`} />
       </div>
 
+      {/* Pipeline visualization bar */}
+      {totalPipeline > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-900 text-sm">Grant Pipeline Flow</h3>
+            <span className="text-xs text-slate-400">{totalPipeline} grants tracked</span>
+          </div>
+          <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
+            {pipelineStages.filter(s => s.count > 0).map(stage => (
+              <div
+                key={stage.label}
+                className={`${stage.color} transition-all duration-500`}
+                style={{ width: `${stage.pct}%` }}
+                title={`${stage.label}: ${stage.count} (${stage.pct}%)`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-4 mt-3">
+            {pipelineStages.filter(s => s.count > 0).map(stage => (
+              <div key={stage.label} className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
+                <span className="text-[10px] font-bold text-slate-600">{stage.label}</span>
+                <span className="text-[10px] text-slate-400">{stage.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        {/* Active Proposals */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-100 flex items-center justify-between mb-4">
-            <h3 className="font-bold text-slate-900">Strategic Priorities</h3>
-            <button className="text-indigo-600 text-xs font-bold uppercase tracking-wider">View All</button>
+            <h3 className="font-bold text-slate-900">Active Proposals</h3>
+            <span className="text-xs text-slate-400 font-bold">{activeProposals} active</span>
           </div>
-          <div className="space-y-4">
-            {(proposals || []).length > 0 ? (proposals || []).slice(0, 3).map(p => (
+          <div className="space-y-3">
+            {(proposals || []).length > 0 ? (proposals || []).slice(0, 5).map(p => (
               <div key={p.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-100">
+                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                    p.status === 'review' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                  }`}>
                     {p.status || 'Draft'}
                   </span>
-                  <span className="text-sm font-medium text-gray-700">{p.title}</span>
+                  <span className="text-sm font-medium text-gray-700 truncate max-w-[180px]">{p.title}</span>
                 </div>
                 <span className="text-xs text-gray-400">{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'Draft'}</span>
               </div>
             )) : (
-              <div className="text-center py-8 text-slate-400 text-sm italic">No active priorities. Start a new proposal.</div>
+              <div className="text-center py-8 text-slate-400 text-sm">
+                <FileText size={24} className="mx-auto mb-2 text-slate-300" />
+                No proposals yet. Go to Proposals to generate a draft.
+              </div>
             )}
-            {grants && grants.length > 0 && grants.filter(g => g.deadline).slice(0, 4).map(g => {
-              const d = new Date(g.deadline);
-              const now = new Date();
-              const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              if (daysLeft < 0) return null;
-              return (
-                <div key={g.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <DeadlineBadge deadline={g.deadline} />
-                    <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{g.title}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{daysLeft}d left · {d.toLocaleDateString()}</span>
+          </div>
+        </div>
+
+        {/* Upcoming Deadlines */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col">
+          <div className="p-2 border-b border-slate-100 flex items-center justify-between mb-4">
+            <h3 className="font-bold text-slate-900">Upcoming Deadlines</h3>
+            <span className="text-xs text-slate-400 font-bold">{pendingDeadlines} pending</span>
+          </div>
+          <div className="space-y-3 flex-1">
+            {grants && grants.filter(g => g.deadline && new Date(g.deadline) > new Date()).length > 0 ? (
+              grants.filter(g => g.deadline && new Date(g.deadline) > new Date())
+                .sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+                .slice(0, 5)
+                .map(g => {
+                  const d = new Date(g.deadline);
+                  const now = new Date();
+                  const daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <div key={g.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <DeadlineBadge deadline={g.deadline} />
+                        <span className="text-sm font-medium text-gray-700 truncate max-w-[180px]">{g.title}</span>
+                      </div>
+                      <span className={`text-xs font-bold ${daysLeft <= 7 ? 'text-rose-600' : daysLeft <= 14 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {daysLeft}d left · {d.toLocaleDateString()}
+                      </span>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                <Calendar size={24} className="mx-auto mb-2 text-slate-300" />
+                No upcoming deadlines. Run a Grant Discovery to find opportunities.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Funder Pipeline + Voice Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+          <h3 className="font-bold text-slate-900 mb-4 px-2">Funder Pipeline</h3>
+          <div className="space-y-3 flex-1">
+            {(funders || []).length > 0 ? (
+              <>
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-sm font-medium text-slate-600">Prospects</span>
+                  <span className="text-lg font-bold text-indigo-600">{funderStages.prospect}</span>
                 </div>
-              );
-            })}
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-sm font-medium text-slate-600">Contacted / LOI</span>
+                  <span className="text-lg font-bold text-amber-600">{funderStages.contacted}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-sm font-medium text-slate-600">Active</span>
+                  <span className="text-lg font-bold text-emerald-600">{funderStages.active}</span>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                <Search size={24} className="mx-auto mb-2 text-slate-300" />
+                No funders tracked yet. Add a funder in Funder Intelligence.
+              </div>
+            )}
           </div>
         </div>
 
@@ -1092,7 +1240,7 @@ function VoiceMetric({ label, value }: VoiceMetricProps) {
 
 function StatCard({ title, value, icon, trend }: { title: string, value: string, icon: React.ReactNode, trend: string }) {
   return (
-    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all" role="img" aria-label={`${title}: ${value}, ${trend}`}>
       <p className="text-sm text-slate-500 font-medium">{title}</p>
       <h2 className="text-3xl font-bold mt-1 text-slate-900">{value}</h2>
       <div className="mt-4 flex items-center gap-2 text-indigo-600 text-sm font-bold">
@@ -1253,7 +1401,7 @@ function ProposalsView({
       setNewProposalData({ title: '', funder: '', description: '' });
     } catch (err: any) {
       console.error(err);
-      showToast(err?.message || 'Failed to generate draft.');
+      showToast(err?.message || 'Failed to generate draft. Check your internet connection and try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -1828,7 +1976,7 @@ function ProposalEditor({
       setDoc(doc(db, propPath), {
         funder: fObj.funderName || '',
         updatedAt: new Date().toISOString()
-      }, { merge: true }).then(() => showToast('Funder saved.', 'success')).catch(err => { console.error("Funder save error:", err); showToast(err?.message || 'Funder save failed.'); });
+      }, { merge: true }).then(() => showToast('Funder saved.', 'success')).catch(err => { console.error("Funder save error:", err); showToast(err?.message || 'Funder save failed. Check your Firestore permissions.'); });
       proposal.funder = fObj.funderName || '';
 
       // Pre-populate 'Budget Narrative' and 'Organizational Capacity' sections if currently blank, minimal, or placeholders
@@ -3204,7 +3352,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       setShowAddManualForm(false);
     } catch (err: any) {
       console.error(err);
-      showToast(err?.message || 'Failed to add funder.');
+      showToast(err?.message || 'Failed to add funder. Make sure the website URL is valid.');
     } finally {
       setIsSubmittingManual(false);
     }
@@ -3324,7 +3472,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       }
     } catch (err: any) {
       console.error(err);
-      showToast(err?.message || 'Funder research failed.');
+      showToast(err?.message || 'Funder research failed. The AI may be busy — try again in a moment.');
     } finally {
       if (funder) setResearchingId(null);
       else setIsResearchingNew(false);
@@ -5045,7 +5193,7 @@ function GrantsView({
       }
     } catch (err: any) {
       console.error(err);
-      showToast(err?.message || 'Voice suggestion failed.');
+      showToast(err?.message || 'Voice suggestion failed. Try adding more writing samples first.');
     } finally {
       setIsVoiceSuggesting(false);
     }
@@ -5149,7 +5297,7 @@ Deadline: 2026-11-15`;
     } catch (err: any) {
       console.error(err);
       setUploadError(err.message);
-      showToast(err?.message || 'File reading failed.');
+      showToast(err?.message || 'Could not read file. Make sure it is a supported format (txt, pdf, docx).');
       setIsUploading(false);
     }
   };
@@ -7406,11 +7554,17 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
           title: relatedProposal.title,
           funder: relatedProposal.funder,
           description: relatedProposal.description || ''
-        } : null
+        } : null,
+        funderIntelligence: selectedFunder.intelligence || null,
+        voiceProfile: organization?.voiceProfile || null
       });
       setGeneratedEmail(typeof result === 'string' ? result : JSON.stringify(result));
-    } catch (err) {
+      if (typeof result === 'object' && result?.subject) {
+        setGeneratedEmail(`Subject: ${result.subject}\n\n${result.body || ''}`);
+      }
+    } catch (err: any) {
       console.error(err);
+      showToast(err?.message || 'Email generation failed. Try again or select a different funder.', 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -7419,6 +7573,7 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
   const copyToClipboard = () => {
     navigator.clipboard.writeText(generatedEmail);
     setCopied(true);
+    showToast('Email copied to clipboard', 'success');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -8159,7 +8314,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
       }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
       showToast('✓ Saved to Funder Database: ' + partner.name, 'success');
     } catch (err: any) {
-      showToast('Failed to save: ' + err.message, 'error');
+      showToast('Failed to save funder: ' + err.message + '. Check your connection and try again.', 'error');
     } finally {
       setSavingPartner(null);
     }
@@ -8197,7 +8352,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
       const ref = await addDoc(grantsRef, grantData);
       showToast(`✓ Sent to Grant Matcher: ${partner.name}. Go to Grants → Autopilot to draft a proposal.`, 'success');
     } catch (err: any) {
-      showToast('Failed to send to Autopilot: ' + err.message, 'error');
+      showToast('Failed to send to Autopilot: ' + err.message + '. Try saving as a funder first.', 'error');
     }
   };
 
@@ -8265,6 +8420,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="Search focus areas for ADR partners"
               placeholder="Search focus areas (e.g. restorative justice, peer mediation, trauma-informed)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -8274,6 +8430,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
           </div>
           <input
             type="text"
+            aria-label="Filter by US state"
             placeholder="State (e.g. NY, CA, TX)..."
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value)}
