@@ -248,11 +248,28 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }> {
   }
 }
 
+// Safe localStorage access — won't crash in private browsing or blocked storage
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  setItem: (key: string, value: string): void => {
+    try { localStorage.setItem(key, value); } catch {}
+  }
+};
+
+// Safe date parsing — returns 0 for invalid dates instead of NaN
+const parseTimeSafe = (dateStr: any): number => {
+  if (!dateStr) return 0;
+  const t = new Date(dateStr).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const toasts = useToasts();
   const [activeWorkspace, setActiveWorkspace] = useState<'personal' | 'shared'>(() => {
-    return (localStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
+    return (safeLocalStorage.getItem('ecadrn_workspace') as 'personal' | 'shared') || 'personal';
   });
   // The Firestore org namespace to use for all data ops
   const orgId = activeWorkspace === 'shared' ? SHARED_ORG_ID : (user?.uid || '');
@@ -270,12 +287,12 @@ export default function App() {
   const [walkthroughStep, setWalkthroughStep] = useState<number | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [importedDocs, setImportedDocs] = useState<Array<{name: string; content: string; importedAt: string}>>(() => {
-    try { return JSON.parse(localStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
+    try { return JSON.parse(safeLocalStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
 
   useEffect(() => {
-    const hasSeen = localStorage.getItem('hasSeenWalkthrough_v2');
+    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
     if (!hasSeen && user) {
       setWalkthroughStep(0);
     }
@@ -606,7 +623,7 @@ CORE PROGRAMS:
                 <button
                   onClick={() => {
                     setActiveWorkspace('personal');
-                    localStorage.setItem('ecadrn_workspace', 'personal');
+                    safeLocalStorage.setItem('ecadrn_workspace', 'personal');
                   }}
                   className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
                     activeWorkspace === 'personal'
@@ -619,7 +636,7 @@ CORE PROGRAMS:
                 <button
                   onClick={() => {
                     setActiveWorkspace('shared');
-                    localStorage.setItem('ecadrn_workspace', 'shared');
+                    safeLocalStorage.setItem('ecadrn_workspace', 'shared');
                   }}
                   className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
                     activeWorkspace === 'shared'
@@ -643,7 +660,7 @@ CORE PROGRAMS:
                 onClick={() => {
                   const next = activeWorkspace === 'personal' ? 'shared' : 'personal';
                   setActiveWorkspace(next);
-                  localStorage.setItem('ecadrn_workspace', next);
+                  safeLocalStorage.setItem('ecadrn_workspace', next);
                 }}
                 title={activeWorkspace === 'personal' ? 'Switch to Team workspace' : 'Switch to Personal workspace'}
                 className={`w-full flex items-center justify-center py-2 rounded-xl transition-colors ${
@@ -874,7 +891,7 @@ CORE PROGRAMS:
             const newDoc = { name: fileName, content: docContent, importedAt: new Date().toISOString() };
             setImportedDocs(prev => {
               const updated = [newDoc, ...prev].slice(0, 20);
-              localStorage.setItem('ecadrn_imported_docs', JSON.stringify(updated));
+              safeLocalStorage.setItem('ecadrn_imported_docs', JSON.stringify(updated));
               return updated;
             });
             // Add a notification
@@ -894,7 +911,7 @@ CORE PROGRAMS:
           onSetActiveTab={setActiveTab}
           onClose={() => {
             setWalkthroughStep(null);
-            localStorage.setItem('hasSeenWalkthrough_v2', 'true');
+            safeLocalStorage.setItem('hasSeenWalkthrough_v2', 'true');
           }} 
         />
       </main>
@@ -1194,7 +1211,7 @@ function DashboardView({
           <div className="space-y-3 flex-1">
             {grants && grants.filter(g => g.deadline && new Date(g.deadline) > new Date()).length > 0 ? (
               grants.filter(g => g.deadline && new Date(g.deadline) > new Date())
-                .sort((a: any, b: any) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+                .sort((a: any, b: any) => parseTimeSafe(a.deadline) - parseTimeSafe(b.deadline))
                 .slice(0, 5)
                 .map(g => {
                   const d = new Date(g.deadline);
