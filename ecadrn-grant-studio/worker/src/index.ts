@@ -817,6 +817,12 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
+    // Wrap all request handling in a top-level try-catch so unhandled errors
+    // return a proper JSON response with CORS headers (instead of a raw 500
+    // that browsers misinterpret as a CORS error)
+    try {
+
+
     // Verify Firebase auth token
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -968,6 +974,11 @@ export default {
           'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.name)}"`,
         },
       });
+    }
+
+    } catch (err: any) {
+      console.error('Unhandled error:', err);
+      return json({ error: `Internal error: ${err.message || err}` }, 500);
     }
 
     return json({ error: 'Not found' }, 404);
