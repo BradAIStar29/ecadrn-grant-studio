@@ -282,11 +282,35 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (!u) setLoading(false);
-    });
-    return unsubscribe;
+    // Wrap onAuthStateChanged with error handling to prevent stale-token hangs.
+    // In normal browsers, Firebase may have a stale auth state in IndexedDB
+    // that can cause the callback to never fire (or throw internally),
+    // leaving the app stuck on the loading screen forever.
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        if (!u) setLoading(false);
+      }, (error) => {
+        console.error('Auth state error (clearing stale session):', error);
+        // Clear any stale Firebase auth state and reset to login screen
+        auth.signOut().catch(() => {});
+        setUser(null);
+        setLoading(false);
+      });
+    } catch (err) {
+      console.error('Failed to initialize auth listener:', err);
+      setUser(null);
+      setLoading(false);
+    }
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, []);
+
+  // Safety net: if auth state doesn't resolve in 8 seconds, stop showing the
+  // loading screen so the user isn't stuck on a blank page (e.g. stale IndexedDB)
+  useEffect(() => {
+    const timeout = setTimeout(() => setLoading(false), 8000);
+    return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
