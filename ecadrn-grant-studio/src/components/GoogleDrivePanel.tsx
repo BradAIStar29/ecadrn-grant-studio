@@ -15,7 +15,7 @@ import { auth } from '../lib/firebase';
 import { GoogleAuthProvider, reauthenticateWithPopup, signInWithPopup } from 'firebase/auth';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.workers.dev';
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface DriveFile {
