@@ -383,9 +383,12 @@ export default function App() {
     // Load Notifications
     const notifPath = `organizations/${orgId}/notifications`;
     const notifRef = collection(db, notifPath);
-    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user?.uid || ''), orderBy('timestamp', 'desc'), limit(20)), (snap) => {
-      // Filter 'read' client-side to avoid needing a composite index
-      const unread = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((n: any) => !n.read);
+    const unsubNotifs = onSnapshot(query(notifRef, where('userId', '==', user?.uid || ''), limit(20)), (snap) => {
+      // Sort + filter client-side to avoid needing composite indexes
+      const unread = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((n: any) => !n.read)
+        .sort((a: any, b: any) => (b.timestamp || '').localeCompare(a.timestamp || ''));
       setNotifications(unread);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, notifPath);
@@ -473,6 +476,7 @@ CORE PROGRAMS:
     });
 
     return () => {
+      unsubNotifs();
       unsubOrg();
       unsubProposals();
       unsubGrants();
@@ -1046,8 +1050,12 @@ CORE PROGRAMS:
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notifications</span>
                        <button 
                          onClick={async () => {
-                           for (const n of notifications) {
-                             await setDoc(doc(db, `organizations/${orgId}/notifications`, n.id), { read: true }, { merge: true });
+                           try {
+                             for (const n of notifications) {
+                               await setDoc(doc(db, `organizations/${orgId}/notifications`, n.id), { read: true }, { merge: true });
+                             }
+                           } catch (e: any) {
+                             console.error('Failed to mark notifications:', e);
                            }
                          }}
                          className="text-[9px] font-bold text-indigo-600 hover:underline"
