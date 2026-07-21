@@ -588,11 +588,15 @@ CORE PROGRAMS:
   }, []);
 
   const saveSettings = async () => {
+    if (!settingsDraft.name?.trim()) {
+      showToast('Organization name cannot be empty.', 'error');
+      return;
+    }
     try {
       const orgRef = doc(db, `organizations/${orgId}`);
       await setDoc(orgRef, {
-        name: settingsDraft.name,
-        profileText: settingsDraft.profileText,
+        name: settingsDraft.name.trim(),
+        profileText: settingsDraft.profileText || '',
         updatedAt: new Date().toISOString()
       }, { merge: true });
       // Save prefs to localStorage
@@ -5717,7 +5721,7 @@ Deadline: 2026-11-15`;
   ];
 
   const runAutopilot = async () => {
-    if (!organization) return;
+    if (!organization || autopilotRunning) return;
     setAutopilotRunning(true);
     setAutopilotLog([]);
     setAutopilotOpen(true);
