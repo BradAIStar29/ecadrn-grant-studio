@@ -277,7 +277,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [firestoreHealth, setFirestoreHealth] = useState<null | "ok" | "error">(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}').sidebarDefault !== 'closed'; } catch { return true; }
+  });
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [proposals, setProposals] = useState<any[]>([]);
@@ -292,6 +294,12 @@ export default function App() {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_imported_docs') || '[]'); } catch { return []; }
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
+  const [showSettings, setShowSettings] = useState(false);
+  // User preferences (persisted to localStorage)
+  const [prefs, setPrefs] = useState(() => {
+    try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}'); } catch { return {}; }
+  });
+  const [settingsDraft, setSettingsDraft] = useState({ name: '', profileText: '' });
 
   useEffect(() => {
     const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
@@ -436,7 +444,7 @@ CORE PROGRAMS:
     // Load Grants
     const grantsPath = `organizations/${orgId}/grants`;
     const grantsRef = collection(db, grantsPath);
-    const unsubGrants = onSnapshot(query(grantsRef, limit(20)), (snap) => {
+    const unsubGrants = onSnapshot(query(grantsRef, limit(prefs.grantPageSize || 20)), (snap) => {
       setGrants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, grantsPath);
@@ -575,6 +583,30 @@ CORE PROGRAMS:
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
+  const saveSettings = async () => {
+    try {
+      const orgRef = doc(db, `organizations/${orgId}`);
+      await setDoc(orgRef, {
+        name: settingsDraft.name,
+        profileText: settingsDraft.profileText,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      // Save prefs to localStorage
+      const updatedPrefs = {
+        ...prefs,
+        grantPageSize: prefs.grantPageSize || 20,
+        deadlineWarningDays: prefs.deadlineWarningDays || 7,
+        sidebarDefault: prefs.sidebarDefault || 'open'
+      };
+      safeLocalStorage.setItem('ecadrn_prefs', JSON.stringify(updatedPrefs));
+      setPrefs(updatedPrefs);
+      setShowSettings(false);
+      showToast('✓ Settings saved successfully', 'success');
+    } catch (e: any) {
+      showToast('Failed to save settings: ' + (e?.message || 'Unknown error'), 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
@@ -616,6 +648,153 @@ CORE PROGRAMS:
 
   return (
     <ErrorBoundary>
+      {/* Settings Modal */}
+      {showSettings && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowSettings(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6 p-6 pb-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Settings size={20} className="text-slate-600" />
+                Settings
+              </h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-100 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-6 pb-6 space-y-6">
+              {/* Organization Profile */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Layout size={16} className="text-indigo-600" />
+                  Organization Profile
+                </h3>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Organization Name</label>
+                <input
+                  type="text"
+                  value={settingsDraft.name}
+                  onChange={(e) => setSettingsDraft(d => ({ ...d, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent mb-3"
+                  placeholder="ECADRN"
+                />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Mission & Background</label>
+                <textarea
+                  value={settingsDraft.profileText}
+                  onChange={(e) => setSettingsDraft(d => ({ ...d, profileText: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+                  rows={5}
+                  placeholder="Describe your organization's mission, vision, and programs..."
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Used by AI to tailor proposals and outreach to your organization.</p>
+              </div>
+
+              {/* Display Preferences */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Layout size={16} className="text-indigo-600" />
+                  Display Preferences
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Grants per page</label>
+                    <select
+                      value={prefs.grantPageSize || 20}
+                      onChange={(e) => setPrefs(p => ({ ...p, grantPageSize: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Deadline warning threshold (days)</label>
+                    <select
+                      value={prefs.deadlineWarningDays || 7}
+                      onChange={(e) => setPrefs(p => ({ ...p, deadlineWarningDays: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value={3}>3 days</option>
+                      <option value={7}>7 days</option>
+                      <option value={14}>14 days</option>
+                      <option value={30}>30 days</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Sidebar default state</label>
+                    <select
+                      value={prefs.sidebarDefault || 'open'}
+                      onChange={(e) => setPrefs(p => ({ ...p, sidebarDefault: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="open">Open</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Info */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Users size={16} className="text-indigo-600" />
+                  Account
+                </h3>
+                <div className="bg-slate-50 rounded-lg p-3 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Email</span>
+                    <span className="text-slate-700 font-medium">{user?.email || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Workspace</span>
+                    <span className="text-slate-700 font-medium capitalize">{activeWorkspace}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Project</span>
+                    <span className="text-slate-700 font-medium text-xs">gen-lang-client-0456143672</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    auth.signOut().catch(() => {});
+                    setShowSettings(false);
+                    setUser(null);
+                  }}
+                  className="w-full mt-3 py-2 px-4 bg-red-50 hover:bg-red-100 text-red-600 font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  Sign Out
+                </button>
+              </div>
+
+              {/* Save / Cancel */}
+              <div className="flex gap-3 pt-2 border-t border-slate-200">
+                <button
+                  onClick={saveSettings}
+                  className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Save size={16} />
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="py-2.5 px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-lg text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         {/* Firestore Health Warning */}
         {firestoreHealth === 'error' && (
           <div className="fixed top-0 left-0 right-0 z-50 bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center justify-between shadow-sm">
@@ -908,7 +1087,14 @@ CORE PROGRAMS:
             >
               <FolderOpen size={20} />
             </button>
-            <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+            <button 
+              onClick={() => {
+                setSettingsDraft({ name: organization?.name || '', profileText: organization?.profileText || '' });
+                setShowSettings(true);
+              }}
+              title="Settings"
+              className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
               <Settings size={20} />
             </button>
           </div>
