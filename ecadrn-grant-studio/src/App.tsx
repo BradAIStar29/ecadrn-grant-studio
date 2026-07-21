@@ -8137,7 +8137,11 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Active • Neural Link Stable</p>
           </div>
         </div>
-        <button className="text-slate-400 hover:text-white transition-colors">
+        <button 
+          onClick={() => setMessages([{ role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals?.length || 0} active projects today?` }])}
+          title="Clear conversation"
+          className="text-slate-400 hover:text-white transition-colors"
+        >
           <X size={20} />
         </button>
       </div>
