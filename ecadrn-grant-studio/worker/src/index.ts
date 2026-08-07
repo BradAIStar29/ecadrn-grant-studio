@@ -1048,7 +1048,7 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
 - Outcome: ${outcome}
 
 ## Proposal Content
-${(proposal.sections || []).map((s: any) => \`### \${s.title}\n\${s.content || ''}\`).join('\n\n') || 'No content provided'}
+${(proposal.sections || []).map((s: any) => '### ' + s.title + '\n' + (s.content || '')).join('\n\n') || 'No content provided'}
 
 ## Funder Intelligence
 ${funder.intelligence || 'No intelligence data available'}
