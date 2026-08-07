@@ -72,6 +72,8 @@ import {
   Trophy,
   RefreshCcwDot,
   TrendingDown,
+  CalendarDays,
+  Flag,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -2562,9 +2564,10 @@ function ProposalEditor({
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [pendingAssignment, setPendingAssignment] = useState<{ sectionIdx: number, user: string } | null>(null);
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline' | 'attachments'>('editor');
+  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline' | 'attachments' | 'versions'>('editor');
   const [budget, setBudget] = useState<any[]>(proposal.budget || []);
   const [attachments, setAttachments] = useState<any[]>(proposal.attachments || []);
+  const [milestones, setMilestones] = useState<any[]>(proposal.milestones || []);
   const [isUploading, setIsUploading] = useState(false);
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -3047,6 +3050,11 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'attachments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Attachments {attachments.length > 0 && `(${attachments.length})`}
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('versions')}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'versions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                Versions {versions.length > 0 && `(${versions.length})`}
               </button>
             </div>
             <div className="h-6 w-px bg-slate-200"></div>
@@ -3824,6 +3832,21 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                   </div>
                 )}
               </div>
+            ) : activeSubTab === 'timeline' ? (
+              <MilestonesTimeline
+                milestones={milestones}
+                onUpdate={(updated) => {
+                  setMilestones(updated);
+                  const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                  setDoc(doc(db, path), { milestones: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true }).catch(() => {});
+                }}
+              />
+            ) : activeSubTab === 'versions' ? (
+              <TimelineView versions={versions} onRevert={(v) => {
+                setSections(v.content);
+                setBudget(v.budget || []);
+                setActiveSubTab('editor');
+              }} />
             ) : (
               <TimelineView versions={versions} onRevert={(v) => {
                 setSections(v.content);
@@ -10374,6 +10397,165 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
           <h4 className="text-sm font-bold text-slate-900 mb-1">Budget Alignment Check</h4>
           <p className="text-xs text-slate-600 leading-relaxed">This budget is automatically mirrored to your Budget Narrative section. AI Advisor suggests including at least 15% indirect costs if the funder allows it.</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Project Milestones Timeline ─────────────────────────────────────────────
+function MilestonesTimeline({ milestones, onUpdate }: { milestones: any[], onUpdate: (m: any[]) => void }) {
+  const [newMilestone, setNewMilestone] = useState({ date: '', title: '', description: '' });
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const addMilestone = () => {
+    if (!newMilestone.title.trim() || !newMilestone.date) return;
+    const item = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...newMilestone,
+      date: newMilestone.date,
+    };
+    const updated = [...(milestones || []), item].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    onUpdate(updated);
+    setNewMilestone({ date: '', title: '', description: '' });
+  };
+
+  const removeMilestone = (id: string) => {
+    onUpdate((milestones || []).filter(m => m.id !== id));
+  };
+
+  const updateMilestone = (id: string, field: string, value: string) => {
+    onUpdate((milestones || []).map(m => m.id === id ? { ...m, [field]: value } : m));
+  };
+
+  const generateTimeline = async () => {
+    setIsGenerating(true);
+    try {
+      const result = await callAI<any[]>('generate-timeline', {
+        description: 'Grant proposal for ADR and conflict resolution programs',
+      });
+      const safe = Array.isArray(result) ? result.map((m: any, i: number) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        date: m.date || m.dueDate || new Date(Date.now() + (i + 1) * 30 * 86400000).toISOString().split('T')[0],
+        title: m.title || m.milestone || `Milestone ${i + 1}`,
+        description: m.description || m.details || '',
+      })) : [];
+      onUpdate(safe);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const sorted = [...(milestones || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  return (
+    <div className="max-w-4xl mx-auto py-8">
+      <div className="flex justify-between items-end mb-12">
+        <div>
+          <h3 className="text-4xl font-black text-slate-900 tracking-tighter mb-2 italic">Project Timeline</h3>
+          <p className="text-slate-500 text-sm font-medium">Build milestone schedules for phased grants and multi-year programs.</p>
+        </div>
+        <button
+          onClick={generateTimeline}
+          disabled={isGenerating}
+          className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100 disabled:opacity-50"
+        >
+          {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+          AI Generate Timeline
+        </button>
+      </div>
+
+      {/* Add milestone form */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-8 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Date</label>
+            <input
+              type="date"
+              value={newMilestone.date}
+              onChange={(e) => setNewMilestone({ ...newMilestone, date: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Title</label>
+            <input
+              type="text"
+              value={newMilestone.title}
+              onChange={(e) => setNewMilestone({ ...newMilestone, title: e.target.value })}
+              placeholder="e.g. Program Launch"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Description</label>
+            <input
+              type="text"
+              value={newMilestone.description}
+              onChange={(e) => setNewMilestone({ ...newMilestone, description: e.target.value })}
+              placeholder="Brief description..."
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+        </div>
+        <button
+          onClick={addMilestone}
+          disabled={!newMilestone.title.trim() || !newMilestone.date}
+          className="w-full py-2.5 flex items-center justify-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:bg-indigo-50 transition-all rounded-lg border border-slate-100 disabled:opacity-50"
+        >
+          <Plus size={14} /> Add Milestone
+        </button>
+      </div>
+
+      {/* Milestone list */}
+      <div className="space-y-4 relative">
+        <div className="absolute left-6 top-0 bottom-0 w-px bg-slate-200"></div>
+        {sorted.length > 0 ? sorted.map((m, idx) => (
+          <div key={m.id} className="relative pl-16 flex items-start gap-4 group">
+            <div className={`absolute left-[22px] w-3 h-3 rounded-full ring-4 z-10 ${idx === 0 ? 'bg-indigo-600 ring-indigo-100' : 'bg-slate-300 ring-white'} transition-all group-hover:scale-125`}>
+              <CalendarDays size={0} className="hidden" />
+            </div>
+            <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm group-hover:shadow-md group-hover:border-indigo-100 transition-all">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1">
+                  <input
+                    type="date"
+                    value={m.date || ''}
+                    onChange={(e) => updateMilestone(m.id, 'date', e.target.value)}
+                    className="text-xs font-bold text-slate-500 bg-transparent border-none outline-none mb-1"
+                  />
+                  <input
+                    type="text"
+                    value={m.title || ''}
+                    onChange={(e) => updateMilestone(m.id, 'title', e.target.value)}
+                    placeholder="Milestone title"
+                    className="text-sm font-black text-slate-900 bg-transparent border-none outline-none w-full"
+                  />
+                </div>
+                <button
+                  onClick={() => removeMilestone(m.id)}
+                  className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <input
+                type="text"
+                value={m.description || ''}
+                onChange={(e) => updateMilestone(m.id, 'description', e.target.value)}
+                placeholder="Add a description..."
+                className="w-full text-sm text-slate-600 bg-transparent border-none outline-none italic placeholder:text-slate-300"
+              />
+            </div>
+          </div>
+        )) : (
+          <div className="text-center py-20 text-slate-400 italic text-sm">
+            <Flag size={32} className="mx-auto mb-3 text-slate-200" />
+            No milestones yet. Add one above or click "AI Generate Timeline" to auto-create a project schedule.
+          </div>
+        )}
       </div>
     </div>
   );
