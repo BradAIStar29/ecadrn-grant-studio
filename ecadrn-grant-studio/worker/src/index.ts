@@ -1030,6 +1030,79 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
 }`;
 
 
+    case 'analyze-win-loss': {
+      const proposal = data.proposal || {};
+      const funder = data.funder || {};
+      const voiceProfile = data.voiceProfile || {};
+      const outcome = data.outcome || 'unknown';
+      const awarded = outcome === 'awarded';
+
+      return `You are a fundraising strategist analyzing ${awarded ? 'a WINNING' : 'a REJECTED'} grant proposal to extract lessons for future applications.
+
+## Proposal Details
+- Title: ${proposal.title || 'Unknown'}
+- Funder: ${funder.funderName || funder.name || 'Unknown'}
+- Funder Type: ${funder.funderType || 'Unknown'}
+- Requested Amount: ${proposal.budgetTotal || proposal.amount || 'Unknown'}
+- Voice Profile Used: ${voiceProfile.name || 'Default'}
+- Outcome: ${outcome}
+
+## Proposal Content
+${(proposal.sections || []).map((s: any) => \`### \${s.title}\n\${s.content || ''}\`).join('\n\n') || 'No content provided'}
+
+## Funder Intelligence
+${funder.intelligence || 'No intelligence data available'}
+
+## Analysis Required
+Analyze ${awarded ? 'why this proposal WON' : 'why this proposal was REJECTED'} and extract actionable insights.
+
+Return JSON:
+{
+  "outcome": "${outcome}",
+  "analysis": {
+    "strengths": ["string — 3-5 things that worked well"],
+    "weaknesses": ["string — 3-5 things that didn't work or were missing"],
+    "funderFit": "string — 0-100 score on how well the proposal matched the funder's priorities",
+    "voiceAlignment": "string — 0-100 score on voice/tone match",
+    "budgetAccuracy": "string — 0-100 score on budget appropriateness",
+    "keyFactors": ["string — the 3 biggest factors that influenced the outcome"]
+  },
+  "lessonsLearned": {
+    "dos": ["string — 3-5 recommendations for future proposals to this funder type"],
+    "donts": ["string — 3-5 things to avoid in future proposals"],
+    "bestPractices": ["string — 2-3 reusable patterns that worked"]
+  },
+  "funderSpecificInsights": "string — specific intelligence about this funder's preferences for future applications",
+  "recommendedVoiceProfile": "string — which voice profile characteristics worked best, or what to try next time",
+  "confidenceScore": "number — 0-100 how confident the AI is in this analysis",
+  "summary": "string — 2-3 sentence executive summary"
+}`;
+    }
+
+    case 'detect-recurring': {
+      const grant = data.grant || {};
+      return `You are a grants research analyst. Analyze this grant opportunity to determine if it is a recurring grant (annual, biannual, quarterly, or cyclical).
+
+## Grant Details
+- Title: ${grant.title || 'Unknown'}
+- Funder: ${grant.funderName || grant.funder || 'Unknown'}
+- Deadline: ${grant.deadline || 'Unknown'}
+- URL: ${grant.url || grant.source || 'Unknown'}
+- Description: ${grant.description || grant.eligibility || 'No description'}
+
+Use web search to verify if this funder offers this grant on a recurring basis. Look for phrases like "annual", "yearly", "cycle", "recurring", "rolling", "next round", "previous cycle".
+
+Return JSON:
+{
+  "isRecurring": boolean,
+  "cycle": "annual" | "biannual" | "quarterly" | "monthly" | "one-time" | "unknown",
+  "estimatedNextCycle": "string — ISO date or human-readable estimate of when the next cycle opens",
+  "confidenceScore": number,
+  "notes": "string — details about the recurring pattern, if found",
+  "historicalData": ["string — past award dates or cycle dates if found via search"]
+}`;
+    }
+
     default:
       return 'INVALID';
   }
