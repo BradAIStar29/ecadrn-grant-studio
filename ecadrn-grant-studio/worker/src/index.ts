@@ -38,13 +38,15 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'identify-missing':        { model: 'gemini-2.5-flash', temperature: 0.5,  category: 'utility',  maxTokens: 8192,  useSearch: false },
   'verify-facts':            { model: 'gemini-2.5-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
   'search-grants':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-};
   'refine-section':         { model: 'gemini-2.5-flash', temperature: 0.6,  category: 'writing',  maxTokens: 16384, useSearch: false },
   'pre-submit-check':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'analyze-competitors':    { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'prioritize-grants':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'explain-diff':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'recommend-funders':     { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'recommend-funders':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-win-loss':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'detect-recurring':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: true  },
+};
 
 const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
 
