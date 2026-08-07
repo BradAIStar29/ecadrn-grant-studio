@@ -600,6 +600,15 @@ Project Description: ${data.projectDescription || ''}
 Line Item: ${data.description || ''}
 Amount: $${data.amount || 0}`;
 
+    case 'generate-timeline':
+      return `Generate a project timeline with milestones for a grant-funded program. Return a JSON array of milestones:
+[{"date": "YYYY-MM-DD", "title": "string", "description": "string"}]
+
+Create 5-8 realistic milestones spanning the project duration. Start dates should be in the near future.
+Each milestone should have a clear title and 1-2 sentence description.
+
+Project Description: ${data.description || 'Grant proposal for ADR and conflict resolution programs'}`;
+
     case 'generate-outreach-email':
       return `Write a professional outreach email for a nonprofit fundraising context. You have access to web search — use it to research the funder if needed.
 
@@ -1115,7 +1124,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
   if (parsed === null || parsed === undefined) return { valid: false, error: 'Null response' };
   if (typeof parsed !== 'object') return { valid: false, error: 'Expected object or array' };
 
-  const arrayActions = ['discover-grants', 'autopilot-search', 'find-adr-partners', 'generate-budget'];
+  const arrayActions = ['discover-grants', 'autopilot-search', 'find-adr-partners', 'generate-budget', 'generate-timeline'];
   if (arrayActions.includes(action)) {
     if (!Array.isArray(parsed)) return { valid: false, error: 'Expected array response' };
     return { valid: true };
