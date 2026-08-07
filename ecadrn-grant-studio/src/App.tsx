@@ -804,6 +804,15 @@ CORE PROGRAMS:
       } else if (mod && e.key === 'y') {
         e.preventDefault();
         setActiveTab('analytics');
+      } else if (mod && e.key === 'o') {
+        e.preventDefault();
+        setActiveTab('outreach');
+      } else if (mod && e.key === 'v') {
+        e.preventDefault();
+        setActiveTab('voice');
+      } else if (mod && e.key === 't') {
+        e.preventDefault();
+        setActiveTab('chat');
       } else if (mod && e.key === 'b') {
         e.preventDefault();
         setIsSidebarOpen(s => !s);
@@ -1440,6 +1449,9 @@ CORE PROGRAMS:
                 { keys: '⌘ C', label: 'Go to Calendar' },
                 { keys: '⌘ A', label: 'Go to ADR Network' },
                 { keys: '⌘ Y', label: 'Go to Analytics' },
+                { keys: '⌘ O', label: 'Go to Outreach' },
+                { keys: '⌘ V', label: 'Go to Voice Profile' },
+                { keys: '⌘ T', label: 'Go to AI Chat' },
                 { keys: '⌘ D', label: 'Toggle dark mode' },
                 { keys: '⌘ B', label: 'Toggle sidebar' },
                 { keys: 'Esc', label: 'Close overlays' },
@@ -6349,6 +6361,7 @@ function GrantsView({
   const [autopilotRunning, setAutopilotRunning] = useState(false);
   const [autopilotLog, setAutopilotLog] = useState<string[]>([]);
   const [autopilotOpen, setAutopilotOpen] = useState(false);
+  const [autopilotConfirm, setAutopilotConfirm] = useState(false);
   const [hideUnverified, setHideUnverified] = useState(true); // Default: only show verified grants
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
   const [agentWriterOpen, setAgentWriterOpen] = useState(false);
@@ -6594,6 +6607,12 @@ Deadline: 2026-11-15`;
 
   const runAutopilot = async () => {
     if (!organization || autopilotRunning) return;
+    if (autopilotMode === 'full' && !autopilotConfirm) {
+      setAutopilotConfirm(true);
+      setTimeout(() => setAutopilotConfirm(false), 5000);
+      return;
+    }
+    setAutopilotConfirm(false);
     setAutopilotRunning(true);
     setAutopilotLog([]);
     setAutopilotOpen(true);
@@ -7057,10 +7076,14 @@ Deadline: 2026-11-15`;
           <button
             onClick={runAutopilot}
             disabled={autopilotRunning}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-3 rounded-xl text-sm font-black uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg"
+            className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${
+              autopilotConfirm
+                ? 'bg-red-600 text-white hover:bg-red-700 animate-pulse'
+                : 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50'
+            }`}
           >
             {autopilotRunning ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
-            {autopilotRunning ? 'Autopilot Running...' : 'Launch Autopilot'}
+            {autopilotRunning ? 'Autopilot Running...' : autopilotConfirm ? '⚠ Click again to confirm Full Agent mode' : 'Launch Autopilot'}
           </button>
 
           {/* Live Log */}
