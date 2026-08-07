@@ -323,6 +323,74 @@ export default function App() {
     return days >= 0 && days <= 7;
   }).length;
   const draftProposalCount = (proposals || []).filter(p => p.status === 'draft' || p.status === 'review').length;
+  const pendingFollowUpCount = (proposals || []).filter(p => p.status === 'submitted').length;
+
+  // Browser notifications for deadlines within 24 hours
+  useEffect(() => {
+    if (!user || !grants?.length) return;
+    if (!('Notification' in window)) return;
+    // Respect user preference (default: enabled)
+    if (prefs.browserNotifications === false) return;
+    // Request permission once on first login
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    if (Notification.permission !== 'granted') return;
+
+    const now = Date.now();
+    const imminent = grants.filter(g => {
+      if (!g.deadline) return false;
+      const hours = (new Date(g.deadline).getTime() - now) / (1000 * 60 * 60);
+      return hours >= 0 && hours <= 24;
+    });
+
+    if (imminent.length === 0) return;
+
+    // Only notify once per grant per session to avoid spam
+    const notifiedKey = 'ecadrn_notified_deadlines';
+    let alreadyNotified: string[] = [];
+    try { alreadyNotified = JSON.parse(safeLocalStorage.getItem(notifiedKey) || '[]'); } catch {}
+
+    const newNotifications = imminent.filter(g => !alreadyNotified.includes(g.id));
+    if (newNotifications.length === 0) return;
+
+    const title = newNotifications.length === 1
+      ? `⏰ Deadline tomorrow: ${newNotifications[0].title || 'Untitled grant'}`
+      : `⏰ ${newNotifications.length} grants due within 24 hours`;
+
+    const body = newNotifications.length === 1
+      ? `${newNotifications[0].funderName || 'Unknown funder'} — due ${new Date(newNotifications[0].deadline).toLocaleDateString()}`
+      : newNotifications.slice(0, 3).map(g => `• ${g.title || 'Untitled'} (${g.funderName || '?'})`).join('\n') + (newNotifications.length > 3 ? `\n+${newNotifications.length - 3} more` : '');
+
+    try {
+      const notif = new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'ecadrn-deadline-alert',
+        requireInteraction: false,
+      });
+      notif.onclick = () => {
+        window.focus();
+        setActiveTab('calendar');
+        notif.close();
+      };
+      // Mark as notified
+      alreadyNotified.push(...newNotifications.map(g => g.id));
+      safeLocalStorage.setItem(notifiedKey, JSON.stringify(alreadyNotified));
+    } catch (e) {
+      console.warn('Notification failed:', e);
+    }
+
+    // Cleanup: prune old notified IDs after 7 days
+    const pruned = alreadyNotified.filter(id => {
+      const g = grants.find(gr => gr.id === id);
+      if (!g || !g.deadline) return false;
+      const days = (new Date(g.deadline).getTime() - now) / (1000 * 60 * 60 * 24);
+      return days > -7; // keep if deadline was within the last 7 days or still upcoming
+    });
+    safeLocalStorage.setItem(notifiedKey, JSON.stringify(pruned));
+  }, [user, grants, prefs.browserNotifications]);
+
   // Global search (Cmd+K)
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -996,6 +1064,39 @@ CORE PROGRAMS:
                 </div>
               </div>
 
+              {/* Notifications */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                  <Bell size={16} className="text-indigo-600" />
+                  Browser Notifications
+                </h3>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prefs.browserNotifications !== false}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        setPrefs(p => ({ ...p, browserNotifications: enabled }));
+                        if (enabled && 'Notification' in window && Notification.permission === 'default') {
+                          Notification.requestPermission();
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <span className="text-sm text-slate-700 dark:text-slate-300">Deadline alerts (24h)</span>
+                      <p className="text-[11px] text-slate-400">Get a browser notification when a grant deadline is within 24 hours.</p>
+                    </div>
+                  </label>
+                  {'Notification' in window && Notification.permission === 'denied' && (
+                    <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2">
+                      Notifications are blocked in your browser settings. Enable them to receive deadline alerts.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Account Info */}
               <div>
                 <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
@@ -1206,6 +1307,7 @@ CORE PROGRAMS:
             collapsed={!isSidebarOpen}
             id="nav-outreach"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'outreach'}
+            badge={pendingFollowUpCount > 0 ? String(pendingFollowUpCount) : undefined}
           />
           <NavItem 
             icon={<MessageSquare size={20} />} 
