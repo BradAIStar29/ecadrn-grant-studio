@@ -4931,6 +4931,112 @@ function FunderNotesField({ funderId, initialNotes, orgId }: { funderId: string,
   );
 }
 
+
+// ── Funder Documents Upload ──────────────────────────────────────────────────
+function FunderDocuments({ funderId, funderName, orgId }: { funderId: string, funderName: string, orgId: string }) {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+
+  useEffect(() => {
+    if (!funderId || !orgId) return;
+    const path = `organizations/${orgId}/funders/${funderId}`;
+    const unsub = onSnapshot(doc(db, path), (snap) => {
+      setDocuments(snap.exists() ? (snap.data()?.documents || []) : []);
+    });
+    return () => unsub();
+  }, [funderId, orgId]);
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setLoading(true);
+    try {
+      const newDocs = Array.from(files).map((f: File) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: auth.currentUser?.email || 'Unknown',
+      }));
+      const updated = [...documents, ...newDocs];
+      const path = `organizations/${orgId}/funders/${funderId}`;
+      await setDoc(doc(db, path), { documents: updated }, { merge: true });
+      setDocuments(updated);
+      setShowUpload(false);
+    } catch (err: any) {
+      console.error('Upload failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeDoc = async (docId: string) => {
+    const updated = documents.filter((d: any) => d.id !== docId);
+    setDocuments(updated);
+    const path = `organizations/${orgId}/funders/${funderId}`;
+    try {
+      await setDoc(doc(db, path), { documents: updated }, { merge: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="px-4 py-3 border-t border-slate-100 -mx-6">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+          <PaperclipIcon size={10} /> Documents {documents.length > 0 && `(${documents.length})`}
+        </span>
+        <button
+          onClick={() => setShowUpload(!showUpload)}
+          className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest hover:underline"
+        >
+          {showUpload ? 'Cancel' : '+ Add'}
+        </button>
+      </div>
+      {showUpload && (
+        <div className="mb-3">
+          <input
+            type="file"
+            multiple
+            className="hidden"
+            id={`funder-doc-upload-${funderId}`}
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+          <button
+            onClick={() => document.getElementById(`funder-doc-upload-${funderId}`)?.click()}
+            disabled={loading}
+            className="w-full py-3 border-2 border-dashed border-slate-200 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+          >
+            {loading ? 'Uploading...' : '990 Filings, Guidelines, Reports...'}
+          </button>
+        </div>
+      )}
+      {documents.length > 0 && (
+        <div className="space-y-1.5">
+          {documents.map((d: any) => (
+            <div key={d.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2 py-1.5 group">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                  <PaperclipIcon size={10} className="text-indigo-500" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 truncate">{d.name}</span>
+              </div>
+              <button
+                onClick={() => removeDoc(d.id)}
+                className="text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FunderCard({ 
   f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick, orgId, onAnalyzeCompetitors
 }: { 
@@ -5411,6 +5517,9 @@ function FunderCard({
               </div>
             </>
           )}
+
+          {/* Funder Documents */}
+          <FunderDocuments funderId={f.id} funderName={f.funderName || f.name || 'Unknown'} orgId={orgId} />
 
           <div className="bg-slate-50 px-4 py-3 border-t border-slate-100 mt-auto -mx-6 -mb-6 flex justify-between items-center">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
@@ -8770,9 +8879,18 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
         funderIntelligence: selectedFunder.intelligence || null,
         voiceProfile: organization?.voiceProfile || null
       });
-      setGeneratedEmail(typeof result === 'string' ? result : JSON.stringify(result));
-      if (typeof result === 'object' && result?.subject) {
-        setGeneratedEmail(`Subject: ${result.subject}\n\n${result.body || ''}`);
+      if (typeof result === 'string') {
+        setGeneratedEmail(result);
+      } else if (result && typeof result === 'object') {
+        if (result.subject || result.body) {
+          setGeneratedEmail(`Subject: ${result.subject || '(No Subject)'}\n\n${result.body || ''}`);
+        } else if (result.email) {
+          setGeneratedEmail(result.email);
+        } else {
+          setGeneratedEmail('Email generation returned an unexpected format. Please try again.');
+        }
+      } else {
+        setGeneratedEmail('Email generation returned an unexpected format. Please try again.');
       }
     } catch (err: any) {
       console.error(err);
