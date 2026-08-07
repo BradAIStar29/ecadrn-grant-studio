@@ -316,6 +316,13 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_dark_mode') || 'false'); } catch { return false; }
   });
+  // Sidebar badge counts
+  const urgentDeadlineCount = (grants || []).filter(g => {
+    if (!g.deadline) return false;
+    const days = Math.ceil((new Date(g.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 7;
+  }).length;
+  const draftProposalCount = (proposals || []).filter(p => p.status === 'draft' || p.status === 'review').length;
   // Global search (Cmd+K)
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1162,6 +1169,7 @@ CORE PROGRAMS:
             collapsed={!isSidebarOpen}
             id="nav-proposals"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'proposals'}
+            badge={draftProposalCount > 0 ? String(draftProposalCount) : undefined}
           />
           <NavItem 
             icon={<Search size={20} />} 
@@ -1216,6 +1224,7 @@ CORE PROGRAMS:
             collapsed={!isSidebarOpen}
             id="nav-calendar"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'calendar'}
+            badge={urgentDeadlineCount > 0 ? String(urgentDeadlineCount) : undefined}
           />
           <NavItem 
             icon={<Network size={20} />} 
@@ -1568,7 +1577,14 @@ function NavItem({ icon, label, active, onClick, collapsed, id, highlighted, bad
       }`}
     >
       <span className={highlighted ? 'text-indigo-400' : active ? 'text-white' : 'text-slate-400'}>{icon}</span>
-      {!collapsed && <span className="text-sm font-medium">{label}</span>}
+      {!collapsed && <span className="text-sm font-medium flex-1 text-left">{label}</span>}
+      {badge && !highlighted && (
+        <span className={`ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black ${
+          badge === '!' ? 'bg-rose-500 text-white animate-pulse' : 'bg-rose-500 text-white'
+        }`}>
+          {badge}
+        </span>
+      )}
       {highlighted && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -2545,6 +2561,7 @@ function ProposalEditor({
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [showDriveExport, setShowDriveExport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<any[]>([]);
@@ -2760,6 +2777,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
 
   const saveProposal = async (auto = false, customMsg: string = '') => {
     if (!auto) setIsSaving(true);
+    if (!auto) setLastSavedAt(new Date());
     if (auto) setAutoSaveStatus('saving');
     try {
       const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
@@ -2769,7 +2787,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         updatedAt: new Date().toISOString(),
         lastEditedBy: auth.currentUser?.email || '',
       }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, propPath));
-      if (auto) { setAutoSaveStatus('saved'); setTimeout(() => setAutoSaveStatus('idle'), 2500); }
+      if (auto) { setAutoSaveStatus('saved'); setLastSavedAt(new Date()); setTimeout(() => setAutoSaveStatus('idle'), 2500); }
 
       if (!auto) {
         const versionsPath = `${propPath}/versions`;
@@ -3159,6 +3177,11 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 ) : (
                   <><span className="text-emerald-500">✓</span> Saved</>
                 )}
+              </span>
+            )}
+            {autoSaveStatus === 'idle' && lastSavedAt && (
+              <span className="text-[9px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                <span className="text-emerald-400">✓</span> Last saved {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
             {/* Guide button */}
