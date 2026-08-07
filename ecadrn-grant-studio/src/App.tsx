@@ -574,83 +574,81 @@ CORE PROGRAMS:
   // ── DOCX Export ────────────────────────────────────────────────────────────
   const exportProposalAsDocx = async (proposal: any) => {
     try {
-      const sections: Paragraph[] = [];
+      const docChildren: any[] = [];
 
       // Title page
-      sections.push(new Paragraph({
+      docChildren.push(new Paragraph({
         text: proposal.title || 'Untitled Proposal',
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
         spacing: { after: 200 },
       }));
-      sections.push(new Paragraph({
+      docChildren.push(new Paragraph({
         text: `Funder: ${proposal.funder || 'N/A'}`,
         alignment: AlignmentType.CENTER,
         spacing: { after: 100 },
       }));
-      sections.push(new Paragraph({
+      docChildren.push(new Paragraph({
         text: `ECADRN - Equity Center for Alternative Dispute Resolution & Negotiation`,
         alignment: AlignmentType.CENTER,
         spacing: { after: 100 },
       }));
-      sections.push(new Paragraph({
+      docChildren.push(new Paragraph({
         text: `Generated: ${new Date().toLocaleDateString()}`,
         alignment: AlignmentType.CENTER,
         spacing: { after: 400 },
       }));
-      sections.push(new Paragraph({ children: [new PageBreak()] }));
+      docChildren.push(new Paragraph({ children: [new PageBreak()] }));
 
       // Budget table if present
       if (proposal.budget && Array.isArray(proposal.budget) && proposal.budget.length > 0) {
-        sections.push(new Paragraph({
+        docChildren.push(new Paragraph({
           text: 'Budget Summary',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 200, after: 100 },
         }));
 
-        const budgetRows = [
-          new TableRow({
-            children: [
-              new TableCell({ children: [new Paragraph({ text: 'Category', bold: true })], width: { size: 40, type: WidthType.PERCENTAGE } }),
-              new TableCell({ children: [new Paragraph({ text: 'Description', bold: true })], width: { size: 40, type: WidthType.PERCENTAGE } }),
-              new TableCell({ children: [new Paragraph({ text: 'Amount', bold: true })], width: { size: 20, type: WidthType.PERCENTAGE } }),
-            ],
-          }),
-          ...proposal.budget.map((item: any) => new TableRow({
-            children: [
-              new TableCell({ children: [new Paragraph({ text: item.category || item.lineItem || 'N/A' })] }),
-              new TableCell({ children: [new Paragraph({ text: item.description || item.desc || '' })] }),
-              new TableCell({ children: [new Paragraph({ text: `$${(item.amount || 0).toLocaleString()}` })] }),
-            ],
-          })),
-        ];
-
-        const totalAmount = proposal.budget.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-        budgetRows.push(new TableRow({
+        const headerRow = new TableRow({
           children: [
-            new TableCell({ children: [new Paragraph({ text: 'Total', bold: true })] }),
-            new TableCell({ children: [new Paragraph({ text: '' })] }),
-            new TableCell({ children: [new Paragraph({ text: `$${totalAmount.toLocaleString()}`, bold: true })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Category', bold: true })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Description', bold: true })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Amount', bold: true })] })] }),
+          ],
+        });
+
+        const dataRows = proposal.budget.map((item: any) => new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: item.category || item.lineItem || 'N/A' })] }),
+            new TableCell({ children: [new Paragraph({ text: item.description || item.desc || '' })] }),
+            new TableCell({ children: [new Paragraph({ text: `$${(item.amount || 0).toLocaleString()}` })] }),
           ],
         }));
 
-        sections.push(new Table({ rows: budgetRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
-        sections.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+        const totalAmount = proposal.budget.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+        const totalRow = new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Total', bold: true })] })] }),
+            new TableCell({ children: [new Paragraph({ text: '' })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `$${totalAmount.toLocaleString()}`, bold: true })] })] }),
+          ],
+        });
+
+        docChildren.push(new Table({ rows: [headerRow, ...dataRows, totalRow], width: { size: 100, type: WidthType.PERCENTAGE } }));
+        docChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
       }
 
       // Proposal sections
       if (proposal.sections && Array.isArray(proposal.sections)) {
         proposal.sections.forEach((section: any) => {
-          sections.push(new Paragraph({
+          docChildren.push(new Paragraph({
             text: section.title || 'Untitled Section',
             heading: HeadingLevel.HEADING_1,
             spacing: { before: 300, after: 150 },
           }));
-          // Strip HTML from Quill content
           const plainText = (section.content || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
           const paragraphs = plainText.split('\n').filter((p: string) => p.trim());
           paragraphs.forEach((p: string) => {
-            sections.push(new Paragraph({
+            docChildren.push(new Paragraph({
               text: p.trim(),
               spacing: { after: 120 },
             }));
@@ -668,10 +666,10 @@ CORE PROGRAMS:
           },
           footers: {
             default: new Footer({
-              children: [new Paragraph({ text: 'Page ', alignment: AlignmentType.CENTER }), new Paragraph({ children: [PageNumber.CURRENT], alignment: AlignmentType.CENTER })],
+              children: [new Paragraph({ children: [new TextRun({ text: 'Page ' }), new TextRun({ children: [PageNumber.CURRENT] })], alignment: AlignmentType.CENTER })],
             }),
           },
-          children: sections,
+          children: docChildren,
         }],
       });
 
@@ -682,7 +680,7 @@ CORE PROGRAMS:
       a.download = `${(proposal.title || 'ECADRN_Proposal').replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('📄 DOCX export downloaded', 'success');
+      showToast('DOCX export downloaded', 'success');
     } catch (err: any) {
       console.error('DOCX export error:', err);
       showToast('Failed to export DOCX: ' + (err.message || 'Unknown error'), 'error');
@@ -694,13 +692,12 @@ CORE PROGRAMS:
     try {
       const funder = funders.find((f: any) => f.funderName === proposal.funder) || {};
       const voiceProfile = voiceProfiles.find((v: any) => v.id === proposal.voiceProfileId) || {};
-      const token = await auth.currentUser?.getIdToken();
       const result = await callAI('analyze-win-loss', {
         proposal,
         funder,
         voiceProfile,
         outcome,
-      }, token);
+      });
       setWinLossResults({ ...result, proposalId: proposal.id });
       showToast(outcome === 'awarded' ? '🏆 Win analysis complete!' : '📉 Loss analysis complete', 'info');
     } catch (err: any) {
@@ -711,8 +708,7 @@ CORE PROGRAMS:
   // ── Recurring Grant Detection ─────────────────────────────────────────────
   const detectRecurringGrant = async (grant: any) => {
     try {
-      const token = await auth.currentUser?.getIdToken();
-      const result = await callAI('detect-recurring', { grant }, token);
+      const result = await callAI('detect-recurring', { grant });
       setRecurringResults(prev => ({ ...prev, [grant.id || grant.title]: result }));
       if (result.isRecurring) {
         showToast(`🔄 Recurring grant detected: ${result.cycle}`, 'info');
@@ -782,9 +778,9 @@ CORE PROGRAMS:
       if (mod && e.key === '/') {
         e.preventDefault();
         setShowShortcuts(s => !s);
-      } else if (mod && e.key === 'k') {
+      } else if (mod && e.key === 'd') {
         e.preventDefault();
-        setActiveTab('grants');
+        setDarkMode(d => !d);
       } else if (mod && e.key === 'n') {
         e.preventDefault();
         setActiveTab('proposals');
@@ -1434,7 +1430,7 @@ CORE PROGRAMS:
             <div className="space-y-3">
               {[
                 { keys: '⌘ /', label: 'Show this help' },
-                { keys: '⌘ K', label: 'Go to Grant Matcher' },
+                { keys: '⌘ K', label: 'Global Search' },
                 { keys: '⌘ N', label: 'New Proposal' },
                 { keys: '⌘ G', label: 'Go to Grants' },
                 { keys: '⌘ P', label: 'Go to Proposals' },
@@ -1442,6 +1438,7 @@ CORE PROGRAMS:
                 { keys: '⌘ C', label: 'Go to Calendar' },
                 { keys: '⌘ A', label: 'Go to ADR Network' },
                 { keys: '⌘ Y', label: 'Go to Analytics' },
+                { keys: '⌘ D', label: 'Toggle dark mode' },
                 { keys: '⌘ B', label: 'Toggle sidebar' },
                 { keys: 'Esc', label: 'Close overlays' },
               ].map(({ keys, label }) => (
@@ -3766,7 +3763,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       if (files.length === 0) return;
                       setIsUploading(true);
                       try {
-                        const newAttachments = files.map(f => ({
+                        const newAttachments = files.map((f: File) => ({
                           name: f.name,
                           size: f.size,
                           type: f.type,
