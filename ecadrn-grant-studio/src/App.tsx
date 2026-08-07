@@ -64,11 +64,20 @@ import {
   Bookmark,
   Save,
   ShieldCheck,
+  Moon,
+  Sun,
+  Command,
+  KanbanSquare,
+  Paperclip as PaperclipIcon,
+  Trophy,
+  RefreshCcwDot,
+  TrendingDown,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
-  BorderStyle, PageBreak
+  BorderStyle, PageBreak, Table, TableRow, TableCell, WidthType,
+  Header, Footer, PageNumber
 } from 'docx';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
@@ -90,7 +99,7 @@ import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import 'react-quill/dist/quill.snow.css';
 
-type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics';
+type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics' | 'crm';
 
 const WALKTHROUGH_STEPS = [
   {
@@ -301,6 +310,19 @@ export default function App() {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}'); } catch { return {}; }
   });
   const [settingsDraft, setSettingsDraft] = useState({ name: '', profileText: '' });
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return JSON.parse(safeLocalStorage.getItem('ecadrn_dark_mode') || 'false'); } catch { return false; }
+  });
+  // Global search (Cmd+K)
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Win/loss analysis results
+  const [winLossResults, setWinLossResults] = useState<any>(null);
+  // Recurring grant detection results
+  const [recurringResults, setRecurringResults] = useState<Record<string, any>>({});
+  // Proposal attachments
+  const [proposalAttachments, setProposalAttachments] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
@@ -308,6 +330,31 @@ export default function App() {
       setWalkthroughStep(0);
     }
   }, [user]);
+
+  // Dark mode: toggle 'dark' class on <html>
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    safeLocalStorage.setItem('ecadrn_dark_mode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  // Global search keyboard shortcut (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowGlobalSearch(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setShowGlobalSearch(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     // Wrap onAuthStateChanged with error handling to prevent stale-token hangs.
@@ -522,6 +569,189 @@ CORE PROGRAMS:
     a.href = url;
     a.download = `ECADRN_Nexus_Master_Export.md`;
     a.click();
+  };
+
+  // ── DOCX Export ────────────────────────────────────────────────────────────
+  const exportProposalAsDocx = async (proposal: any) => {
+    try {
+      const sections: Paragraph[] = [];
+
+      // Title page
+      sections.push(new Paragraph({
+        text: proposal.title || 'Untitled Proposal',
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+      }));
+      sections.push(new Paragraph({
+        text: `Funder: ${proposal.funder || 'N/A'}`,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 100 },
+      }));
+      sections.push(new Paragraph({
+        text: `ECADRN - Equity Center for Alternative Dispute Resolution & Negotiation`,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 100 },
+      }));
+      sections.push(new Paragraph({
+        text: `Generated: ${new Date().toLocaleDateString()}`,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      }));
+      sections.push(new Paragraph({ children: [new PageBreak()] }));
+
+      // Budget table if present
+      if (proposal.budget && Array.isArray(proposal.budget) && proposal.budget.length > 0) {
+        sections.push(new Paragraph({
+          text: 'Budget Summary',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 200, after: 100 },
+        }));
+
+        const budgetRows = [
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ text: 'Category', bold: true })], width: { size: 40, type: WidthType.PERCENTAGE } }),
+              new TableCell({ children: [new Paragraph({ text: 'Description', bold: true })], width: { size: 40, type: WidthType.PERCENTAGE } }),
+              new TableCell({ children: [new Paragraph({ text: 'Amount', bold: true })], width: { size: 20, type: WidthType.PERCENTAGE } }),
+            ],
+          }),
+          ...proposal.budget.map((item: any) => new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ text: item.category || item.lineItem || 'N/A' })] }),
+              new TableCell({ children: [new Paragraph({ text: item.description || item.desc || '' })] }),
+              new TableCell({ children: [new Paragraph({ text: `$${(item.amount || 0).toLocaleString()}` })] }),
+            ],
+          })),
+        ];
+
+        const totalAmount = proposal.budget.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+        budgetRows.push(new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: 'Total', bold: true })] }),
+            new TableCell({ children: [new Paragraph({ text: '' })] }),
+            new TableCell({ children: [new Paragraph({ text: `$${totalAmount.toLocaleString()}`, bold: true })] }),
+          ],
+        }));
+
+        sections.push(new Table({ rows: budgetRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+        sections.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+      }
+
+      // Proposal sections
+      if (proposal.sections && Array.isArray(proposal.sections)) {
+        proposal.sections.forEach((section: any) => {
+          sections.push(new Paragraph({
+            text: section.title || 'Untitled Section',
+            heading: HeadingLevel.HEADING_1,
+            spacing: { before: 300, after: 150 },
+          }));
+          // Strip HTML from Quill content
+          const plainText = (section.content || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+          const paragraphs = plainText.split('\n').filter((p: string) => p.trim());
+          paragraphs.forEach((p: string) => {
+            sections.push(new Paragraph({
+              text: p.trim(),
+              spacing: { after: 120 },
+            }));
+          });
+        });
+      }
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          headers: {
+            default: new Header({
+              children: [new Paragraph({ text: 'ECADRN Grant Proposal', alignment: AlignmentType.RIGHT })],
+            }),
+          },
+          footers: {
+            default: new Footer({
+              children: [new Paragraph({ text: 'Page ', alignment: AlignmentType.CENTER }), new Paragraph({ children: [PageNumber.CURRENT], alignment: AlignmentType.CENTER })],
+            }),
+          },
+          children: sections,
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(proposal.title || 'ECADRN_Proposal').replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📄 DOCX export downloaded', 'success');
+    } catch (err: any) {
+      console.error('DOCX export error:', err);
+      showToast('Failed to export DOCX: ' + (err.message || 'Unknown error'), 'error');
+    }
+  };
+
+  // ── Win/Loss Analysis ──────────────────────────────────────────────────────
+  const runWinLossAnalysis = async (proposal: any, outcome: 'awarded' | 'declined') => {
+    try {
+      const funder = funders.find((f: any) => f.funderName === proposal.funder) || {};
+      const voiceProfile = voiceProfiles.find((v: any) => v.id === proposal.voiceProfileId) || {};
+      const token = await auth.currentUser?.getIdToken();
+      const result = await callAI('analyze-win-loss', {
+        proposal,
+        funder,
+        voiceProfile,
+        outcome,
+      }, token);
+      setWinLossResults({ ...result, proposalId: proposal.id });
+      showToast(outcome === 'awarded' ? '🏆 Win analysis complete!' : '📉 Loss analysis complete', 'info');
+    } catch (err: any) {
+      showToast('Analysis failed: ' + (err.message || 'Unknown error'), 'error');
+    }
+  };
+
+  // ── Recurring Grant Detection ─────────────────────────────────────────────
+  const detectRecurringGrant = async (grant: any) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const result = await callAI('detect-recurring', { grant }, token);
+      setRecurringResults(prev => ({ ...prev, [grant.id || grant.title]: result }));
+      if (result.isRecurring) {
+        showToast(`🔄 Recurring grant detected: ${result.cycle}`, 'info');
+      } else {
+        showToast('Grant appears to be one-time', 'info');
+      }
+    } catch (err: any) {
+      showToast('Detection failed: ' + (err.message || 'Unknown error'), 'error');
+    }
+  };
+
+  // ── Global Search ──────────────────────────────────────────────────────────
+  const getGlobalSearchResults = () => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const results: { type: string; title: string; subtitle: string; tab: Tab; id: string }[] = [];
+
+    (proposals || []).forEach(p => {
+      if ((p.title || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q) || (p.funder || '').toLowerCase().includes(q)) {
+        results.push({ type: 'Proposal', title: p.title || 'Untitled', subtitle: `Funder: ${p.funder || 'N/A'} - Status: ${p.status || 'draft'}`, tab: 'proposals', id: p.id });
+      }
+    });
+    (grants || []).forEach(g => {
+      if ((g.title || '').toLowerCase().includes(q) || (g.funderName || g.funder || '').toLowerCase().includes(q)) {
+        results.push({ type: 'Grant', title: g.title || 'Untitled', subtitle: `Funder: ${g.funderName || g.funder || 'N/A'} - Deadline: ${g.deadline || 'N/A'}`, tab: 'grants', id: g.id });
+      }
+    });
+    (funders || []).forEach(f => {
+      if ((f.funderName || '').toLowerCase().includes(q) || (f.website || '').toLowerCase().includes(q)) {
+        results.push({ type: 'Funder', title: f.funderName || 'Unknown', subtitle: `Stage: ${f.relationshipStage || 'New'} - ${(f.website || '').replace(/^https?:\/\//, '')}`, tab: 'funders', id: f.id });
+      }
+    });
+    (voiceProfiles || []).forEach(v => {
+      if ((v.name || '').toLowerCase().includes(q)) {
+        results.push({ type: 'Voice Profile', title: v.name || 'Unknown', subtitle: `Maturity: ${v.maturityScore || 0}%`, tab: 'voice', id: v.id });
+      }
+    });
+
+    return results.slice(0, 12);
   };
 
   const login = async () => {
@@ -999,6 +1229,15 @@ CORE PROGRAMS:
             id="nav-analytics"
             badge="NEW"
           />
+          <NavItem 
+            icon={<KanbanSquare size={20} />} 
+            label="Funder CRM" 
+            active={activeTab === 'crm'} 
+            onClick={() => setActiveTab('crm')} 
+            collapsed={!isSidebarOpen}
+            id="nav-crm"
+            badge="NEW"
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-slate-800">
@@ -1110,6 +1349,13 @@ CORE PROGRAMS:
             >
               <Settings size={20} />
             </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
           </div>
         </header>
 
@@ -1125,6 +1371,7 @@ CORE PROGRAMS:
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
             {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
           {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}
+          {activeTab === 'crm' && <FunderCRMView funders={funders} proposals={proposals} orgId={orgId} organization={organization} />}
           </AnimatePresence>
         </div>
 

@@ -1,1 +1,31 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-dark-bg: #0f172a;
+  --color-dark-surface: #1e293b;
+  --color-dark-border: #334155;
+  --color-dark-text: #e2e8f0;
+  --color-dark-muted: #94a3b8;
+}
+
+/* Smooth theme transitions */
+* {
+  transition-property: background-color, border-color, color;
+  transition-duration: 150ms;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb { background: #475569; }
+
+/* Quill dark mode */
+.dark .ql-toolbar { background: #1e293b !important; border-color: #334155 !important; }
+.dark .ql-container { background: #0f172a !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+.dark .ql-editor { color: #e2e8f0 !important; }
+.dark .ql-snow .ql-stroke { stroke: #94a3b8 !important; }
+.dark .ql-snow .ql-fill { fill: #94a3b8 !important; }
+.dark .ql-snow .ql-picker { color: #94a3b8 !important; }
