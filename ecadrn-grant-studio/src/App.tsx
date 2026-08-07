@@ -2246,6 +2246,10 @@ function ProposalEditor({
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [customSaveMsg, setCustomSaveMsg] = useState('');
   const [showEditorGuide, setShowEditorGuide] = useState(false);
+  const [refineFeedback, setRefineFeedback] = useState('');
+  const [showRefineBox, setShowRefineBox] = useState(false);
+  const [preSubmitResults, setPreSubmitResults] = useState<any>(null);
+  const [showPreSubmitCheck, setShowPreSubmitCheck] = useState(false);
 
   const editorGuideSteps = [
     { title: "Navigate Sections", content: "Use the section list on the left to jump between proposal sections. The active section is highlighted in indigo. Click any section to start editing it immediately." },
@@ -2573,6 +2577,65 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     }
   };
 
+  // Refine a single section based on user feedback
+  const refineSection = async () => {
+    if (!refineFeedback.trim()) return;
+    setIsAIWorking('refine');
+    try {
+      const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization?.voiceProfile;
+      const otherSections: any = {};
+      sections.forEach((s, i) => {
+        if (i !== activeSectionIdx) otherSections[s.title || s.id] = (s.content || '').slice(0, 500);
+      });
+      const result = await callAI('refine-section', {
+        orgProfile: organization,
+        sectionName: currentSection.title,
+        currentContent: currentSection.content,
+        feedback: refineFeedback,
+        otherSections,
+        grantTitle: proposal.title,
+        funderName: proposal.funder,
+        funderPriorities: funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase())?.intelligence?.givingPriorities?.join(', ') || '',
+        toneDescriptors: activeProfile?.toneDescriptors?.join(', ') || '',
+        keyPhrases: activeProfile?.keyPhrases?.join(', ') || '',
+        voiceRules: activeProfile?.voiceRules?.join('; ') || '',
+      });
+      const refinedContent = typeof result === 'string' ? result : (result?.content || '');
+      if (!refinedContent) throw new Error('AI returned empty content for refinement');
+      const newSections = [...sections];
+      newSections[activeSectionIdx].content = refinedContent;
+      setSections(newSections);
+      setRefineFeedback('');
+      setShowRefineBox(false);
+    } catch (e: any) {
+      console.error('Refine error:', e);
+    } finally {
+      setIsAIWorking(null);
+    }
+  };
+
+  // Pre-submission quality gate check
+  const runPreSubmitCheck = async () => {
+    setIsAIWorking('presubmit');
+    try {
+      const matchedFunder = funders.find((f: any) =>
+        f.funderName?.toLowerCase() === proposal.funder?.toLowerCase()
+      );
+      const result = await callAI('pre-submit-check', {
+        grantTitle: proposal.title,
+        funderName: proposal.funder,
+        funderPriorities: matchedFunder?.intelligence?.givingPriorities?.join(', ') || '',
+        proposal: { sections }
+      });
+      setPreSubmitResults(result);
+      setShowPreSubmitCheck(true);
+    } catch (e: any) {
+      console.error('Pre-submit check error:', e);
+    } finally {
+      setIsAIWorking(null);
+    }
+  };
+
   const currentSection = sections[activeSectionIdx] || { title: 'No Section', content: '' };
   const sectionWordCount = currentSection.content ? currentSection.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0;
   const totalWordCount = sections.reduce((acc, s) => acc + (s.content ? s.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0), 0);
@@ -2705,6 +2768,23 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 title="Strategic Funder Alignment"
               >
                 <Globe size={18} className={isAIWorking === 'align' ? 'animate-pulse' : ''} />
+              </button>
+              <button 
+                onClick={() => setShowRefineBox(!showRefineBox)}
+                disabled={!!isAIWorking}
+                className={`p-2 rounded-lg transition-all ${isAIWorking === 'refine' ? 'bg-amber-100 text-amber-600' : 'showRefineBox ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                title="Refine Section with AI"
+              >
+                <Wand2 size={18} className={isAIWorking === 'refine' ? 'animate-pulse' : ''} />
+              </button>
+              <button 
+                onClick={() => runPreSubmitCheck()}
+                disabled={!!isAIWorking}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm cursor-pointer ${isAIWorking === 'presubmit' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 animate-pulse' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-150'}`}
+                title="Pre-Submission Quality Gate"
+              >
+                <ShieldCheck size={13} className={isAIWorking === 'presubmit' ? 'animate-spin' : 'text-emerald-600'} />
+                <span>Pre-Submit Check</span>
               </button>
             </div>
             <button
@@ -3184,6 +3264,33 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       </div>
                     </div>
                   </div>
+
+                  {showRefineBox && (
+                    <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Wand2 size={16} className="text-amber-600" />
+                        <h4 className="text-sm font-bold text-amber-800">Refine: {currentSection.title}</h4>
+                        <button onClick={() => setShowRefineBox(false)} className="ml-auto text-amber-400 hover:text-amber-600 text-lg leading-none">×</button>
+                      </div>
+                      <textarea
+                        value={refineFeedback}
+                        onChange={(e) => setRefineFeedback(e.target.value)}
+                        placeholder="Tell the AI what to change. e.g., 'Add more specific data about mediation outcomes', 'Shorten to 200 words', 'Add a community quote', 'Make the opening more compelling'..."
+                        className="w-full p-3 text-sm border border-amber-200 rounded-lg bg-white resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        rows={3}
+                      />
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-amber-600 font-medium">The AI will rewrite ONLY this section based on your feedback.</p>
+                        <button
+                          onClick={() => refineSection()}
+                          disabled={!!isAIWorking || !refineFeedback.trim()}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 disabled:opacity-50"
+                        >
+                          {isAIWorking === 'refine' ? 'Refining...' : 'Refine Section'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="prose prose-slate max-w-none">
                     <ReactQuill 
