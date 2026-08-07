@@ -8,6 +8,17 @@
     <meta http-equiv="Expires" content="0" />
     <title>ECADRN Grant Studio</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>" />
+    <script>
+      // Anti-FOUC: apply dark mode before first paint
+      (function() {
+        try {
+          var stored = localStorage.getItem('ecadrn_dark_mode');
+          if (stored === 'true' || stored === '"true"') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
