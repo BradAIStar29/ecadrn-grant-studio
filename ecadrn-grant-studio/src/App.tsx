@@ -3172,6 +3172,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       </div>
                     </div>
                   </motion.div>
+                )}
 
                 {showPreSubmitCheck && preSubmitResults && (
                   <motion.div
@@ -4002,6 +4003,30 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
     setEditingFunderId(null);
   };
 
+  // Analyze competitors for a funder
+  const [competitorResults, setCompetitorResults] = useState<any>(null);
+  const [showCompetitorModal, setShowCompetitorModal] = useState(false);
+  const [analyzingCompetitorId, setAnalyzingCompetitorId] = useState<string | null>(null);
+
+  const analyzeCompetitors = async (funder: any) => {
+    setAnalyzingCompetitorId(funder.id || funder.funderName);
+    try {
+      const result = await callAI('analyze-competitors', {
+        funderName: funder.funderName,
+        orgMission: organization?.missionStatement || '',
+        funderPriorities: funder.intelligence?.givingPriorities?.join(', ') || '',
+        funderType: funder.intelligence?.funderType || '',
+      });
+      setCompetitorResults({ funderName: funder.funderName, ...result });
+      setShowCompetitorModal(true);
+    } catch (e: any) {
+      console.error('Competitor analysis error:', e);
+      showToast('Competitor analysis failed. Please try again.');
+    } finally {
+      setAnalyzingCompetitorId(null);
+    }
+  };
+
   const filteredFunders = funders.filter(f => {
     const lastAnalysisStr = f.lastAnalysisAt || f.updatedAt ? new Date(f.lastAnalysisAt || f.updatedAt).toLocaleDateString() : 'N/A';
     const matchesSearch = searchTerm.toLowerCase() === '' || 
@@ -4354,6 +4379,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
             setEditData={setEditData}
             STAGES={STAGES}
             onTagClick={setFilterTag}
+            onAnalyzeCompetitors={analyzeCompetitors}
           />
         )) : (
           <div className="col-span-full py-12 text-center text-slate-400 italic bg-white rounded-xl border border-dashed border-slate-200">
@@ -4361,6 +4387,75 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
           </div>
         )}
       </div>
+
+      {showCompetitorModal && competitorResults && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowCompetitorModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black flex items-center gap-2">
+                <Users size={20} className="text-purple-600" />
+                Competitor Analysis: {competitorResults.funderName}
+              </h3>
+              <button onClick={() => setShowCompetitorModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20} /></button>
+            </div>
+
+            {competitorResults.similarOrganizations && competitorResults.similarOrganizations.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">Similar Organizations</h4>
+                <div className="space-y-2">
+                  {competitorResults.similarOrganizations.map((org: any, i: number) => (
+                    <div key={i} className="p-3 bg-purple-50 rounded-lg border border-purple-100">
+                      <p className="text-sm font-bold text-slate-800">{org.name || org}</p>
+                      {typeof org === 'object' && org.strength && <p className="text-xs text-slate-500 mt-1">{org.strength}</p>}
+                      {typeof org === 'object' && org.overlap && <p className="text-xs text-purple-600 mt-1">Overlap: {org.overlap}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {competitorResults.differentiators && competitorResults.differentiators.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Your Differentiators</h4>
+                <ul className="space-y-1.5">
+                  {competitorResults.differentiators.map((item: string, i: number) => (
+                    <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-emerald-50 p-2 rounded-lg">
+                      <span className="text-emerald-500 mt-0.5">+</span> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {competitorResults.gaps && competitorResults.gaps.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Gaps to Address</h4>
+                <ul className="space-y-1.5">
+                  {competitorResults.gaps.map((item: string, i: number) => (
+                    <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-rose-50 p-2 rounded-lg">
+                      <span className="text-rose-500 mt-0.5">-</span> {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {competitorResults.recommendation && (
+              <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-600 italic">
+                {competitorResults.recommendation}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
 
       <PageGuide 
         isOpen={showGuide} 
@@ -4408,12 +4503,12 @@ function FunderNotesField({ funderId, initialNotes, orgId }: { funderId: string,
 }
 
 function FunderCard({ 
-  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick, orgId
+  f, isEditing, isResearching, editData, onEdit, onCancelEdit, onSaveEdit, onResearch, setEditData, STAGES, onTagClick, orgId, onAnalyzeCompetitors
 }: { 
   f: any, isEditing: boolean, isResearching: boolean, editData: any, onEdit: () => void, 
   onCancelEdit: () => any, onSaveEdit: () => any, onResearch: () => any, setEditData: (d: any) => void, STAGES: string[],
   onTagClick: (tag: string) => void,
-  key?: any, orgId: string
+  key?: any, orgId: string, onAnalyzeCompetitors?: (f: any) => void
 }) {
   const [customTagInput, setCustomTagInput] = useState('');
   const [inlineTagText, setInlineTagText] = useState('');
@@ -4899,6 +4994,13 @@ function FunderCard({
                 className="text-indigo-600 text-[10px] font-bold uppercase hover:underline flex items-center gap-1"
               >
                 <RefreshCw size={10} className={isResearching ? 'animate-spin' : ''} /> Re-Analyze
+              </button>
+              <button 
+                onClick={() => onAnalyzeCompetitors && onAnalyzeCompetitors(f)}
+                disabled={isResearching}
+                className="text-purple-600 text-[10px] font-bold uppercase hover:underline flex items-center gap-1"
+              >
+                <Users size={10} /> Competitors
               </button>
             </div>
           </div>
@@ -5709,6 +5811,34 @@ function GrantsView({
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
   const [agentWriterOpen, setAgentWriterOpen] = useState(false);
   const [agentPrefillGrant, setAgentPrefillGrant] = useState<any>(null);
+  const [prioritizeResults, setPrioritizeResults] = useState<any>(null);
+  const [showPrioritizeModal, setShowPrioritizeModal] = useState(false);
+  const [isPrioritizing, setIsPrioritizing] = useState(false);
+
+  const prioritizeGrants = async () => {
+    if (grants.length === 0) return;
+    setIsPrioritizing(true);
+    try {
+      const result = await callAI('prioritize-grants', {
+        grants: grants.map(g => ({
+          title: g.title,
+          funderName: g.funderName || g.funder || '',
+          amount: g.amount || g.maxAward || 0,
+          deadline: g.deadline || g.applicationDeadline || '',
+          matchScore: g.ecadrnScore || g.matchScore || g.alignmentScore || 0,
+          status: g.status || 'discovered',
+        })),
+        orgMission: organization?.missionStatement || '',
+        orgFocusAreas: organization?.focusAreas?.join(', ') || '',
+      });
+      setPrioritizeResults(result);
+      setShowPrioritizeModal(true);
+    } catch (e: any) {
+      console.error('Prioritize error:', e);
+    } finally {
+      setIsPrioritizing(false);
+    }
+  };
 
   const activeVoiceForSuggestions = voiceProfiles.find(p => p.id === (selectedVoiceIdForSuggestion || selectedVoiceProfileId)) || organization?.voiceProfile || voiceProfiles[0];
 
@@ -6182,6 +6312,14 @@ Deadline: 2026-11-15`;
           >
             <Bot size={13} />
             ✦ Agent Write
+          </button>
+          <button
+            onClick={() => prioritizeGrants()}
+            disabled={isPrioritizing || grants.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+          >
+            <BarChart3 size={13} className={isPrioritizing ? 'animate-spin' : ''} />
+            {isPrioritizing ? 'Prioritizing...' : 'Prioritize'}
           </button>
           <div className="flex items-center gap-2">
           <button
@@ -6896,6 +7034,64 @@ Deadline: 2026-11-15`;
 
           </motion.div>
         </div>
+      )}
+
+      {showPrioritizeModal && prioritizeResults && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPrioritizeModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black flex items-center gap-2">
+                <BarChart3 size={20} className="text-indigo-600" />
+                Grant Prioritization
+              </h3>
+              <button onClick={() => setShowPrioritizeModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20} /></button>
+            </div>
+
+            {prioritizeResults.topPicks && prioritizeResults.topPicks.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Top Picks</h4>
+                <div className="space-y-2">
+                  {prioritizeResults.topPicks.map((pick: any, i: number) => (
+                    <div key={i} className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                      <p className="text-sm font-bold text-slate-800">{pick.title || pick.grantTitle}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {pick.funderName || pick.funder} - {pick.reason || pick.rationale}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {prioritizeResults.deprioritize && prioritizeResults.deprioritize.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Deprioritize</h4>
+                <div className="space-y-1.5">
+                  {prioritizeResults.deprioritize.map((item: any, i: number) => (
+                    <div key={i} className="p-2 bg-rose-50 rounded-lg">
+                      <p className="text-xs text-slate-700">{typeof item === 'string' ? item : item.title || item.grantTitle}</p>
+                      {typeof item === 'object' && item.reason && <p className="text-[10px] text-rose-500 mt-0.5">{item.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {prioritizeResults.strategy && (
+              <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-600 italic">
+                {prioritizeResults.strategy}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
       )}
 
       <PageGuide 
