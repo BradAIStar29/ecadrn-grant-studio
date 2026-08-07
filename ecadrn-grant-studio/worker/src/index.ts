@@ -39,6 +39,12 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'verify-facts':            { model: 'gemini-2.5-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
   'search-grants':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
 };
+  'refine-section':         { model: 'gemini-2.5-flash', temperature: 0.6,  category: 'writing',  maxTokens: 16384, useSearch: false },
+  'pre-submit-check':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'analyze-competitors':    { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'prioritize-grants':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'explain-diff':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'recommend-funders':     { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
 
 const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
 
@@ -783,6 +789,245 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
   }
 ]`;
 
+// ── New AI Actions (Phase 2) ─────────────────────────────────────────────
+
+    case 'refine-section':
+      return `You are an expert nonprofit grant writer specializing in ADR, conflict resolution, and civic equity funding.
+
+TASK: Refine a single section of a grant proposal based on the user's specific feedback. Keep everything that works — only change what the user asked for. Maintain the organization's voice profile throughout.
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile || {}).slice(0, 2000)}
+
+VOICE PROFILE:
+Tone: ${data.toneDescriptors || 'professional, mission-driven'}
+Key phrases: ${data.keyPhrases || ''}
+Voice rules: ${data.voiceRules || ''}
+
+GRANT CONTEXT:
+Title: ${data.grantTitle || ''}
+Funder: ${data.funderName || ''}
+Funder priorities: ${data.funderPriorities || ''}
+
+CURRENT SECTION:
+Section name: ${data.sectionName || ''}
+Current content:
+${data.currentContent || ''}
+
+USER FEEDBACK (what to change):
+${data.feedback || 'Improve this section.'}
+
+OTHER SECTIONS (for context — do NOT modify these, use only to ensure consistency):
+${JSON.stringify(data.otherSections || {}).slice(0, 3000)}
+
+RULES:
+1. Return ONLY the refined section content — no explanation, no preamble.
+2. Maintain factual accuracy — do not invent new programs, data, or outcomes.
+3. Keep the voice profile consistent with the original.
+4. If the user asks to shorten, cut filler not substance.
+5. If the user asks to add data, use placeholders like [INSERT: specific statistic about X] for data the org would need to verify.
+6. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note".
+7. Use active voice.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
+{
+  "content": "string — the refined section content",
+  "changes": ["string — brief description of each change made"],
+  "wordCount": number
+}`;
+
+    case 'pre-submit-check':
+      return `You are a senior grant reviewer performing a final pre-submission quality gate check. This is the last check before the proposal goes to the funder.
+
+TASK: Perform a comprehensive quality assessment combining structural review, AI-detection analysis, and fact verification into a single go/no-go recommendation.
+
+GRANT: ${data.grantTitle || ''}
+FUNDER: ${data.funderName || ''}
+FUNDER PRIORITIES: ${data.funderPriorities || 'Not specified'}
+
+PROPOSAL SECTIONS:
+${JSON.stringify(data.proposal || {}).slice(0, 8000)}
+
+CHECK THESE DIMENSIONS:
+1. COMPLETENESS — Are all required sections present and substantive (not placeholders)?
+2. FUNDER ALIGNMENT — Does the proposal mirror the funder's stated priorities and language?
+3. SMART GOALS — Are goals specific, measurable, achievable, relevant, time-bound?
+4. BUDGET ALIGNMENT — Does the budget narrative match the described activities?
+5. COMMUNITY VOICE — Are constituent perspectives, quotes, or lived-experience references included?
+6. SUSTAINABILITY — Are there 3+ concrete revenue diversification strategies?
+7. DATA CITATION — Are statistics and claims sourced? Flag unsourced claims.
+8. AI CLICHÉS — Flag any AI-sounding phrases: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue"
+9. ACTIVE VOICE — Flag instances of passive voice that should be active.
+10. WORD COUNTS — Are sections within reasonable ranges?
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
+{
+  "recommendation": "go | no-go | revise",
+  "overallScore": number 0-100,
+  "mustFix": ["string — critical issues that MUST be resolved before submission"],
+  "shouldFix": ["string — important improvements that would strengthen the proposal"],
+  "niceToHave": ["string — optional polish items"],
+  "sectionIssues": {
+    "executiveSummary": ["string — issues found, or empty array if clean"],
+    "needStatement": ["string"],
+    "projectDescription": ["string"],
+    "goalsObjectives": ["string"],
+    "methodology": ["string"],
+    "evaluationPlan": ["string"],
+    "sustainability": ["string"],
+    "organizationalCapacity": ["string"],
+    "budgetNarrative": ["string"]
+  },
+  "aiClichesFound": ["string — exact AI-sounding phrases detected"],
+  "unsourcedClaims": ["string — specific claims that need citation"],
+  "passiveVoiceInstances": ["string — specific instances with suggested active rewrite"],
+  "summary": "string — 3-4 sentence overall assessment"
+}`;
+
+    case 'analyze-competitors':
+      return `You are a nonprofit grants strategist specializing in ADR and conflict resolution funding. You have access to web search — USE IT EXTENSIVELY.
+
+TASK: Research organizations that have previously received funding from this funder or for this specific grant program. Analyze what made their proposals successful and provide actionable intelligence for ECADRN's application.
+
+SEARCH INSTRUCTIONS:
+1. Search for past recipients of this specific grant program
+2. Search for the funder's recent 990 filings or annual reports listing grantees
+3. Search for press releases or announcements of past award winners
+4. Search for "funder name + grant recipients" and "funder name + awarded"
+5. For each competitor found, search for their website to understand their programs and approach
+6. Search for any publicly available winning proposals or summaries
+
+FUNDER: ${data.funderName || ''}
+GRANT PROGRAM: ${data.grantTitle || ''}
+FUNDER WEBSITE: ${data.funderUrl || 'Not provided'}
+
+APPLYING ORGANIZATION — ECADRN:
+Mission: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+Programs: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network.
+
+⚠️ ANTI-HALLUCINATION RULES:
+1. ONLY include organizations you can verify via web search actually received funding.
+2. Do NOT fabricate competitor names or award amounts.
+3. If you cannot find past recipients, state that clearly.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
+{
+  "competitors": [
+    {
+      "name": "string — real organization name",
+      "website": "string or null",
+      "yearAwarded": "string",
+      "amount": "string or null",
+      "projectSummary": "string — what they were funded to do, if known",
+      "strengths": ["string — what likely made their proposal competitive"],
+      "ecadrnDifferentiator": "string — how ECADRN differs from or improves on this approach"
+    }
+  ],
+  "commonWinningElements": ["string — patterns across successful proposals"],
+  "ecadrnCompetitiveAdvantages": ["string — ECADRN's unique strengths vs. competitors"],
+  "ecadrnGaps": ["string — areas where competitors are stronger and ECADRN should address"],
+  "recommendedStrategy": "string — 4-5 sentence strategy for how ECADRN should position against these competitors",
+  "researchConfidence": "high | medium | low"
+}`;
+
+    case 'prioritize-grants':
+      return `You are a nonprofit grant strategy advisor. Analyze the grant pipeline and recommend which grants to pursue first.
+
+TASK: Given a list of grant opportunities with deadlines, alignment scores, and award amounts, produce a prioritized ranking with reasoning.
+
+GRANT PIPELINE:
+${JSON.stringify(data.grants || []).slice(0, 10000)}
+
+ORGANIZATION CONTEXT:
+${JSON.stringify(data.orgProfile || {}).slice(0, 2000)}
+
+CURRENT PROPOSAL COUNT: ${data.activeProposalCount || 0}
+TEAM CAPACITY: ${data.teamCapacity || 'small team, 1-2 grant writers'}
+
+PRIORITIZATION FACTORS:
+1. Deadline urgency — how soon is the deadline? Can the proposal be written in time?
+2. Mission alignment — how well does this grant fit ECADRN's programs?
+3. Award amount — is the effort justified by the potential funding?
+4. Competition level — how competitive is this grant? (lower competition = higher priority)
+5. Effort estimate — how much work will the proposal require?
+6. Win probability — given alignment and capacity, how likely is ECADRN to win?
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
+{
+  "rankings": [
+    {
+      "grantTitle": "string",
+      "funderName": "string",
+      "rank": number,
+      "priority": "critical | high | medium | low | skip",
+      "reasoning": "string — 2-3 sentences explaining this ranking",
+      "estimatedEffort": "string — 'low' | 'medium' | 'high'",
+      "estimatedEffortHours": number,
+      "winProbability": number 0-100,
+      "deadlineUrgency": "string — 'urgent (≤2 weeks)' | 'near (≤1 month)' | 'comfortable (≤3 months)' | 'distant (>3 months)'",
+      "recommendedAction": "string — specific next step"
+    }
+  ],
+  "summary": "string — 3-4 sentence strategic overview of the pipeline",
+  "topPick": "string — grant title of the #1 recommendation",
+  "skipRecommendation": ["string — grants to skip and why"]
+}`;
+
+    case 'explain-diff':
+      return `You are a grant writing editor. Compare two versions of a proposal section and explain what changed, whether the changes are improvements, and any concerns.
+
+Return JSON:
+{
+  "changes": [{"type": "addition | deletion | modification | move", "description": "string", "assessment": "improvement | neutral | regression"}],
+  "overallAssessment": "string — 2-3 sentences on whether the new version is better overall",
+  "concerns": ["string — any issues introduced by the changes"],
+  "recommendation": "string — keep new version | revert | merge"
+}
+
+Section name: ${data.sectionName || ''}
+Old version:
+${data.oldContent || ''}
+
+New version:
+${data.newContent || ''}`;
+
+    case 'recommend-funders':
+      return `You are a nonprofit fundraising strategist for ECADRN. Analyze the organization's funder database and grant pipeline to recommend which funders ECADRN should pursue next, based on their giving cycles, past relationship history, and mission alignment.
+
+CURRENT FUNDER DATABASE:
+${JSON.stringify(data.funders || []).slice(0, 8000)}
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile || {}).slice(0, 2000)}
+
+RECENT GRANT PIPELINE:
+${JSON.stringify(data.grants || []).slice(0, 3000)}
+
+TASK: Recommend the top 5 funders ECADRN should engage with next, considering:
+1. Relationship stage — warm contacts should be prioritized over cold
+2. Giving cycle timing — are they likely accepting applications now or soon?
+3. Mission alignment — how well do their priorities match ECADRN's programs?
+4. Funding history — have they funded ADR/mediation work before?
+5. Gap analysis — are there funders in the database that ECADRN hasn't approached yet?
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
+{
+  "recommendations": [
+    {
+      "funderName": "string",
+      "priority": "critical | high | medium | low",
+      "reasoning": "string — 2-3 sentences explaining why this funder should be prioritized",
+      "suggestedAction": "string — specific next step: 'Send LOI' | 'Schedule intro call' | 'Submit full proposal' | 'Research deadlines' | 'Send outreach email'",
+      "estimatedAskRange": "string — suggested ask amount based on their typical grant size",
+      "timing": "string — 'now' | 'within 1 month' | 'within 3 months' | 'long-term'"
+    }
+  ],
+  "untouchedFunders": ["string — funders in the database with no relationship activity yet"],
+  "warmFollowUps": ["string — funders with prior contact who need a follow-up"],
+  "summary": "string — 3-4 sentence strategic overview"
+}`;
+
+
     default:
       return 'INVALID';
   }
@@ -810,6 +1055,12 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'humanize-proposal': ['score', 'suggestions'],
     'generate-outreach-email': ['subject', 'body'],
     'chat': ['reply'],
+    'refine-section': ['content'],
+    'pre-submit-check': ['recommendation', 'overallScore'],
+    'analyze-competitors': ['competitors'],
+    'prioritize-grants': ['rankings'],
+    'explain-diff': ['changes'],
+    'recommend-funders': ['recommendations'],
   };
 
   const keys = requiredKeys[action];
