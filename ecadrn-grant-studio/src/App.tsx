@@ -1362,9 +1362,9 @@ CORE PROGRAMS:
         <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
-            {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} />}
+            {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} onExportDocx={exportProposalAsDocx} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
@@ -1471,6 +1471,63 @@ CORE PROGRAMS:
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Global Search Modal (Cmd+K) */}
+      <AnimatePresence>
+        {showGlobalSearch && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] flex items-start justify-center pt-24 bg-black/40 backdrop-blur-sm"
+            onClick={() => { setShowGlobalSearch(false); setSearchQuery(''); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl mx-4 border border-slate-200 dark:border-slate-700 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+                <Search size={20} className="text-slate-400 dark:text-slate-500" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search proposals, grants, funders, voice profiles..."
+                  className="flex-1 bg-transparent outline-none text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                />
+                <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-xs font-mono text-slate-500 dark:text-slate-400">ESC</kbd>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {searchQuery.trim() && getGlobalSearchResults().length === 0 && (
+                  <div className="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">No results found for "{searchQuery}"</div>
+                )}
+                {getGlobalSearchResults().map((result) => (
+                  <button
+                    key={result.id}
+                    onClick={() => {
+                      setActiveTab(result.tab);
+                      setShowGlobalSearch(false);
+                      setSearchQuery('');
+                    }}
+                    className="w-full flex items-start gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left border-b border-slate-100 dark:border-slate-700/50 last:border-0"
+                  >
+                    <span className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mt-0.5 w-20 flex-shrink-0">{result.type}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{result.title}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{result.subtitle}</div>
+                    </div>
+                    <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 flex-shrink-0 mt-1" />
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </ErrorBoundary>
   );
 }
@@ -1840,9 +1897,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user
+  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onWinLossAnalysis, winLossResults
 }: { 
-  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any
+  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2151,12 +2208,32 @@ function ProposalsView({
                   {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="px-8 py-5 text-right">
-                  <button 
-                    onClick={() => setSelectedProposal(p)}
-                    className="text-indigo-600 font-bold text-[10px] uppercase tracking-widest hover:underline"
-                  >
-                    Open Editor
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    {onExportDocx && (
+                      <button 
+                        onClick={() => onExportDocx(p)}
+                        title="Export as Word document"
+                        className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      >
+                        <Download size={16} />
+                      </button>
+                    )}
+                    {onWinLossAnalysis && (p.status === 'awarded' || p.status === 'declined') && (
+                      <button 
+                        onClick={() => onWinLossAnalysis(p, p.status === 'awarded' ? 'awarded' : 'declined')}
+                        title={p.status === 'awarded' ? 'Analyze win' : 'Analyze loss'}
+                        className={`transition-colors ${p.status === 'awarded' ? 'text-emerald-500 hover:text-emerald-600' : 'text-rose-500 hover:text-rose-600'}`}
+                      >
+                        {p.status === 'awarded' ? <Trophy size={16} /> : <TrendingDown size={16} />}
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setSelectedProposal(p)}
+                      className="text-indigo-600 font-bold text-[10px] uppercase tracking-widest hover:underline"
+                    >
+                      Open Editor
+                    </button>
+                  </div>
                 </td>
               </tr>
             )) : (
@@ -2488,8 +2565,10 @@ function ProposalEditor({
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [pendingAssignment, setPendingAssignment] = useState<{ sectionIdx: number, user: string } | null>(null);
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline'>('editor');
+  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline' | 'attachments'>('editor');
   const [budget, setBudget] = useState<any[]>(proposal.budget || []);
+  const [attachments, setAttachments] = useState<any[]>(proposal.attachments || []);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [customSaveMsg, setCustomSaveMsg] = useState('');
@@ -2966,6 +3045,12 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                >
                  Timeline
                </button>
+              <button 
+                onClick={() => setActiveSubTab('attachments')}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'attachments' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Attachments {attachments.length > 0 && `(${attachments.length})`}
+              </button>
             </div>
             <div className="h-6 w-px bg-slate-200"></div>
             <div className="flex items-center gap-2">
@@ -3665,6 +3750,83 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 onUpdate={(newBudget) => setBudget(newBudget)} 
                 proposalDescription={proposal.description || sections[0]?.content || 'Grant proposal for ADR and conflict resolution.'} 
               />
+            ) : activeSubTab === 'attachments' ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-300 transition-colors">
+                  <PaperclipIcon className="mx-auto text-slate-300 mb-3" size={32} />
+                  <p className="text-sm font-medium text-slate-600 mb-1">Upload Supporting Documents</p>
+                  <p className="text-xs text-slate-400 mb-4">Letters of support, 501(c)(3), financial statements, MOUs, etc.</p>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    id="attachment-upload"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length === 0) return;
+                      setIsUploading(true);
+                      try {
+                        const newAttachments = files.map(f => ({
+                          name: f.name,
+                          size: f.size,
+                          type: f.type,
+                          uploadedAt: new Date().toISOString(),
+                          uploadedBy: auth.currentUser?.email || 'Unknown',
+                        }));
+                        const updated = [...attachments, ...newAttachments];
+                        setAttachments(updated);
+                        const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                        await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true });
+                        showToast('Attachments uploaded', 'success');
+                      } catch (err: any) {
+                        showToast('Upload failed: ' + (err.message || 'Unknown error'), 'error');
+                      } finally {
+                        setIsUploading(false);
+                        if (e.target) e.target.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => document.getElementById('attachment-upload')?.click()}
+                    disabled={isUploading}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    {isUploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                    {isUploading ? 'Uploading...' : 'Select Files'}
+                  </button>
+                </div>
+                {attachments.length > 0 && (
+                  <div className="space-y-2">
+                    {attachments.map((att, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <PaperclipIcon size={16} className="text-indigo-500" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-slate-700">{att.name}</div>
+                            <div className="text-xs text-slate-400">
+                              {(att.size / 1024).toFixed(0)}KB - Uploaded by {att.uploadedBy?.split('@')[0] || 'Unknown'} - {new Date(att.uploadedAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const updated = attachments.filter((_, i) => i !== idx);
+                            setAttachments(updated);
+                            const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                            await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true });
+                            showToast('Attachment removed', 'info');
+                          }}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <TimelineView versions={versions} onRevert={(v) => {
                 setSections(v.content);
@@ -5930,7 +6092,9 @@ function GrantsView({
   selectedVoiceProfileId = null,
   orgId = '',
   user = null,
-  funders = []
+  funders = [],
+  onDetectRecurring,
+  recurringResults = {}
 }: { 
   grants: any[], 
   organization: any, 
@@ -5938,7 +6102,9 @@ function GrantsView({
   selectedVoiceProfileId?: string | null,
   orgId?: string,
   user?: any,
-  funders?: any[]
+  funders?: any[],
+  onDetectRecurring?: (grant: any) => void,
+  recurringResults?: Record<string, any>
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
@@ -6981,6 +7147,20 @@ Deadline: 2026-11-15`;
                 <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-200">
                   ✓ Verified
                 </span>
+              )}
+              {recurringResults[g.id || g.title]?.isRecurring && (
+                <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center gap-1">
+                  🔄 {recurringResults[g.id || g.title]?.cycle || 'Recurring'}
+                </span>
+              )}
+              {onDetectRecurring && !recurringResults[g.id || g.title] && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDetectRecurring(g); }}
+                  title="Check if this is a recurring grant"
+                  className="text-[9px] font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-0.5"
+                >
+                  <RefreshCcwDot size={10} /> Detect cycle
+                </button>
               )}
             </div>
             <h4 className="font-bold text-slate-900 mb-2 leading-tight group-hover:text-indigo-600 pr-12 text-lg tracking-tight">{g.title}</h4>
@@ -10247,6 +10427,126 @@ function TimelineView({ versions, onRevert }: { versions: any[], onRevert: (v: a
         )) : (
           <div className="text-center py-20 text-slate-400 italic text-sm">No version history available for this proposal yet.</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Funder CRM Pipeline (Kanban) ─────────────────────────────────────────────
+function FunderCRMView({ funders, proposals, orgId, organization }: { funders: any[], proposals: any[], orgId: string, organization: any }) {
+  const stages = [
+    { key: 'cold', label: 'Cold Lead', color: 'bg-slate-400' },
+    { key: 'contacted', label: 'Contacted', color: 'bg-blue-500' },
+    { key: 'loi', label: 'LOI Sent', color: 'bg-amber-500' },
+    { key: 'proposal', label: 'Proposal Submitted', color: 'bg-purple-500' },
+    { key: 'funded', label: 'Funded', color: 'bg-emerald-500' },
+  ];
+
+  const [draggedFunder, setDraggedFunder] = useState<string | null>(null);
+  const [localFunders, setLocalFunders] = useState(funders || []);
+
+  useEffect(() => {
+    setLocalFunders(funders || []);
+  }, [funders]);
+
+  const getFunderStage = (funder: any): string => {
+    const stage = funder.relationshipStage || 'cold';
+    // Infer stage from proposals if not explicitly set
+    if (stage === 'cold' || !stage) {
+      const funderProposals = (proposals || []).filter((p: any) => p.funder === funder.funderName);
+      if (funderProposals.some((p: any) => p.status === 'awarded')) return 'funded';
+      if (funderProposals.some((p: any) => p.status === 'submitted')) return 'proposal';
+      if (funderProposals.some((p: any) => p.status === 'review')) return 'loi';
+      if (funderProposals.length > 0) return 'contacted';
+    }
+    return stage;
+  };
+
+  const updateStage = async (funderId: string, newStage: string) => {
+    try {
+      const funder = localFunders.find((f: any) => f.id === funderId);
+      if (!funder) return;
+      const path = `organizations/${orgId}/funders/${funderId}`;
+      await setDoc(doc(db, path), {
+        ...funder,
+        relationshipStage: newStage,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      setLocalFunders(prev => prev.map((f: any) => f.id === funderId ? { ...f, relationshipStage: newStage } : f));
+    } catch (err: any) {
+      console.error('Failed to update funder stage:', err);
+    }
+  };
+
+  const fundersByStage = (stageKey: string) => localFunders.filter((f: any) => getFunderStage(f) === stageKey);
+
+  return (
+    <div className="h-full">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <KanbanSquare className="text-indigo-600 dark:text-indigo-400" /> Funder Relationship Pipeline
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Drag funder cards between stages. Stages auto-infer from proposal status but can be manually overridden.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 h-[calc(100%-100px)]">
+        {stages.map((stage) => {
+          const stageFunders = fundersByStage(stage.key);
+          return (
+            <div
+              key={stage.key}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex flex-col"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedFunder) {
+                  updateStage(draggedFunder, stage.key);
+                  setDraggedFunder(null);
+                }
+              }}
+            >
+              <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{stage.label}</span>
+                </div>
+                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">{stageFunders.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {stageFunders.length === 0 && (
+                  <div className="text-center py-8 text-slate-300 dark:text-slate-600 text-xs italic">Drop funders here</div>
+                )}
+                {stageFunders.map((funder: any) => {
+                  const funderProposals = (proposals || []).filter((p: any) => p.funder === funder.funderName);
+                  const totalAsk = funderProposals.reduce((sum: number, p: any) => sum + (p.budgetTotal || 0), 0);
+                  return (
+                    <div
+                      key={funder.id}
+                      draggable
+                      onDragStart={() => setDraggedFunder(funder.id)}
+                      onDragEnd={() => setDraggedFunder(null)}
+                      className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 cursor-grab hover:shadow-md transition-shadow active:cursor-grabbing"
+                    >
+                      <div className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{funder.funderName || 'Unknown Funder'}</div>
+                      {funder.website && (
+                        <a href={funder.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 dark:text-blue-400 hover:underline truncate block mt-0.5">
+                          {(funder.website || '').replace(/^https?:\/\//, '')}
+                        </a>
+                      )}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1"><FileText size={12} /> {funderProposals.length}</span>
+                        {totalAsk > 0 && <span className="flex items-center gap-1"><TrendingUp size={12} /> ${(totalAsk / 1000).toFixed(0)}K</span>}
+                        {funder.contactName && <span className="flex items-center gap-1 truncate"><Users size={12} /> {funder.contactName}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
