@@ -4,8 +4,43 @@ export interface Env {
   GEMINI_API_KEY: string;
   ALLOWED_ORIGIN: string;
   FIREBASE_PROJECT_ID: string;
-  GOOGLE_DRIVE_TOKEN?: string; // Optional: set via Cloudflare secret for server-side Drive access
+  GOOGLE_DRIVE_TOKEN?: string;
 }
+
+// ── Model & Temperature Configuration ────────────────────────────────────────
+// Gemini 2.5-flash for all actions — native reasoning, better instruction
+// following, and superior JSON output vs 2.0-flash.
+
+type ActionCategory = 'research' | 'writing' | 'analysis' | 'chat' | 'utility';
+
+const ACTION_CONFIG: Record<string, { model: string; temperature: number; category: ActionCategory; maxTokens: number; useSearch: boolean }> = {
+  'generate-draft':          { model: 'gemini-2.5-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
+  'agent-write-proposal':    { model: 'gemini-2.5-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
+  'research-funder':         { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'research-grant-url':      { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'discover-grants':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'autopilot-search':        { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'find-adr-partners':       { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'align-proposal':          { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'align-grant-ecadrn':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'align-to-funder':         { model: 'gemini-2.5-flash', temperature: 0.5,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'compare-proposals':       { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'review-proposal':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'humanize-proposal':       { model: 'gemini-2.5-flash', temperature: 0.6,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'score-alignment':         { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-voice':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-uploaded-grant':  { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'utility',  maxTokens: 8192,  useSearch: false },
+  'generate-budget':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'writing',  maxTokens: 16384, useSearch: false },
+  'generate-justification':  { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'writing',  maxTokens: 4096,  useSearch: false },
+  'generate-outreach-email': { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
+  'chat':                    { model: 'gemini-2.5-flash', temperature: 0.8,  category: 'chat',     maxTokens: 4096,  useSearch: false },
+  'rewrite-voice':           { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'identify-missing':        { model: 'gemini-2.5-flash', temperature: 0.5,  category: 'utility',  maxTokens: 8192,  useSearch: false },
+  'verify-facts':            { model: 'gemini-2.5-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
+  'search-grants':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+};
+
+const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
 
 // ── Prompt builder ──────────────────────────────────────────────────────────
 
@@ -80,6 +115,14 @@ STRICT REQUIREMENTS:
 14. Use active voice, not passive. "We will train 50 mediators" not "50 mediators will be trained."
 15. Include community voice — reference constituent perspectives, partner organizations, or direct quotes where appropriate.
 
+REASONING BEFORE WRITING:
+Before writing, internally analyze:
+- What are the funder's top 3 stated priorities? How does each ECADRN program map to them?
+- What are the strongest outcome metrics ECADRN can credibly claim?
+- What is the most compelling hook for the executive summary based on community need?
+- What 3 sustainability strategies are most realistic for an early-career ADR network?
+Then write the proposal incorporating these decisions.
+
 WORD COUNT GUIDANCE (aim for these ranges):
 - executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
 - needStatement: 300-400 words — data-backed, community voice, urgency
@@ -104,7 +147,6 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "budgetNarrative": "string"
 }`;
 
-
     case 'research-grant-url':
       return `You are a nonprofit grants researcher and web analyst with access to web search. The user has provided a grant opportunity name and/or URL.
 
@@ -115,6 +157,7 @@ SEARCH INSTRUCTIONS:
 2. Search for recent news or announcements about this grant
 3. Search for past recipients to verify it's real and active
 4. Verify deadlines and amounts against the official source
+5. Search for the funder's 990 filing or annual report for grant history
 
 GRANT NAME: ${data.grantName}
 GRANT URL: ${data.grantUrl || 'Not provided'}
@@ -181,28 +224,47 @@ STRICT REQUIREMENTS:
 4. Budget narrative must align exactly with described activities and realistic nonprofit costs — show the math.
 5. Apply ECADRN's voice throughout — it must read as written by a human who deeply knows this org.
 6. Evaluation plan must name specific metrics, data collection methods, reporting timelines, and accountable staff.
-7. Organizational capacity section must reference ECADRN's actual programs, staff credentials, and outcomes.
-8. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
-9. Executive summary must open with a compelling, specific hook about the community need — not a boilerplate intro.
-10. Sustainability section must describe at least 3 concrete revenue diversification strategies beyond grant period.
-11. Need statement must include at least 2 specific data points or statistics with source attribution.
-12. Methodology must describe a step-by-step implementation plan with phases and timelines.
-13. Use active voice, not passive. Include community voice — constituent perspectives, partner orgs, or direct quotes.
-14. ADDITIONAL INSTRUCTIONS FROM USER: ${data.userInstructions || 'None — write the strongest possible proposal.'}
+7. Executive summary must open with a compelling, specific hook — not a mission restatement.
+8. Need statement must include at least 2 specific data points with source attribution.
+9. Methodology must describe a step-by-step implementation plan with phases, timelines, and responsible parties.
+10. Sustainability must describe at least 3 concrete revenue diversification strategies.
+11. Include community voice — constituent perspectives, partner quotes, or lived-experience references.
+12. DO NOT use AI clichés: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+13. Use active voice, not passive. "We will train 50 mediators" not "50 mediators will be trained."
+14. DO NOT use generic nonprofit filler — every sentence should be specific to ECADRN's ADR, conflict resolution, and civic equity work.
 
-ADDITIONAL INSTRUCTIONS FROM USER: ${data.userInstructions || 'None — write the strongest possible proposal.'}
+REASONING BEFORE WRITING:
+Before writing, internally analyze:
+- What are the funder's top 3 priorities and how do ECADRN's programs directly map to each?
+- What are the 3 strongest outcome metrics ECADRN can credibly claim?
+- What is the most compelling community-need hook for the executive summary?
+- What 3 sustainability strategies are most realistic for an early-career ADR network?
+- What data points best support the need statement?
+- How should the budget narrative align with the methodology activities?
+Then write the proposal incorporating these decisions.
 
-OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+WORD COUNT GUIDANCE:
+- executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
+- needStatement: 300-400 words — data-backed, community voice, urgency
+- projectDescription: 400-500 words — specific activities, timeline, populations served
+- goalsObjectives: 300-400 words — 3-4 SMART goals with measurable targets
+- methodology: 400-500 words — evidence-based approach, step-by-step activities
+- evaluationPlan: 300-400 words — metrics, data collection, reporting cadence
+- sustainability: 250-350 words — diversified revenue, partnerships, long-term vision
+- organizationalCapacity: 300-400 words — track record, team, programs, governance
+- budgetNarrative: 300-400 words — itemized rationale, cost-effectiveness, match if any
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
 {
-  "executiveSummary": "string — 300-400 words, compelling hook, mission alignment, ask amount, key outcomes",
-  "needStatement": "string — 300-400 words, data-backed, community voice, urgency",
-  "projectDescription": "string — 400-500 words, specific activities, timeline, populations served",
-  "goalsObjectives": "string — 300-400 words, 3-4 SMART goals with measurable targets",
-  "methodology": "string — 400-500 words, evidence-based approach, step-by-step activities",
-  "evaluationPlan": "string — 300-400 words, metrics, data collection, reporting cadence",
-  "sustainability": "string — 250-350 words, diversified revenue, partnerships, long-term vision",
-  "organizationalCapacity": "string — 300-400 words, track record, team, programs, governance",
-  "budgetNarrative": "string — 300-400 words, itemized rationale, cost-effectiveness, match if any"
+  "executiveSummary": "string",
+  "needStatement": "string",
+  "projectDescription": "string",
+  "goalsObjectives": "string",
+  "methodology": "string",
+  "evaluationPlan": "string",
+  "sustainability": "string",
+  "organizationalCapacity": "string",
+  "budgetNarrative": "string"
 }`;
 
     case 'research-funder':
@@ -218,6 +280,8 @@ SEARCH INSTRUCTIONS — perform these searches:
 5. Search for nonprofits similar to ECADRN that have received funding from this funder — find past grantees in the ADR, mediation, restorative justice, or access-to-justice space.
 6. Search for the funder's application deadlines, LOI requirements, and submission process.
 7. Search for any recent RFPs, funding announcements, or giving guidelines published by this funder.
+8. Search for the funder's 990-PF filing on ProPublica Nonprofit Explorer or Candid for grant-by-grant breakdowns.
+9. Search for "funder name + grants + dispute resolution" or "funder name + grants + mediation" to find ADR-specific funding history.
 
 FUNDER:
 Name: ${data.funderName}
@@ -270,6 +334,9 @@ SEARCH INSTRUCTIONS:
 4. Verify each grant program is real and currently active by checking its official page
 5. Search for real deadlines, real award amounts, and real eligibility requirements
 6. Prioritize grants with upcoming deadlines or rolling applications
+7. Search specifically for: "access to justice grants 2026", "mediation program funding", "restorative justice foundation grants", "conflict resolution nonprofit funding", "ADR grants for nonprofits"
+8. Search for state-level justice department grants that include mediation/dispute resolution components
+9. Search for bar foundation grants in states relevant to the geographic focus
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile)}
@@ -295,7 +362,10 @@ Additional guidance: ${data.searchQuery}
 GOOD examples of real funders in this space:
 - Open Society Foundations, Z. Smith Reynolds Foundation, Hewlett Foundation, MacArthur Foundation,
   Robert Wood Johnson Foundation, JPMorgan Chase Foundation, Google.org, National Institute of Justice,
-  Surdna Foundation, Woods Fund Chicago, JAMS Foundation, AAA-ICDR Foundation, NIDR, State Bar Foundations.
+  Surdna Foundation, Woods Fund Chicago, JAMS Foundation, AAA-ICDR Foundation, NIDR, State Bar Foundations,
+  Boren Foundation, Mary Reynolds Babcock Foundation, Kate B. Reynolds Charitable Trust,
+  Edward W. Hazen Foundation, Public Welfare Foundation, Vera Institute of Justice funders,
+  ABA Section of Dispute Resolution grants.
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 [
@@ -349,95 +419,49 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
 
     case 'verify-facts':
       return `You are an expert grant reviewer and fact-checker.
+Verify the claims in this grant proposal against known facts. Return JSON:
+- "verified": array of { "claim": "string", "status": "verified|unverified|false", "note": "string" }
+- "missingSources": array of strings (claims that need citation)
+- "overallConfidence": number 0-100
 
-TASK: Audit the grant proposal text below against the organization's verified profile data to identify any factual inconsistencies, unsupported claims, or demographic mismatches.
-
-PROPOSAL SECTIONS:
-${JSON.stringify(data.sections)}
-
-VERIFIED ORGANIZATIONAL DATA:
-${JSON.stringify(data.orgProfile)}
-
-OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
-[
-  {
-    "section": "executiveSummary | needStatement | projectDescription | goalsObjectives | methodology | evaluationPlan | sustainability | organizationalCapacity | budgetNarrative",
-    "severity": "high | medium | low",
-    "issue": "Detailed description of the discrepancy, mismatch, or unsupported claim",
-    "verifiedFact": "The correct fact/data from the organizational profile",
-    "proposedFix": "Specific suggestion on how to rephrase or correct the text"
-  }
-]`;
-
+Grant Proposal:
+${JSON.stringify(data.proposal || data).slice(0, 8000)}`;
 
     case 'align-grant-ecadrn':
       return `You are an expert grant writer for ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation). Align the following grant opportunity with ECADRN's mission of advancing ADR, conflict resolution, and civic equity.
 
-Grant: ${data.grantTitle || ''}
-Funder: ${data.funderName || ''}
-Description: ${data.grantDescription || ''}
-Focus Areas: ${data.focusAreas || ''}
+Return JSON:
+{
+  "alignmentScore": number 0-100,
+  "rationale": "string — 2-3 sentences explaining the alignment",
+  "suggestedApproach": "string — how ECADRN should frame their application",
+  "keyPrograms": ["string — which ECADRN programs fit this grant"]
+}
 
-Provide a JSON response with:
-- "alignmentScore" (0-100): how well this grant fits ECADRN
-- "recommendedAngle" (string): suggested approach
-- "keyKeywords" (array of strings): keywords to emphasize
-- "risks" (array of strings): potential alignment risks`;
+Grant Opportunity:
+${JSON.stringify(data).slice(0, 4000)}`;
 
     case 'align-to-funder':
       return `You are a grant alignment expert. Align the following proposal section to match the funder's priorities and language.
+Return JSON: { "alignedContent": "string", "changes": ["string — what was changed and why"] }
 
-Funder Intelligence: ${JSON.stringify(data.funderIntelligence || {})}
-Section Content: ${data.content || ''}
-
-Return JSON with:
-- "alignedContent" (string): the revised section content
-- "changes" (array of strings): summary of changes made`;
+Funder Priorities: ${data.funderPriorities || 'Not specified'}
+Funder Language: ${data.funderLanguage || 'Not specified'}
+Proposal Section: ${data.content || ''}`;
 
     case 'compare-proposals':
       return `You are an expert grant reviewer who evaluates competing proposal drafts and recommends the strongest version.
-
-PROPOSAL A:
-Title: ${data.proposal1Title || 'Proposal A'}
-Funder: ${data.proposal1Funder || 'Unknown'}
-Sections:
-${JSON.stringify(data.proposal1Sections || {})}
-
-PROPOSAL B:
-Title: ${data.proposal2Title || 'Proposal B'}
-Funder: ${data.proposal2Funder || 'Unknown'}
-Sections:
-${JSON.stringify(data.proposal2Sections || {})}
-
-GRANT CONTEXT:
-Funder: ${data.funderName || 'Unknown'}
-Focus areas: ${data.focusAreas || 'N/A'}
-
-For each of the 9 sections (executiveSummary, needStatement, projectDescription, goalsObjectives, methodology, evaluationPlan, sustainability, organizationalCapacity, budgetNarrative):
-1. Compare both versions
-2. Identify which is stronger and why
-3. Note specific strengths and weaknesses in each
-
-Also provide an overall recommendation.
-
-OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+Return JSON:
 {
-  "sections": [
-    {
-      "section": "string — section key",
-      "sectionName": "string — human-readable name",
-      "winner": "A" | "B" | "tie",
-      "rationale": "string — 2-3 sentences explaining why the winner is stronger",
-      "strengthsA": ["string"],
-      "strengthsB": ["string"],
-      "weaknessesA": ["string"],
-      "weaknessesB": ["string"]
-    }
-  ],
-  "overallWinner": "A" | "B" | "tie",
-  "overallRationale": "string — 3-4 sentences explaining the overall recommendation",
-  "mergeSuggestions": ["string — specific suggestions for combining the best of both proposals"]
-}`;
+  "winner": "A | B",
+  "reasoning": "string — 3-4 sentences explaining the choice",
+  "strengthsA": ["string"], "weaknessesA": ["string"],
+  "strengthsB": ["string"], "weaknessesB": ["string"],
+  "mergedRecommendation": "string — how to combine the best of both"
+}
+
+Proposal A: ${JSON.stringify(data.proposalA || {}).slice(0, 4000)}
+Proposal B: ${JSON.stringify(data.proposalB || {}).slice(0, 4000)}`;
 
     case 'analyze-uploaded-grant':
       return `Analyze this grant document and extract key information. Return JSON with:
@@ -473,6 +497,10 @@ SEARCH INSTRUCTIONS:
 2. Search for foundations currently accepting applications in the dispute resolution space
 3. Verify each program is real and currently active
 4. Find real deadlines and award amounts
+5. Search for: "access to justice grants 2026", "mediation program funding", "restorative justice foundation grants", "conflict resolution nonprofit funding"
+6. Search for state-level justice department grants that include mediation/dispute resolution components
+7. Search for bar foundation grants in states relevant to the geographic focus
+8. Search for federal grants on grants.gov related to dispute resolution or access to justice
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
@@ -495,7 +523,9 @@ Geographic scope: ${data.geographicFocus || 'National'}
 KNOWN FUNDERS IN THIS SPACE:
 Open Society Foundations, Z. Smith Reynolds Foundation, Hewlett Foundation, MacArthur Foundation,
 Robert Wood Johnson Foundation, JPMorgan Chase Foundation, Google.org, National Institute of Justice,
-Surdna Foundation, Woods Fund Chicago, JAMS Foundation, AAA-ICDR Foundation, NIDR, State Bar Foundations.
+Surdna Foundation, Woods Fund Chicago, JAMS Foundation, AAA-ICDR Foundation, NIDR, State Bar Foundations,
+Boren Foundation, Mary Reynolds Babcock Foundation, Kate B. Reynolds Charitable Trust,
+Public Welfare Foundation, ABA Section of Dispute Resolution grants.
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 [
@@ -517,7 +547,9 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
 ]`;
 
     case 'chat':
-      return `You are ECADRN's AI grant writing assistant. Respond in JSON format:
+      return `You are ECADRN's AI grant writing assistant. You help with grant strategy, proposal writing, funder research, and nonprofit fundraising questions. Be specific, actionable, and reference ECADRN's actual programs when relevant.
+
+Respond in JSON format:
 {"reply": "your response text"}
 
 Conversation context: ${data.context || ''}
@@ -539,6 +571,7 @@ REQUIREMENTS:
 - Each line item must have a specific, realistic dollar amount based on market rates
 - Justification must explain HOW the amount was calculated (rate × hours, per-person cost, etc.)
 - Total budget should be appropriate for a mid-size nonprofit grant ($25K-$150K range)
+- Include at least one line item for training materials and one for community outreach
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 [
@@ -581,9 +614,10 @@ INSTRUCTIONS:
 4. Do NOT use generic fundraising cliches ("we are writing to...", "we hope this email finds you well").
 5. Include a clear, specific call-to-action appropriate to the email type.
 6. If a proposal is referenced, mention its title and how it aligns with the funder.
+7. For LOI emails, include a specific dollar ask range based on the funder's typical grant size.
 
 OUTPUT FORMAT — Return ONLY this JSON. No markdown fences.
-{"subject": "string — compelling subject line", "body": "string — the email body, with proper paragraph breaks using \n\n"}`;
+{"subject": "string — compelling subject line", "body": "string — the email body, with proper paragraph breaks using \\n\\n"}`;
 
     case 'humanize-proposal':
       return `You are a grant writing editor who specializes in making proposals sound authentic, compelling, and human — not like AI-generated text.
@@ -596,7 +630,7 @@ PROPOSAL SECTIONS:
 ${JSON.stringify(data.proposal || {}).slice(0, 6000)}
 
 ANALYZE FOR:
-1. AI-sounding phrases ("delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note")
+1. AI-sounding phrases ("delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue")
 2. Generic filler that could apply to any nonprofit — flag and suggest org-specific replacements
 3. Missing concrete data, specific numbers, named programs, or real outcomes
 4. Passive voice where active voice would be stronger
@@ -621,24 +655,77 @@ Current Features: ${JSON.stringify(data.currentFeatures || [])}
 Organization: ${JSON.stringify(data.orgProfile || {}).slice(0, 2000)}`;
 
     case 'review-proposal':
-      return `Review this grant proposal for quality and completeness. Return JSON with:
-- "overallScore" (number): 0-100
-- "sectionScores" (object): score per section (0-100)
-- "strengths" (array of strings)
-- "weaknesses" (array of strings)
-- "recommendations" (array of strings)
+      return `You are a senior grant reviewer with experience on foundation and government review panels.
 
-Grant: ${data.grantTitle || ''}
-Funder: ${data.funderName || ''}
-Description: ${data.grantDescription || ''}
-Proposal: ${JSON.stringify(data.proposal || {}).slice(0, 6000)}`;
+Review this grant proposal for quality and completeness.
+
+GRANT: ${data.grantTitle || ''}
+FUNDER: ${data.funderName || ''}
+DESCRIPTION: ${data.grantDescription || ''}
+
+PROPOSAL:
+${JSON.stringify(data.proposal || {}).slice(0, 6000)}
+
+Evaluate against these criteria:
+1. Clarity and specificity — does every section contain concrete details?
+2. Funder alignment — does the proposal mirror the funder's priorities?
+3. SMART goals — are goals specific, measurable, achievable, relevant, time-bound?
+4. Budget narrative — does it align with activities and show the math?
+5. Community voice — are constituent perspectives included?
+6. Sustainability — are there 3+ concrete revenue strategies?
+7. AI clichés — flag any AI-sounding phrases
+
+Return JSON with:
+- "overallScore" (number): 0-100
+- "sectionScores" (object): score per section (0-100), keys: executiveSummary, needStatement, projectDescription, goalsObjectives, methodology, evaluationPlan, sustainability, organizationalCapacity, budgetNarrative
+- "strengths" (array of strings): specific strengths
+- "weaknesses" (array of strings): specific weaknesses with the section name
+- "recommendations" (array of strings): actionable improvements
+- "aiClichesFound" (array of strings): AI-sounding phrases detected`;
 
     case 'rewrite-voice':
-      return `Rewrite the following content to match the organization's voice profile. Return JSON: {"content": "rewritten text"}
+      return `Rewrite the following content to match the organization's voice profile. Maintain all factual content but adjust tone, word choice, and sentence structure. Return JSON: {"content": "rewritten text"}
 
 Voice Profile: ${JSON.stringify(data.voiceProfile || {}).slice(0, 2000)}
 Content: ${data.content || ''}`;
 
+    case 'score-alignment':
+      return `You are an expert grant alignment analyst for ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation).
+
+TASK: Score how well this grant opportunity aligns with ECADRN's mission and programs.
+
+ECADRN MISSION: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
+ECADRN PROGRAMS: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network.
+
+GRANT OPPORTUNITY:
+${JSON.stringify(data.grant || data).slice(0, 4000)}
+
+Score each dimension 0-100 and provide specific reasoning:
+1. Mission Alignment — how closely does the grant's purpose match ECADRN's mission?
+2. Program Fit — which ECADRN programs could this grant fund?
+3. Population Match — does the grant serve populations ECADRN works with?
+4. Geographic Fit — is the geographic scope appropriate?
+5. Budget Feasibility — is the award range realistic for ECADRN's capacity?
+6. Competitive Position — how well-positioned is ECADRN to win this grant?
+7. Strategic Value — does this grant advance ECADRN's long-term strategy?
+
+Return JSON:
+{
+  "overallScore": number,
+  "dimensionScores": {
+    "missionAlignment": number,
+    "programFit": number,
+    "populationMatch": number,
+    "geographicFit": number,
+    "budgetFeasibility": number,
+    "competitivePosition": number,
+    "strategicValue": number
+  },
+  "rationale": "string — 3-4 sentence overall assessment",
+  "bestPrograms": ["string — which ECADRN programs this grant should fund"],
+  "risks": ["string — potential challenges or misalignments"],
+  "recommendation": "string — pursue | monitor | skip, with brief reasoning"
+}`;
 
     case 'find-adr-partners':
       return `You are a research specialist in Alternative Dispute Resolution (ADR) organizations, university programs, and educational institutions in the United States. You have access to web search — USE IT EXTENSIVELY to find REAL organizations.
@@ -701,19 +788,49 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
   }
 }
 
-// Helper to clean JSON from response
+// ── Response Validation ──────────────────────────────────────────────────────
+
+function validateResponse(action: string, parsed: any): { valid: boolean; error?: string } {
+  if (parsed === null || parsed === undefined) return { valid: false, error: 'Null response' };
+  if (typeof parsed !== 'object') return { valid: false, error: 'Expected object or array' };
+
+  const arrayActions = ['discover-grants', 'autopilot-search', 'find-adr-partners', 'generate-budget'];
+  if (arrayActions.includes(action)) {
+    if (!Array.isArray(parsed)) return { valid: false, error: 'Expected array response' };
+    return { valid: true };
+  }
+
+  const requiredKeys: Record<string, string[]> = {
+    'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
+    'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
+    'research-funder': ['funderOverview', 'missionAlignmentScore'],
+    'research-grant-url': ['grantTitle', 'funderName'],
+    'score-alignment': ['overallScore', 'dimensionScores'],
+    'review-proposal': ['overallScore', 'sectionScores'],
+    'humanize-proposal': ['score', 'suggestions'],
+    'generate-outreach-email': ['subject', 'body'],
+    'chat': ['reply'],
+  };
+
+  const keys = requiredKeys[action];
+  if (keys) {
+    for (const key of keys) {
+      if (!(key in parsed)) return { valid: false, error: `Missing required field: ${key}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+// Helper to clean JSON from response (fallback if native JSON mode isn't available)
 function cleanJsonResponse(text: string): string {
   let cleaned = text.trim();
-  
-  // Strip starting ```json or ``` and ending ``` (including single backticks)
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
   cleaned = cleaned.replace(/^`\s*/, '');
   cleaned = cleaned.replace(/```\s*$/, '');
   cleaned = cleaned.replace(/`\s*$/, '');
-  
   cleaned = cleaned.trim();
 
-  // If there's extra text before the first { or [ and after the last } or ], extract the JSON structure
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   const firstBracket = cleaned.indexOf('[');
@@ -760,23 +877,16 @@ async function driveRequest(path: string, options: RequestInit, token: string) {
 
 async function verifyFirebaseToken(token: string, projectId: string): Promise<any> {
   try {
-    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${token}`;
-    // Using simple token verification via Google Identity Toolkit
-    // Note: In worker context, verifying RS256 JWT using Firebase public keys is standard,
-    // but for simplicity/robustness we verify via Google API, or parse the JWT.
-    // Let's decode the JWT payload first to see if it's expired/valid.
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     
-    // Ensure token is not expired (current time in seconds)
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) {
       console.error('Firebase token expired');
       return null;
     }
     
-    // Ensure audience matches firebase project
     if (payload.aud !== projectId) {
       console.error('Firebase project mismatch');
       return null;
@@ -793,6 +903,45 @@ async function verifyFirebaseToken(token: string, projectId: string): Promise<an
     console.error('Token verification error:', err);
     return null;
   }
+}
+
+// ── AI Generation Engine ──────────────────────────────────────────────────────
+
+async function runGeneration(
+  ai: GoogleGenAI,
+  prompt: string,
+  config: { model: string; temperature: number; maxTokens: number; useSearch: boolean },
+  useJsonMode: boolean
+): Promise<string> {
+  const generationConfig: any = {
+    model: config.model,
+    contents: prompt,
+    config: {
+      temperature: config.temperature,
+      maxOutputTokens: config.maxTokens,
+    },
+  };
+
+  // Native JSON mode — Gemini guarantees valid JSON output
+  // Cannot use responseMimeType with googleSearch tool, so only for non-search actions
+  if (useJsonMode && !config.useSearch) {
+    generationConfig.config.responseMimeType = 'application/json';
+  }
+
+  // Add Google Search tool for research actions
+  if (config.useSearch) {
+    generationConfig.config.tools = [{ googleSearch: {} }];
+  }
+
+  const generationPromise = ai.models.generateContent(generationConfig);
+
+  const timeoutMs = config.useSearch ? 45000 : 30000;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs);
+  });
+
+  const res = await Promise.race([generationPromise, timeoutPromise]);
+  return res.text?.trim() || '';
 }
 
 export default {
@@ -817,12 +966,7 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
-    // Wrap all request handling in a top-level try-catch so unhandled errors
-    // return a proper JSON response with CORS headers (instead of a raw 500
-    // that browsers misinterpret as a CORS error)
     try {
-
-
     // Verify Firebase auth token
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -847,78 +991,60 @@ export default {
       const prompt = getPrompt(action, body);
       if (prompt === 'INVALID') return json({ error: `Unknown action: ${action}` }, 400);
 
+      const config = ACTION_CONFIG[action] || DEFAULT_CONFIG;
       const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-      const modelName = action === 'agent-write-proposal' ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
 
-      // Actions that get Google Search grounding for real-time web research
-      const searchGroundedActions = ['research-funder', 'research-grant-url', 'find-adr-partners', 'discover-grants', 'autopilot-search', 'search-grants'];
-      const useSearchGrounding = searchGroundedActions.includes(action);
-
+      // Attempt 1: Native JSON mode (for non-search actions) or standard mode with search
       let resultText = '';
-      let errorOccurred = false;
-
-      // Wrap generateContent call in a timeout of 30 seconds (search-grounded calls need more time)
-      const runGeneration = async (currentPrompt: string) => {
-        const generationConfig: any = {
-          model: modelName,
-          contents: currentPrompt,
-        };
-
-        // Add Google Search tool for research actions
-        if (useSearchGrounding) {
-          generationConfig.config = {
-            tools: [{ googleSearch: {} }],
-          };
-        }
-
-        const generationPromise = ai.models.generateContent(generationConfig);
-
-        const timeoutMs = useSearchGrounding ? 40000 : 25000;
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs);
-        });
-
-        const res = await Promise.race([generationPromise, timeoutPromise]);
-        return res.text?.trim() || '';
-      };
+      let attempt1Error = false;
 
       try {
-        resultText = await runGeneration(prompt);
+        resultText = await runGeneration(ai, prompt, config, true);
       } catch (err: any) {
         if (err.message === 'TIMEOUT') {
-          return json({ error: 'Service Unavailable: AI generation timed out' }, 503);
+          return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
         }
-        errorOccurred = true;
+        attempt1Error = true;
+        console.error(`AI generation attempt 1 failed for action "${action}":`, err.message || err);
       }
 
-      // Retry wrapper: if generateContent throws or returns empty text, retry once with a slightly different prompt
-      if (errorOccurred || !resultText) {
+      // Attempt 2: Retry with explicit JSON instruction appended to prompt
+      if (attempt1Error || !resultText) {
         try {
-          const retryPrompt = `${prompt}\n\nIMPORTANT: Respond with valid JSON only, no markdown formatting.`;
-          resultText = await runGeneration(retryPrompt);
+          const retryPrompt = `${prompt}\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no preamble. Start with { or [ and end with } or ].`;
+          resultText = await runGeneration(ai, retryPrompt, config, false);
         } catch (err: any) {
           if (err.message === 'TIMEOUT') {
-            return json({ error: 'Service Unavailable: AI generation timed out' }, 503);
+            return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
           }
-          return json({ error: `AI Generation failed: ${err.message || err}` }, 500);
+          return json({ error: `AI generation failed after retry: ${err.message || err}` }, 500);
         }
       }
 
       if (!resultText) {
-        return json({ error: 'AI returned empty response' }, 500);
+        return json({ error: 'AI returned an empty response. Please try again.' }, 500);
       }
 
       const cleaned = cleanJsonResponse(resultText);
 
+      let parsed: any;
       try {
-        return json(JSON.parse(cleaned));
+        parsed = JSON.parse(cleaned);
       } catch {
-        return json({ raw: cleaned });
+        console.error(`JSON parse failed for action "${action}". Raw length: ${cleaned.length}`);
+        return json({ raw: cleaned, error: 'AI response was not valid JSON' });
       }
+
+      // Validate the response structure
+      const validation = validateResponse(action, parsed);
+      if (!validation.valid) {
+        console.error(`Validation failed for action "${action}": ${validation.error}`);
+      }
+
+      return json(parsed);
     }
 
     // ── Google Drive Routes ────────────────────────────────────────────────
-    // Drive token is passed in X-Drive-Token header (user's OAuth token from frontend)
     const driveToken = request.headers.get('X-Drive-Token');
 
     if (path === '/drive/files' && request.method === 'POST') {
@@ -928,7 +1054,6 @@ export default {
       let q = "trashed=false";
       if (body.folderId) q += ` and '${body.folderId}' in parents`;
       if (body.query) q += ` and (name contains '${body.query}' or fullText contains '${body.query}')`;
-      // Only docs, sheets, plain text, and PDFs
       q += " and (mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet' or mimeType='text/plain' or mimeType='application/pdf')";
 
       const params = new URLSearchParams({
@@ -948,7 +1073,6 @@ export default {
       if (!driveToken) return json({ error: 'Drive token required' }, 400);
       const fileId = path.split('/')[3];
 
-      // First check mimeType to see if it's a Workspace doc that needs exporting
       const metaRes = await driveRequest(`/files/${fileId}?fields=mimeType,name`, { method: 'GET' }, driveToken);
       if (!metaRes.ok) return json({ error: 'Drive metadata error', details: await metaRes.text() }, metaRes.status);
       const meta = await metaRes.json() as any;
@@ -974,6 +1098,61 @@ export default {
           'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.name)}"`,
         },
       });
+    }
+
+    if (path === '/drive/folders' && request.method === 'GET') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+
+      const params = new URLSearchParams({
+        q: "trashed=false and mimeType='application/vnd.google-apps.folder'",
+        fields: 'files(id,name)',
+        pageSize: '50',
+      });
+
+      const res = await driveRequest(`/files?${params}`, { method: 'GET' }, driveToken);
+      if (!res.ok) return json({ error: 'Drive API error', details: await res.text() }, res.status);
+      const data = await res.json() as any;
+      return json({ folders: data.files || [] });
+    }
+
+    if (path === '/drive/export' && request.method === 'POST') {
+      if (!driveToken) return json({ error: 'Drive token required' }, 400);
+      const body = await request.json() as any;
+
+      const createRes = await driveRequest(`/files`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: body.title,
+          mimeType: 'application/vnd.google-apps.document',
+          ...(body.folderId ? { parents: [body.folderId] } : {}),
+        }),
+      }, driveToken);
+
+      if (!createRes.ok) return json({ error: 'Failed to create document', details: await createRes.text() }, createRes.status);
+      const created = await createRes.json() as any;
+
+      let docContent = '';
+      if (body.sections) {
+        for (const section of body.sections) {
+          docContent += `${section.title}\n\n${section.content}\n\n`;
+          if (section.budget) {
+            docContent += `Budget:\n${JSON.stringify(section.budget, null, 2)}\n\n`;
+          }
+        }
+      }
+
+      const updateRes = await driveRequest(`/files/${created.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body: { content: docContent },
+        }),
+      }, driveToken);
+
+      if (!updateRes.ok) return json({ error: 'Failed to write content', details: await updateRes.text() }, updateRes.status);
+
+      return json({ fileId: created.id, webViewLink: `https://docs.google.com/document/d/${created.id}/edit` });
     }
 
     } catch (err: any) {
