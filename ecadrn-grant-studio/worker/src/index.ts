@@ -32,6 +32,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'analyze-uploaded-grant':  { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'utility',  maxTokens: 8192,  useSearch: false },
   'generate-budget':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'writing',  maxTokens: 16384, useSearch: false },
   'generate-justification':  { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'writing',  maxTokens: 4096,  useSearch: false },
+  'generate-timeline':        { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'writing',  maxTokens: 8192,  useSearch: false },
   'generate-outreach-email': { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
   'chat':                    { model: 'gemini-2.5-flash', temperature: 0.8,  category: 'chat',     maxTokens: 4096,  useSearch: false },
   'rewrite-voice':           { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'analysis', maxTokens: 16384, useSearch: false },
