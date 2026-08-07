@@ -63,6 +63,7 @@ import {
   GitCompare,
   Bookmark,
   Save,
+  ShieldCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -3265,7 +3266,6 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       )}
                     </div>
                   </motion.div>
-                )}
                 )}
 
                 <div className={`max-w-3xl mx-auto space-y-8 ${focusMode ? 'pt-12' : ''}`}>
