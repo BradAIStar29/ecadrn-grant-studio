@@ -2772,7 +2772,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
               <button 
                 onClick={() => setShowRefineBox(!showRefineBox)}
                 disabled={!!isAIWorking}
-                className={`p-2 rounded-lg transition-all ${isAIWorking === 'refine' ? 'bg-amber-100 text-amber-600' : 'showRefineBox ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                className={`p-2 rounded-lg transition-all ${isAIWorking === 'refine' ? 'bg-amber-100 text-amber-600' : showRefineBox ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`}
                 title="Refine Section with AI"
               >
                 <Wand2 size={18} className={isAIWorking === 'refine' ? 'animate-pulse' : ''} />
@@ -3172,6 +3172,99 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       </div>
                     </div>
                   </motion.div>
+
+                {showPreSubmitCheck && preSubmitResults && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
+                    className="max-w-3xl mx-auto mb-12 bg-white border-2 border-emerald-200 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100/30 blur-3xl -mr-32 -mt-32"></div>
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <h5 className="text-2xl font-black tracking-tight mb-1 flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${preSubmitResults.recommendation === 'go' ? 'bg-emerald-500' : preSubmitResults.recommendation === 'revise' ? 'bg-amber-500' : 'bg-rose-500'}`}>
+                              <ShieldCheck size={20} className="text-white" />
+                            </div>
+                            Pre-Submission Check
+                          </h5>
+                          <p className="text-slate-500 text-sm font-medium">Score: {preSubmitResults.overallScore}/100</p>
+                        </div>
+                        <button onClick={() => setShowPreSubmitCheck(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={20} /></button>
+                      </div>
+
+                      <div className={`p-4 rounded-xl mb-6 ${preSubmitResults.recommendation === 'go' ? 'bg-emerald-50 border border-emerald-200' : preSubmitResults.recommendation === 'revise' ? 'bg-amber-50 border border-amber-200' : 'bg-rose-50 border border-rose-200'}`}>
+                        <p className={`text-sm font-bold ${preSubmitResults.recommendation === 'go' ? 'text-emerald-700' : preSubmitResults.recommendation === 'revise' ? 'text-amber-700' : 'text-rose-700'}`}>
+                          {preSubmitResults.recommendation === 'go' ? 'GO - Ready for submission' : preSubmitResults.recommendation === 'revise' ? 'REVISE - Fix the items below first' : 'NO-GO - Critical issues must be resolved'}
+                        </p>
+                        <p className="text-xs text-slate-600 mt-2">{preSubmitResults.summary}</p>
+                      </div>
+
+                      {preSubmitResults.mustFix && preSubmitResults.mustFix.length > 0 && (
+                        <div className="mb-4">
+                          <h6 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Must Fix</h6>
+                          <ul className="space-y-1.5">
+                            {preSubmitResults.mustFix.map((item: string, i: number) => (
+                              <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-rose-50 p-2 rounded-lg">
+                                <span className="text-rose-500 mt-0.5 shrink-0">[!]</span> {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {preSubmitResults.shouldFix && preSubmitResults.shouldFix.length > 0 && (
+                        <div className="mb-4">
+                          <h6 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Should Fix</h6>
+                          <ul className="space-y-1.5">
+                            {preSubmitResults.shouldFix.map((item: string, i: number) => (
+                              <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-amber-50 p-2 rounded-lg">
+                                <span className="text-amber-500 mt-0.5 shrink-0">[~]</span> {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {preSubmitResults.aiClichesFound && preSubmitResults.aiClichesFound.length > 0 && (
+                        <div className="mb-4">
+                          <h6 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">AI Cliches Detected</h6>
+                          <div className="flex flex-wrap gap-2">
+                            {preSubmitResults.aiClichesFound.map((phrase: string, i: number) => (
+                              <span key={i} className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-lg border border-purple-200 font-medium">{phrase}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {preSubmitResults.unsourcedClaims && preSubmitResults.unsourcedClaims.length > 0 && (
+                        <div className="mb-4">
+                          <h6 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-2">Unsourced Claims</h6>
+                          <ul className="space-y-1.5">
+                            {preSubmitResults.unsourcedClaims.map((claim: string, i: number) => (
+                              <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-orange-50 p-2 rounded-lg">
+                                <span className="text-orange-500 mt-0.5 shrink-0">[#]</span> {claim}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {preSubmitResults.niceToHave && preSubmitResults.niceToHave.length > 0 && (
+                        <div>
+                          <h6 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nice to Have</h6>
+                          <ul className="space-y-1.5">
+                            {preSubmitResults.niceToHave.map((item: string, i: number) => (
+                              <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                                <span className="text-slate-300 mt-0.5 shrink-0">[*]</span> {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
                 )}
 
                 <div className={`max-w-3xl mx-auto space-y-8 ${focusMode ? 'pt-12' : ''}`}>
