@@ -1075,13 +1075,13 @@ CORE PROGRAMS:
         <div id="sidebar-logo" className="p-6 flex items-center justify-between">
           {isSidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-8000 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center">
                 <div className="w-4 h-4 bg-white dark:bg-slate-900 rounded-sm"></div>
               </div>
               <span className="text-white font-bold text-lg tracking-tight">Nexus OS</span>
             </div>
           ) : (
-            <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-8000 rounded-lg flex items-center justify-center mx-auto">
+            <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center mx-auto">
               <div className="w-4 h-4 bg-white dark:bg-slate-900 rounded-sm"></div>
             </div>
           )}
@@ -1497,7 +1497,7 @@ CORE PROGRAMS:
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className="bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl mx-4 border border-slate-200 dark:border-slate-700 overflow-hidden"
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl mx-4 border border-slate-200 dark:border-slate-700 overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -1524,7 +1524,7 @@ CORE PROGRAMS:
                       setShowGlobalSearch(false);
                       setSearchQuery('');
                     }}
-                    className="w-full flex items-start gap-3 px-5 py-3 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors text-left border-b border-slate-100 dark:border-slate-800 dark:border-slate-700/50 last:border-0"
+                    className="w-full flex items-start gap-3 px-5 py-3 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors text-left border-b border-slate-100 dark:border-slate-700/50 last:border-0"
                   >
                     <span className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mt-0.5 w-20 flex-shrink-0">{result.type}</span>
                     <div className="flex-1 min-w-0">
@@ -1572,7 +1572,7 @@ function NavItem({ icon, label, active, onClick, collapsed, id, highlighted, bad
       {highlighted && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-50 dark:bg-slate-8000"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
         </span>
       )}
     </button>
@@ -1590,7 +1590,7 @@ function DeadlineBadge({ deadline }: { deadline: string | Date }) {
     return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">EXPIRED</span>;
   }
   if (daysLeft <= 3) {
-    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-50 dark:bg-slate-8000 text-white border border-red-600 animate-pulse">CRITICAL</span>;
+    return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500 text-white border border-red-600 animate-pulse">CRITICAL</span>;
   }
   if (daysLeft <= 7) {
     return <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">URGENT</span>;
@@ -1661,7 +1661,7 @@ function DashboardView({
     { label: 'Researching', count: grantPipeline.researching, color: 'bg-blue-400', pct: stagePct(grantPipeline.researching) },
     { label: 'Drafting', count: grantPipeline.drafting, color: 'bg-indigo-400', pct: stagePct(grantPipeline.drafting) },
     { label: 'Submitted', count: grantPipeline.submitted, color: 'bg-amber-400', pct: stagePct(grantPipeline.submitted) },
-    { label: 'Awarded', count: grantPipeline.awarded, color: 'bg-emerald-50 dark:bg-slate-8000', pct: stagePct(grantPipeline.awarded) },
+    { label: 'Awarded', count: grantPipeline.awarded, color: 'bg-emerald-50 dark:bg-slate-800', pct: stagePct(grantPipeline.awarded) },
     { label: 'Declined', count: grantPipeline.declined, color: 'bg-rose-300', pct: stagePct(grantPipeline.declined) },
   ];
 
@@ -1859,7 +1859,7 @@ function VoiceMetric({ label, value }: VoiceMetricProps) {
       </div>
       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
         <div 
-          className="bg-indigo-50 dark:bg-slate-8000 h-full transition-all duration-500" 
+          className="bg-indigo-50 dark:bg-slate-800 h-full transition-all duration-500" 
           style={{ width: `${value}%` }}
         ></div>
       </div>
@@ -2361,7 +2361,7 @@ function ProposalsView({
                         <span className={`text-xs font-medium w-36 shrink-0 ${differs ? 'text-slate-700' : 'text-slate-400'}`}>{s.name}</span>
                         <div className="flex-1 flex items-center gap-2">
                           <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${winner === 0 ? 'bg-indigo-50 dark:bg-slate-8000' : 'bg-indigo-300'}`} style={{ width: `${(s.wc1/max)*100}%` }} />
+                            <div className={`h-full rounded-full ${winner === 0 ? 'bg-indigo-50 dark:bg-slate-800' : 'bg-indigo-300'}`} style={{ width: `${(s.wc1/max)*100}%` }} />
                           </div>
                           <span className="text-xs text-slate-500 w-12 text-right">{s.wc1}w</span>
                         </div>
@@ -3192,7 +3192,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                   <span className="text-xs font-bold text-slate-900 dark:text-white">{totalWordCount} / 2500 Words</span>
                 </div>
                 <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-indigo-50 dark:bg-slate-8000 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (totalWordCount / 2500) * 100)}%` }}></div>
+                  <div className="bg-indigo-50 dark:bg-slate-800 h-full transition-all duration-1000" style={{ width: `${Math.min(100, (totalWordCount / 2500) * 100)}%` }}></div>
                 </div>
               </div>
 
@@ -3344,7 +3344,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           <div className="w-full bg-slate-850 h-1 rounded-full mt-2 overflow-hidden">
                             <div 
                               className={`h-full transition-all duration-500 ${
-                                humanizerResults.aiProbabilityScore > 40 ? 'bg-rose-500' : 'bg-emerald-50 dark:bg-slate-8000'
+                                humanizerResults.aiProbabilityScore > 40 ? 'bg-rose-500' : 'bg-emerald-50 dark:bg-slate-800'
                               }`} 
                               style={{ width: `${humanizerResults.aiProbabilityScore}%` }}
                             ></div>
@@ -3370,7 +3370,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           <div className="text-sm font-black flex items-center gap-1.5 mt-1">
                             <span className={`w-2.5 h-2.5 rounded-full ${
                               humanizerResults.funderAiCheckRisk === 'High' ? 'bg-rose-500 animate-ping' :
-                              humanizerResults.funderAiCheckRisk === 'Medium' ? 'bg-amber-500' : 'bg-emerald-50 dark:bg-slate-8000'
+                              humanizerResults.funderAiCheckRisk === 'Medium' ? 'bg-amber-500' : 'bg-emerald-50 dark:bg-slate-800'
                             }`}></span>
                             <span className={
                               humanizerResults.funderAiCheckRisk === 'High' ? 'text-rose-400' :
@@ -3479,12 +3479,12 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                     initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
                     className="max-w-3xl mx-auto mb-12 bg-slate-900 text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden"
                   >
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 dark:bg-slate-8000/10 blur-3xl -mr-32 -mt-32"></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 dark:bg-slate-800/10 blur-3xl -mr-32 -mt-32"></div>
                     <div className="relative z-10">
                       <div className="flex justify-between items-center mb-8">
                         <div>
                           <h5 className="text-2xl font-black tracking-tight mb-1 flex items-center gap-3">
-                            <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-8000 rounded-lg flex items-center justify-center">
+                            <div className="w-8 h-8 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center">
                               <CheckCircle size={16} />
                             </div>
                             AI Review Summary
@@ -3534,7 +3534,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       <div className="flex justify-between items-center mb-6">
                         <div>
                           <h5 className="text-2xl font-black tracking-tight mb-1 flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${preSubmitResults.recommendation === 'go' ? 'bg-emerald-50 dark:bg-slate-8000' : preSubmitResults.recommendation === 'revise' ? 'bg-amber-50 dark:bg-slate-8000' : 'bg-rose-500'}`}>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${preSubmitResults.recommendation === 'go' ? 'bg-emerald-50 dark:bg-slate-800' : preSubmitResults.recommendation === 'revise' ? 'bg-amber-50 dark:bg-slate-800' : 'bg-rose-500'}`}>
                               <ShieldCheck size={20} className="text-white" />
                             </div>
                             Pre-Submission Check
@@ -3876,7 +3876,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
               >
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 bg-indigo-50 dark:bg-slate-8000 rounded-full animate-ping"></span>
+                    <span className="w-2.5 h-2.5 bg-indigo-50 dark:bg-slate-800 rounded-full animate-ping"></span>
                     <div>
                       <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest block">Section Chat Room</h5>
                       <span className="text-[9px] text-slate-400 font-bold block">Section-specific team syncing</span>
@@ -7198,12 +7198,12 @@ Deadline: 2026-11-15`;
             </div>
             
             {activeVoiceForSuggestions ? (
-              <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-150 space-y-2">
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-[9px] font-black uppercase text-indigo-600 tracking-wider">Active Voice Profile:</span>
                   <span className="text-[10px] font-bold text-slate-700 font-mono text-xs">{activeVoiceForSuggestions.name}</span>
                 </div>
-                <div className="space-y-1.5 pt-1.5 border-t border-slate-150">
+                <div className="space-y-1.5 pt-1.5 border-t border-slate-200">
                   <div>
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tone Descriptors</span>
                     <div className="flex flex-wrap gap-1 mt-0.5">
@@ -8342,7 +8342,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
         <div className="space-y-6">
           {/* Voice Rewriter Tool */}
           <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl flex flex-col border border-slate-800">
-            <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-8000 rounded-xl flex items-center justify-center mb-6 text-white shadow-lg shadow-indigo-500/20">
+            <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-white shadow-lg shadow-indigo-500/20">
               <Scroll size={20} className="text-white" />
             </div>
             <h4 className="font-bold text-lg mb-2">Voice Rewriter Scratchpad</h4>
@@ -8372,7 +8372,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
             <button 
               onClick={rewriteText}
               disabled={isRewriting || !textToRewrite.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-50 dark:bg-slate-8000 text-white py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-slate-950"
+              className="w-full bg-indigo-600 hover:bg-indigo-50 dark:bg-slate-800 text-white py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-slate-950"
             >
               {isRewriting ? <RefreshCw className="animate-spin text-white" size={14} /> : null}
               {isRewriting ? 'Translating Syntax...' : 'Apply Calibrated Voice'}
@@ -8426,7 +8426,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                     <span className="block text-slate-400 text-[10px] uppercase font-bold mb-1">Writing Maturity Score</span>
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-emerald-50 dark:bg-slate-8000 h-full" style={{ width: `${analyzedResult.maturityScore || 80}%` }}></div>
+                        <div className="bg-emerald-50 dark:bg-slate-800 h-full" style={{ width: `${analyzedResult.maturityScore || 80}%` }}></div>
                       </div>
                       <span className="font-bold text-slate-800 text-xs">{analyzedResult.maturityScore || 80}%</span>
                     </div>
@@ -9061,7 +9061,7 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
           <div className="p-6 space-y-3">
             {missingComponents.map((m, i) => (
               <div key={i} className="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
-                <div className="w-1.5 h-1.5 bg-amber-50 dark:bg-slate-8000 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-amber-50 dark:bg-slate-800 rounded-full"></div>
                 {m}
               </div>
             ))}
@@ -9125,7 +9125,7 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
     <div id="chat-view" className="h-[calc(100vh-12rem)] flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
       <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-900 text-white">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-8000 rounded-lg flex items-center justify-center">
+          <div className="w-10 h-10 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center">
             <MessageSquare size={20} />
           </div>
           <div>
@@ -9233,11 +9233,11 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
 
   const getUrgencyColors = (urgency: string) => {
     switch (urgency) {
-      case 'critical': return { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100', badge: 'bg-rose-500 text-white' };
-      case 'urgent': return { bg: 'bg-amber-50 dark:bg-slate-800', text: 'text-amber-600', border: 'border-amber-100', badge: 'bg-amber-50 dark:bg-slate-8000 text-white' };
-      case 'soon': return { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-100', badge: 'bg-yellow-400 text-white' };
+      case 'critical': return { bg: 'bg-rose-50 dark:bg-slate-800', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-100 dark:border-rose-900', badge: 'bg-rose-500 text-white' };
+      case 'urgent': return { bg: 'bg-amber-50 dark:bg-slate-800', text: 'text-amber-600', border: 'border-amber-100', badge: 'bg-amber-50 dark:bg-slate-800 text-white' };
+      case 'soon': return { bg: 'bg-yellow-50 dark:bg-slate-800', text: 'text-yellow-600 dark:text-yellow-400', border: 'border-yellow-100 dark:border-yellow-900', badge: 'bg-yellow-400 text-white' };
       case 'past': return { bg: 'bg-slate-50', text: 'text-slate-400', border: 'border-slate-100 dark:border-slate-800', badge: 'bg-slate-300 text-slate-600' };
-      default: return { bg: 'bg-indigo-50 dark:bg-slate-800', text: 'text-indigo-600', border: 'border-indigo-100', badge: 'bg-indigo-50 dark:bg-slate-8000 text-white' };
+      default: return { bg: 'bg-indigo-50 dark:bg-slate-800', text: 'text-indigo-600', border: 'border-indigo-100', badge: 'bg-indigo-50 dark:bg-slate-800 text-white' };
     }
   };
 
@@ -9306,7 +9306,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             <button
               onClick={() => setActiveTab('grid')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'grid' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+                activeTab === 'grid' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Calendar Grid
@@ -9314,7 +9314,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             <button
               onClick={() => setActiveTab('monthly')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'monthly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+                activeTab === 'monthly' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Monthly Track
@@ -9322,7 +9322,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             <button
               onClick={() => setActiveTab('weekly')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === 'weekly' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-900'
+                activeTab === 'weekly' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Weekly Columns
@@ -9332,7 +9332,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
           <button
             onClick={() => setShowPast(!showPast)}
             className={`text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-full transition-all ${
-              showPast ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              showPast ? 'bg-slate-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {showPast ? '✓ Past' : 'Hide Past'}
@@ -9364,13 +9364,13 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xl shadow-slate-100">
           {/* Month navigation */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
-            <button onClick={goPrevMonth} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors">
+            <button onClick={goPrevMonth} className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors">
               <ChevronLeft size={18} />
             </button>
             <span className="text-sm font-black text-slate-800 uppercase tracking-wider">
               {monthNames[navMonth]} {navYear}
             </span>
-            <button onClick={goNextMonth} className="p-2 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors">
+            <button onClick={goNextMonth} className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors">
               <ChevronRight size={18} />
             </button>
           </div>
@@ -9461,7 +9461,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
             
             return (
               <div key={colName} className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 flex flex-col min-h-[300px]">
-                <div className="border-b border-slate-150 pb-2 mb-3 flex justify-between items-center">
+                <div className="border-b border-slate-200 pb-2 mb-3 flex justify-between items-center">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 dark:text-slate-500">{colName}</h4>
                   <span className="text-[9px] font-bold text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded-full">{colEvents.length}</span>
                 </div>
@@ -9731,7 +9731,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
             { label: 'Researching', count: pipeline.researching, pct: totalPipeline > 0 ? Math.round((pipeline.researching / totalPipeline) * 100) : 0, color: 'bg-blue-400' },
             { label: 'Drafting', count: pipeline.drafting, pct: totalPipeline > 0 ? Math.round((pipeline.drafting / totalPipeline) * 100) : 0, color: 'bg-indigo-400' },
             { label: 'Submitted', count: pipeline.submitted, pct: totalPipeline > 0 ? Math.round((pipeline.submitted / totalPipeline) * 100) : 0, color: 'bg-amber-400' },
-            { label: 'Awarded', count: pipeline.awarded, pct: totalPipeline > 0 ? Math.round((pipeline.awarded / totalPipeline) * 100) : 0, color: 'bg-emerald-50 dark:bg-slate-8000' },
+            { label: 'Awarded', count: pipeline.awarded, pct: totalPipeline > 0 ? Math.round((pipeline.awarded / totalPipeline) * 100) : 0, color: 'bg-emerald-50 dark:bg-slate-800' },
           ].map(stage => (
             <div key={stage.label} className="flex items-center gap-3">
               <span className="text-xs font-bold text-slate-600 w-24">{stage.label}</span>
@@ -9773,7 +9773,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
                       <span className="text-xs text-slate-400 dark:text-slate-500">{stats.won}W · {stats.lost}L · {stats.pending}P{stats.totalValue > 0 && ` · $${(stats.totalValue / 1000).toFixed(0)}K`}</span>
                     </div>
                     <div className="flex h-4 rounded-full overflow-hidden bg-slate-100">
-                      <div className="bg-emerald-50 dark:bg-slate-8000" style={{ width: `${wonPct}%` }} />
+                      <div className="bg-emerald-50 dark:bg-slate-800" style={{ width: `${wonPct}%` }} />
                       <div className="bg-rose-400" style={{ width: `${lostPct}%` }} />
                       <div className="bg-amber-400" style={{ width: `${pendingPct}%` }} />
                     </div>
@@ -9783,7 +9783,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
             </div>
           )}
           <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-emerald-50 dark:bg-slate-8000" />Won</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-emerald-50 dark:bg-slate-800" />Won</span>
             <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" />Lost</span>
             <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" />Pending</span>
           </div>
@@ -9794,10 +9794,10 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
           <h3 className="font-bold text-slate-900 text-sm mb-4">Grant Discovery Sources</h3>
           <div className="space-y-3">
             {[
-              { label: 'AI Discovery', count: sourceStats.discovery, color: 'bg-indigo-50 dark:bg-slate-8000' },
+              { label: 'AI Discovery', count: sourceStats.discovery, color: 'bg-indigo-50 dark:bg-slate-800' },
               { label: 'Autopilot', count: sourceStats.autopilot, color: 'bg-violet-500' },
               { label: 'ADR Network', count: sourceStats.adrNetwork, color: 'bg-blue-500' },
-              { label: 'Saved Searches', count: sourceStats.savedSearch, color: 'bg-emerald-50 dark:bg-slate-8000' },
+              { label: 'Saved Searches', count: sourceStats.savedSearch, color: 'bg-emerald-50 dark:bg-slate-800' },
               { label: 'Manual / Upload', count: sourceStats.manual, color: 'bg-slate-400' },
             ].filter(s => s.count > 0).map(s => {
               const pct = totalPipeline > 0 ? Math.round((s.count / totalPipeline) * 100) : 0;
@@ -9824,7 +9824,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
             <div key={m.label} className="flex-1 flex flex-col items-center gap-1">
               <div className="w-full flex items-end justify-center gap-1 h-32">
                 <div
-                  className="w-1/2 bg-indigo-50 dark:bg-slate-8000 rounded-t transition-all duration-500"
+                  className="w-1/2 bg-indigo-50 dark:bg-slate-800 rounded-t transition-all duration-500"
                   style={{ height: `${(m.grants / maxMonthly) * 100}%`, minHeight: m.grants > 0 ? '8px' : '0' }}
                   title={`${m.grants} grants`}
                 />
@@ -9839,7 +9839,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
           ))}
         </div>
         <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded bg-indigo-50 dark:bg-slate-8000" />Grants Discovered</span>
+          <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded bg-indigo-50 dark:bg-slate-800" />Grants Discovered</span>
           <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500"><span className="w-2.5 h-2.5 rounded bg-emerald-400" />Proposals Created</span>
         </div>
       </div>
@@ -9870,7 +9870,7 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
             {[
               { label: 'Prospects', count: funderStages.prospect, color: 'bg-slate-400' },
               { label: 'Contacted / LOI', count: funderStages.contacted, color: 'bg-blue-400' },
-              { label: 'Active / Proposal Pending', count: funderStages.active, color: 'bg-emerald-50 dark:bg-slate-8000' },
+              { label: 'Active / Proposal Pending', count: funderStages.active, color: 'bg-emerald-50 dark:bg-slate-800' },
             ].map(s => {
               const total = safeFunders.length || 1;
               const pct = Math.round((s.count / total) * 100);
@@ -10345,7 +10345,7 @@ function Walkthrough({
           <div 
             key={i} 
             className={`h-1.5 rounded-full transition-all ${
-              i === currentStep ? 'w-6 bg-indigo-50 dark:bg-slate-8000' : 'w-1.5 bg-slate-800'
+              i === currentStep ? 'w-6 bg-indigo-50 dark:bg-slate-800' : 'w-1.5 bg-slate-800'
             }`}
           ></div>
         ))}
@@ -10365,7 +10365,7 @@ function Walkthrough({
             if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
             else onClose();
           }}
-          className="flex-[2] py-2 bg-indigo-600 hover:bg-indigo-50 dark:bg-slate-8000 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-lg shadow-indigo-950"
+          className="flex-[2] py-2 bg-indigo-600 hover:bg-indigo-50 dark:bg-slate-800 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-lg shadow-indigo-950"
         >
           <span>{currentStep < steps.length - 1 ? 'Next Step' : 'Launch OS'}</span>
           <ChevronRight size={14} />
@@ -10757,9 +10757,9 @@ function FunderCRMView({ funders, proposals, orgId, organization }: { funders: a
   const stages = [
     { key: 'cold', label: 'Cold Lead', color: 'bg-slate-400' },
     { key: 'contacted', label: 'Contacted', color: 'bg-blue-500' },
-    { key: 'loi', label: 'LOI Sent', color: 'bg-amber-50 dark:bg-slate-8000' },
+    { key: 'loi', label: 'LOI Sent', color: 'bg-amber-50 dark:bg-slate-800' },
     { key: 'proposal', label: 'Proposal Submitted', color: 'bg-purple-500' },
-    { key: 'funded', label: 'Funded', color: 'bg-emerald-50 dark:bg-slate-8000' },
+    { key: 'funded', label: 'Funded', color: 'bg-emerald-50 dark:bg-slate-800' },
   ];
 
   const [draggedFunder, setDraggedFunder] = useState<string | null>(null);
@@ -10847,7 +10847,7 @@ function FunderCRMView({ funders, proposals, orgId, organization }: { funders: a
                       draggable
                       onDragStart={() => setDraggedFunder(funder.id)}
                       onDragEnd={() => setDraggedFunder(null)}
-                      className="bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 cursor-grab hover:shadow-md transition-shadow active:cursor-grabbing"
+                      className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-3 cursor-grab hover:shadow-md transition-shadow active:cursor-grabbing"
                     >
                       <div className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{funder.funderName || 'Unknown Funder'}</div>
                       {funder.website && (
