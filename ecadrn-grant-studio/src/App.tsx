@@ -19,6 +19,7 @@ import {
   Plus,
   PlusCircle,
   Mic,
+  ArrowLeft,
   ArrowRight,
   TrendingUp,
   AlertTriangle,
@@ -340,6 +341,7 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [proposals, setProposals] = useState<any[]>([]);
+  const [proposalsLoaded, setProposalsLoaded] = useState(false);
   const [grants, setGrants] = useState<any[]>([]);
   const [funders, setFunders] = useState<any[]>([]);
   const [voiceProfiles, setVoiceProfiles] = useState<any[]>([]);
@@ -643,6 +645,7 @@ CORE PROGRAMS:
     const proposalsRef = collection(db, proposalsPath);
     const unsubProposals = onSnapshot(query(proposalsRef, orderBy('updatedAt', 'desc')), (snap) => {
       setProposals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setProposalsLoaded(true);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, proposalsPath);
     });
@@ -1637,7 +1640,7 @@ CORE PROGRAMS:
               transition={{ duration: 0.2 }}
             >
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
-            {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
+            {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
             {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
@@ -2213,9 +2216,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onPrintProposal, onWinLossAnalysis, winLossResults
+  proposals, proposalsLoaded, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onPrintProposal, onWinLossAnalysis, winLossResults
 }: { 
-  proposals: any[], organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
+  proposals: any[], proposalsLoaded: boolean, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2588,7 +2591,25 @@ function ProposalsView({
                   </div>
                 </td>
               </tr>
-            )) : (
+            )) : !proposalsLoaded ? (
+              <tr>
+                <td colSpan={5}>
+                  <div className="py-8 space-y-3">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="flex items-center gap-4 animate-pulse">
+                        <div className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+                          <div className="h-3 w-1/3 rounded bg-slate-100 dark:bg-slate-800" />
+                        </div>
+                        <div className="h-6 w-16 rounded-full bg-slate-100 dark:bg-slate-800" />
+                        <div className="h-3 w-20 rounded bg-slate-100 dark:bg-slate-800" />
+                      </div>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ) : (
               <tr>
                 <td colSpan={5}><EmptyState icon={FileText} title="No proposals yet" description="Start by generating a draft from a discovered grant or from scratch." /></td>
               </tr>
@@ -3327,11 +3348,15 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       {!focusMode && (
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <button onClick={onBack} className="p-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 rounded-lg text-slate-400 dark:text-slate-500">
-              <X size={20} />
+            <button onClick={onBack} className="p-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 rounded-lg text-slate-400 dark:text-slate-500" aria-label="Back to proposals" title="Back to proposals">
+              <ArrowLeft size={20} />
             </button>
-            <div>
-              <h4 className="font-bold text-slate-900 leading-tight">{proposal.title}</h4>
+            <nav aria-label="Proposal breadcrumb" className="flex items-center gap-2 text-sm">
+              <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 font-medium transition-colors">Proposals</button>
+              <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
+              <span className="font-bold text-slate-900 leading-tight truncate max-w-[300px]">{proposal.title}</span>
+            </nav>
+            <div className="ml-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <span className="text-indigo-600">Funder: {proposal.funder}</span>
                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
@@ -10109,6 +10134,27 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
         </button>
       </div>
 
+      {/* Empty state when no data at all */}
+      {totalPipeline === 0 && safeProposals.length === 0 && safeFunders.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <BarChart3 size={28} className="text-indigo-400 dark:text-slate-500" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">No analytics data yet</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
+            Analytics will populate automatically as you discover grants, draft proposals, and track funder relationships.
+            Start by running Grant Discovery to build your pipeline.
+          </p>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+            <span className="flex items-center gap-1.5"><Search size={14} /> Discover grants</span>
+            <span className="text-slate-300 dark:text-slate-600">→</span>
+            <span className="flex items-center gap-1.5"><FileText size={14} /> Draft proposals</span>
+            <span className="text-slate-300 dark:text-slate-600">→</span>
+            <span className="flex items-center gap-1.5"><TrendingUp size={14} /> Track outcomes</span>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Key Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
@@ -10327,6 +10373,8 @@ function AnalyticsView({ organization, proposals, grants, funders, orgId }: { or
           {pipeline.drafting > 0 && <p className="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">✍️ {pipeline.drafting} grants are in the drafting stage. Use the Pre-Submission Checklist to ensure quality before submitting.</p>}
         </div>
       </div>
+      </>
+      )}
     </motion.div>
   );
 }
