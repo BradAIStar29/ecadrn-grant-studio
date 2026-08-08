@@ -416,6 +416,19 @@ export default function App() {
     }
   }, [user]);
 
+  // Auto-open shortcuts modal on first visit
+  useEffect(() => {
+    if (!user) return;
+    const hasSeenShortcuts = safeLocalStorage.getItem('hasSeenShortcuts_v1');
+    if (!hasSeenShortcuts) {
+      const timer = setTimeout(() => {
+        setShowShortcuts(true);
+        safeLocalStorage.setItem('hasSeenShortcuts_v1', 'true');
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
   // Dark mode: toggle 'dark' class on <html>
   useEffect(() => {
     if (darkMode) {
