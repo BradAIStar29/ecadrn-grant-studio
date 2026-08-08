@@ -76,6 +76,8 @@ import {
   CalendarDays,
   Flag,
   Keyboard,
+  Building2,
+  Target,
 } from 'lucide-react';
 
 // ── Debounce hook for search inputs ─────────────────────────────────────────
@@ -86,6 +88,29 @@ function useDebounce<T>(value: T, delayMs: number): T {
     return () => clearTimeout(timer);
   }, [value, delayMs]);
   return debounced;
+}
+
+// ── Empty state component with icon + CTA ───────────────────────────────────
+function EmptyState({ icon: Icon, title, description, actionLabel, onAction }: {
+  icon: any; title: string; description: string; actionLabel?: string; onAction?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+        <Icon size={28} className="text-slate-400 dark:text-slate-500" />
+      </div>
+      <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">{title}</h3>
+      <p className="text-sm text-slate-400 dark:text-slate-500 max-w-sm mb-4">{description}</p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
 }
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -1045,7 +1070,7 @@ CORE PROGRAMS:
       {showSettings && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowSettings(false)}
+          onClick role="dialog" aria-modal="true"={() => setShowSettings(false)}
         >
           <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
@@ -1251,7 +1276,7 @@ CORE PROGRAMS:
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() => setIsMobileSidebarOpen(false)}
+          onClick={() = role="dialog" aria-modal="true"> setIsMobileSidebarOpen(false)}
         />
       )}
       <motion.aside 
@@ -1588,7 +1613,7 @@ CORE PROGRAMS:
         >
           <Menu size={20} />
         </button>
-        <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
+        <div className="p-8 max-w-7xl mx-auto flex-1 h-full pt-16 md:pt-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -1650,7 +1675,7 @@ CORE PROGRAMS:
       {showShortcuts && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowShortcuts(false)}
+          onClick role="dialog" aria-modal="true"={() => setShowShortcuts(false)}
         >
           <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-slate-200 dark:border-slate-700"
@@ -2021,10 +2046,7 @@ function DashboardView({
                 <span className="text-xs text-gray-400">{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'Draft'}</span>
               </div>
             )) : (
-              <div className="text-center py-8 text-slate-400 text-sm">
-                <FileText size={24} className="mx-auto mb-2 text-slate-300" />
-                No proposals yet. Go to Proposals to generate a draft.
-              </div>
+              <EmptyState icon={FileText} title="No proposals yet" description="Head to the Proposals tab to generate your first draft." />
             )}
           </div>
         </div>
@@ -2089,7 +2111,7 @@ function DashboardView({
             ) : (
               <div className="text-center py-8 text-slate-400 text-sm">
                 <Search size={24} className="mx-auto mb-2 text-slate-300" />
-                No funders tracked yet. Add a funder in Funder Intelligence.
+                No funders tracked yet.
               </div>
             )}
           </div>
@@ -2551,7 +2573,7 @@ function ProposalsView({
               </tr>
             )) : (
               <tr>
-                <td colSpan={5} className="px-8 py-12 text-center text-slate-400 italic">No proposals yet. Start by generating a draft.</td>
+                <td colSpan={5}><EmptyState icon={FileText} title="No proposals yet" description="Start by generating a draft from a discovered grant or from scratch." /></td>
               </tr>
             )}
           </tbody>
@@ -2611,7 +2633,7 @@ function ProposalsView({
         const identicalSections = sectionWordCounts.filter(s => s.content1 === s.content2);
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCompareModal(false)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick role="dialog" aria-modal="true"={() => setShowCompareModal(false)}>
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><GitCompare size={20} /> Proposal Comparison</h2>
@@ -4496,7 +4518,7 @@ function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left overflow-y-auto" role="dialog" aria-modal="true">
       <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl my-8">
         <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
           <div>
@@ -6224,7 +6246,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -7236,7 +7258,7 @@ Deadline: 2026-11-15`;
             {showSavedSearches && (
               <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto">
                 {savedSearches.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400 dark:text-slate-500">No saved searches yet. Apply filters and save your current search.</div>
+                  <EmptyState icon={Search} title="No saved searches" description="Apply filters and save your current search for quick access later." />
                 ) : (
                   savedSearches.map(s => (
                     <div key={s.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0 group">
@@ -7759,7 +7781,7 @@ Deadline: 2026-11-15`;
 
       {/* ECADRN Purpose Alignment Assessment Dialog Overlay Block */}
       {selectedAlignmentGrant && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }} 
             animate={{ opacity: 1, scale: 1 }}
@@ -8989,7 +9011,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                 )}
               </div>
             ) : (
-              <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-800 p-6 rounded-xl text-center font-semibold">No funders currently saved in your Funder Intelligence roster.</p>
+              <EmptyState icon={Building2} title="No funders yet" description="Add funders in the Funder Intelligence tab to start tracking relationships here." />
             )}
           </div>
 
@@ -9052,7 +9074,7 @@ We bridge the gap between ADR theory and transformative community practice by fo
                 </div>
               )}
               {highAlignmentGrants.length === 0 && (
-                <p className="text-xs text-slate-400 italic text-center p-6 bg-slate-50 dark:bg-slate-800 rounded-xl font-semibold">No grants currently qualified as high-alignment (ECADRN of 80% or greater). Execute Discover Grants search in Grant Matcher to populate.</p>
+                <EmptyState icon={Target} title="No high-alignment grants" description="Run a Discover Grants search in Grant Matcher to find grants with 80%+ ECADRN alignment." />
               )}
             </div>
           </div>
@@ -10556,7 +10578,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
 
       {hasSearched && !searching && filteredPartners.length === 0 && (
         <div className="text-center py-16">
-          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">No partners found. Try a different search or filter.</p>
+          <EmptyState icon={Users} title="No partners found" description="Try a different search query or adjust your filters." />
         </div>
       )}
 
