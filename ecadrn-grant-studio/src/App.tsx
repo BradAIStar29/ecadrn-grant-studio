@@ -75,6 +75,7 @@ import {
   TrendingDown,
   CalendarDays,
   Flag,
+  Keyboard,
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
@@ -182,6 +183,12 @@ const WALKTHROUGH_STEPS = [
     tab: 'chat',
     content: "Your on-demand grants strategist. Ask about funder landscapes, how to strengthen a proposal section, budget strategy, or mission alignment. It has full context on your org profile and pipeline.",
     highlight: "chat-view"
+  },
+  {
+    title: "⌨️ Keyboard Shortcuts — Power User Mode",
+    tab: 'dashboard',
+    content: "Speed through the entire app without touching your mouse. Press ⌘/Ctrl + / anytime to see all shortcuts. Navigation: ⌘K = Search, ⌘G = Grants, ⌘P = Proposals, ⌘F = Funders, ⌘C = Calendar, ⌘A = ADR Network, ⌘Y = Analytics, ⌘O = Outreach, ⌘V = Voice, ⌘T = AI Chat. Actions: ⌘N = New Proposal, ⌘E = Export CSV. UI: ⌘D = Dark mode, ⌘B = Toggle sidebar, Esc = Close overlays.",
+    highlight: "dashboard-overview"
   },
   {
     title: "You're ready — launch the OS",
@@ -1395,18 +1402,41 @@ CORE PROGRAMS:
               {user.displayName?.[0] || 'U'}
             </div>
             {isSidebarOpen && (
-              <div className="overflow-hidden">
+              <div className="overflow-hidden flex-1">
                 <p className="text-sm font-medium text-white truncate">{user.displayName || 'User'}</p>
                 <p className="text-xs text-slate-500 truncate">{user?.email}</p>
               </div>
             )}
+            {isSidebarOpen && (
+              <button
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard shortcuts (⌘/)"
+                className="p-2 text-slate-500 hover:text-white rounded-lg transition-colors hover:bg-slate-800 shrink-0"
+              >
+                <Keyboard size={16} />
+              </button>
+            )}
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-full mt-4 flex items-center justify-center p-2 text-slate-500 hover:text-white rounded-lg transition-colors bg-slate-800/50"
-          >
-            {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          <div className="flex items-center gap-2 mt-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="flex-1 flex items-center justify-center p-2 text-slate-500 hover:text-white rounded-lg transition-colors bg-slate-800/50"
+            >
+              {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            {!isSidebarOpen && (
+              <button
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard shortcuts (⌘/)"
+                className="flex items-center justify-center p-2 text-slate-500 hover:text-white rounded-lg transition-colors bg-slate-800/50"
+              >
+                <Keyboard size={16} />
+              </button>
+            )}
+          </div>
+          {isSidebarOpen && (
+            <p className="text-[10px] text-slate-600 mt-3 text-center">Press <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-400 font-mono">⌘ /</kbd> for shortcuts</p>
+          )}
         </div>
       </motion.aside>
 
@@ -1581,29 +1611,57 @@ CORE PROGRAMS:
               </button>
             </div>
             <div className="space-y-3">
-              {[
-                { keys: '⌘ /', label: 'Show this help' },
-                { keys: '⌘ K', label: 'Global Search' },
-                { keys: '⌘ N', label: 'New Proposal' },
-                { keys: '⌘ G', label: 'Go to Grants' },
-                { keys: '⌘ P', label: 'Go to Proposals' },
-                { keys: '⌘ F', label: 'Go to Funder Intelligence' },
-                { keys: '⌘ C', label: 'Go to Calendar' },
-                { keys: '⌘ A', label: 'Go to ADR Network' },
-                { keys: '⌘ Y', label: 'Go to Analytics' },
-                { keys: '⌘ O', label: 'Go to Outreach' },
-                { keys: '⌘ E', label: 'Go to Analytics (export)' },
-                { keys: '⌘ V', label: 'Go to Voice Profile' },
-                { keys: '⌘ T', label: 'Go to AI Chat' },
-                { keys: '⌘ D', label: 'Toggle dark mode' },
-                { keys: '⌘ B', label: 'Toggle sidebar' },
-                { keys: 'Esc', label: 'Close overlays' },
-              ].map(({ keys, label }) => (
-                <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-colors">
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
-                  <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm">{keys}</kbd>
-                </div>
-              ))}
+              {(() => {
+                const categories = [
+                  {
+                    name: 'General',
+                    items: [
+                      { keys: '⌘ /', label: 'Show this shortcuts panel' },
+                      { keys: '⌘ K', label: 'Global Search' },
+                      { keys: 'Esc', label: 'Close any overlay / modal' },
+                    ]
+                  },
+                  {
+                    name: 'Navigation',
+                    items: [
+                      { keys: '⌘ G', label: 'Go to Grant Matcher' },
+                      { keys: '⌘ P', label: 'Go to Proposals' },
+                      { keys: '⌘ F', label: 'Go to Funder Intelligence' },
+                      { keys: '⌘ C', label: 'Go to Calendar' },
+                      { keys: '⌘ A', label: 'Go to ADR Network' },
+                      { keys: '⌘ Y', label: 'Go to Analytics' },
+                      { keys: '⌘ O', label: 'Go to Outreach' },
+                      { keys: '⌘ V', label: 'Go to Voice Lab' },
+                      { keys: '⌘ T', label: 'Go to AI Chat' },
+                    ]
+                  },
+                  {
+                    name: 'Actions',
+                    items: [
+                      { keys: '⌘ N', label: 'New Proposal draft' },
+                      { keys: '⌘ E', label: 'Export pipeline as CSV (Analytics)' },
+                    ]
+                  },
+                  {
+                    name: 'Interface',
+                    items: [
+                      { keys: '⌘ D', label: 'Toggle dark mode' },
+                      { keys: '⌘ B', label: 'Toggle sidebar open/closed' },
+                    ]
+                  },
+                ];
+                return categories.map(cat => (
+                  <div key={cat.name}>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-1 mt-4 first:mt-0 px-3">{cat.name}</div>
+                    {cat.items.map(({ keys, label }) => (
+                      <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-colors">
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+                        <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm">{keys}</kbd>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         </div>
