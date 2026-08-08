@@ -51,6 +51,14 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
 
 const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function safeTruncateContext(obj: any, maxLen = 4000): string {
+  const str = JSON.stringify(obj || {});
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 20) + '...[truncated]}';
+}
+
 // ── Prompt builder ──────────────────────────────────────────────────────────
 
 function getPrompt(action: string, data: any): string {
@@ -448,7 +456,7 @@ Return JSON:
 }
 
 Grant Opportunity:
-${JSON.stringify(data).slice(0, 4000)}`;
+${safeTruncateContext(data, 4000)}`;
 
     case 'align-to-funder':
       return `You are a grant alignment expert. Align the following proposal section to match the funder's priorities and language.
@@ -469,8 +477,8 @@ Return JSON:
   "mergedRecommendation": "string — how to combine the best of both"
 }
 
-Proposal A: ${JSON.stringify(data.proposalA || {}).slice(0, 4000)}
-Proposal B: ${JSON.stringify(data.proposalB || {}).slice(0, 4000)}`;
+Proposal A: ${safeTruncateContext(data.proposalA, 4000)}
+Proposal B: ${safeTruncateContext(data.proposalB, 4000)}`;
 
     case 'analyze-uploaded-grant':
       return `Analyze this grant document and extract key information. Return JSON with:
@@ -494,7 +502,41 @@ ${(data.text || '').slice(0, 8000)}`;
 - "avoidWords" (array of strings): words or phrases to avoid
 
 Documents:
-${JSON.stringify(data.documents || []).slice(0, 8000)}`;
+${safeTruncateContext(data.documents, 8000)}`;
+
+    case 'search-grants':
+      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
+
+TASK: Search the web to identify up to ${data.count || 10} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities matching these parameters:
+
+Search Query: ${data.searchQuery || data.query || 'ADR conflict resolution grants'}
+Geographic Focus: ${data.geographicFocus || 'US National'}
+Award Amount: ${data.amount ? '$' + data.amount : 'Any'}
+Focus Areas: ${data.focusAreas || 'Alternative Dispute Resolution, conflict resolution, mediation, restorative justice'}
+
+STRICT ANTI-HALLUCINATION REQUIREMENTS:
+1. Every grant MUST be a real, verifiable opportunity findable on the web
+2. Include the exact funder name, program name, and URL
+3. Include the actual deadline (or "Ongoing" if rolling)
+4. Include the actual award range
+5. Do NOT fabricate or infer opportunities — if you cannot verify a grant, omit it
+6. If you find fewer than requested, return only what you can verify
+
+Return a JSON array of grant opportunities:
+[
+  {
+    "grantTitle": "string",
+    "funderName": "string",
+    "amountMax": number,
+    "deadline": "YYYY-MM-DD or Ongoing",
+    "description": "string (2-3 sentences)",
+    "url": "string (direct URL to grant page)",
+    "focusAreas": ["string"],
+    "geographicFocus": "string",
+    "eligibility": "string",
+    "verified": true
+  }
+]`;
 
     case 'autopilot-search':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
@@ -1146,6 +1188,18 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'prioritize-grants': ['rankings'],
     'explain-diff': ['changes'],
     'recommend-funders': ['recommendations'],
+    'align-grant-ecadrn': ['alignmentScore', 'rationale', 'suggestedApproach'],
+    'align-to-funder': ['alignedContent', 'changes'],
+    'compare-proposals': ['winner', 'comparison'],
+    'generate-justification': ['justification'],
+    'analyze-voice': ['toneDescriptors', 'keyPhrases'],
+    'rewrite-voice': ['content'],
+    'identify-missing': ['missing'],
+    'analyze-win-loss': ['winProbability', 'keyFactors'],
+    'detect-recurring': ['recurringGrants'],
+    'analyze-uploaded-grant': ['grantTitle', 'funderName'],
+    'generate-budget': [],
+    'generate-timeline': [],
   };
 
   const keys = requiredKeys[action];
@@ -1201,13 +1255,12 @@ function cleanJsonResponse(text: string): string {
 // ── Google Drive API Helpers ─────────────────────────────────────────────────
 
 async function driveRequest(path: string, options: RequestInit, token: string) {
+  const headers = new Headers(options.headers as HeadersInit);
+  headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Accept', 'application/json');
   return fetch(`https://www.googleapis.com/drive/v3${path}`, {
     ...options,
-    headers: {
-      ...options.headers,
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-    },
+    headers,
   });
 }
 
@@ -1270,6 +1323,7 @@ async function runGeneration(
   }
 
   const generationPromise = ai.models.generateContent(generationConfig);
+  generationPromise.catch((err: any) => console.warn('Background generation completed/failed after timeout:', err?.message || err));
 
   const timeoutMs = config.useSearch ? 45000 : 30000;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -1290,6 +1344,8 @@ export default {
       'Access-Control-Allow-Origin': responseOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Drive-Token',
+      'Access-Control-Max-Age': '86400',
+      'Access-Control-Expose-Headers': 'Content-Disposition',
     };
 
     if (request.method === 'OPTIONS') {
@@ -1303,6 +1359,14 @@ export default {
       });
 
     try {
+    // Validate essential environment configuration
+    if (!env.GEMINI_API_KEY) {
+      return json({ error: 'Server misconfiguration: GEMINI_API_KEY missing' }, 500);
+    }
+    if (!env.FIREBASE_PROJECT_ID) {
+      return json({ error: 'Server misconfiguration: FIREBASE_PROJECT_ID missing' }, 500);
+    }
+
     // Verify Firebase auth token
     const authHeader = request.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -1323,7 +1387,15 @@ export default {
       const action = path.replace('/ai/', '');
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-      const body = await request.json() as any;
+      let body: any;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ error: 'Invalid JSON payload in request body' }, 400);
+      }
+      if (!body || typeof body !== 'object') {
+        return json({ error: 'Request body must be a JSON object' }, 400);
+      }
       const prompt = getPrompt(action, body);
       if (prompt === 'INVALID') return json({ error: `Unknown action: ${action}` }, 400);
 
@@ -1368,7 +1440,7 @@ export default {
         parsed = JSON.parse(cleaned);
       } catch {
         console.error(`JSON parse failed for action "${action}". Raw length: ${cleaned.length}`);
-        return json({ raw: cleaned, error: 'AI response was not valid JSON' });
+        return json({ raw: cleaned, error: 'AI response was not valid JSON' }, 422);
       }
 
       // Validate the response structure
@@ -1387,9 +1459,13 @@ export default {
       if (!driveToken) return json({ error: 'Drive token required' }, 400);
       const body = await request.json() as any;
 
+      const escapeDriveQuery = (str: string) => str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       let q = "trashed=false";
-      if (body.folderId) q += ` and '${body.folderId}' in parents`;
-      if (body.query) q += ` and (name contains '${body.query}' or fullText contains '${body.query}')`;
+      if (body.folderId) q += ` and '${escapeDriveQuery(body.folderId)}' in parents`;
+      if (body.query) {
+        const safeQuery = escapeDriveQuery(body.query);
+        q += ` and (name contains '${safeQuery}' or fullText contains '${safeQuery}')`;
+      }
       q += " and (mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet' or mimeType='text/plain' or mimeType='application/pdf')";
 
       const params = new URLSearchParams({
@@ -1478,22 +1554,32 @@ export default {
         }
       }
 
-      const updateRes = await driveRequest(`/files/${created.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const docsRes = await fetch(`https://docs.googleapis.com/v1/documents/${created.id}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${driveToken}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          body: { content: docContent },
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 },
+                text: docContent,
+              },
+            },
+          ],
         }),
-      }, driveToken);
+      });
 
-      if (!updateRes.ok) return json({ error: 'Failed to write content', details: await updateRes.text() }, updateRes.status);
+      if (!docsRes.ok) return json({ error: 'Failed to write document content', details: await docsRes.text() }, docsRes.status);
 
       return json({ fileId: created.id, webViewLink: `https://docs.google.com/document/d/${created.id}/edit` });
     }
 
     } catch (err: any) {
-      console.error('Unhandled error:', err);
-      return json({ error: `Internal error: ${err.message || err}` }, 500);
+      console.error('Unhandled top-level error:', err?.stack || err);
+      return json({ error: 'An internal server error occurred. Please try again later.' }, 500);
     }
 
     return json({ error: 'Not found' }, 404);
