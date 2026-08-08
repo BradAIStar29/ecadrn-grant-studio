@@ -1592,6 +1592,7 @@ CORE PROGRAMS:
                 { keys: '⌘ A', label: 'Go to ADR Network' },
                 { keys: '⌘ Y', label: 'Go to Analytics' },
                 { keys: '⌘ O', label: 'Go to Outreach' },
+                { keys: '⌘ E', label: 'Go to Analytics (export)' },
                 { keys: '⌘ V', label: 'Go to Voice Profile' },
                 { keys: '⌘ T', label: 'Go to AI Chat' },
                 { keys: '⌘ D', label: 'Toggle dark mode' },
@@ -2387,6 +2388,32 @@ function ProposalsView({
                         <Printer size={16} />
                       </button>
                     )}
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const { collection, addDoc } = await import('firebase/firestore');
+                          const propPath = orgId === 'ecadrn-shared' ? `organizations/${orgId}/proposals` : `users/${user?.uid || ''}/proposals`;
+                          const dup = {
+                            ...p,
+                            title: (p.title || 'Untitled') + ' (Copy)',
+                            status: 'draft',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            createdBy: user?.email || 'Unknown',
+                            lastEditedBy: user?.email || 'Unknown',
+                          };
+                          delete dup.id;
+                          await addDoc(collection(db, propPath), dup);
+                          showToast('Proposal duplicated as draft', 'success');
+                        } catch (err: any) {
+                          showToast('Failed to duplicate: ' + (err.message || 'Unknown error'), 'error');
+                        }
+                      }}
+                      title="Duplicate proposal"
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                    >
+                      <Copy size={16} />
+                    </button>
                     {onWinLossAnalysis && (p.status === 'awarded' || p.status === 'declined') && (
                       <button 
                         onClick={() => onWinLossAnalysis(p, p.status === 'awarded' ? 'awarded' : 'declined')}
