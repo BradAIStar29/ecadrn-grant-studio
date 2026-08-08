@@ -136,6 +136,7 @@ import {
 import { callAI } from './services/api';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import 'react-quill/dist/quill.snow.css';
 
 type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics' | 'crm';
@@ -351,6 +352,11 @@ export default function App() {
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
   const [showSettings, setShowSettings] = useState(false);
+  // Modal refs for focus trapping
+  const settingsModalRef = useRef<HTMLDivElement>(null);
+  const shortcutsModalRef = useRef<HTMLDivElement>(null);
+  const globalSearchRef = useRef<HTMLDivElement>(null);
+
   // User preferences (persisted to localStorage)
   const [prefs, setPrefs] = useState(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}'); } catch { return {}; }
@@ -437,6 +443,11 @@ export default function App() {
 
   // Global search (Cmd+K)
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+
+  // Focus trapping for App-scoped modals
+  useFocusTrap(settingsModalRef, showSettings, () => setShowSettings(false));
+  useFocusTrap(shortcutsModalRef, showShortcuts, () => setShowShortcuts(false));
+  useFocusTrap(globalSearchRef, showGlobalSearch, () => setShowGlobalSearch(false));
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   // Win/loss analysis results
