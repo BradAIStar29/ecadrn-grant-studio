@@ -77,6 +77,16 @@ import {
   Flag,
   Keyboard,
 } from 'lucide-react';
+
+// ── Debounce hook for search inputs ─────────────────────────────────────────
+function useDebounce<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
@@ -300,6 +310,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}').sidebarDefault !== 'closed'; } catch { return true; }
   });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [proposals, setProposals] = useState<any[]>([]);
@@ -402,6 +413,7 @@ export default function App() {
   // Global search (Cmd+K)
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   // Win/loss analysis results
   const [winLossResults, setWinLossResults] = useState<any>(null);
   // Recurring grant detection results
@@ -428,6 +440,15 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [user]);
+
+  // Auto-close mobile sidebar on resize to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) setIsMobileSidebarOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Dark mode: toggle 'dark' class on <html>
   useEffect(() => {
@@ -847,8 +868,8 @@ CORE PROGRAMS:
 
   // ── Global Search ──────────────────────────────────────────────────────────
   const getGlobalSearchResults = () => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearchQuery.trim()) return [];
+    const q = debouncedSearchQuery.toLowerCase();
     const results: { type: string; title: string; subtitle: string; tab: Tab; id: string }[] = [];
 
     (proposals || []).forEach(p => {
@@ -1226,10 +1247,18 @@ CORE PROGRAMS:
         )}
     <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex">
       {/* Sidebar */}
+      {/* Mobile sidebar overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
       <motion.aside 
         initial={false}
         animate={{ width: isSidebarOpen ? 260 : 80 }}
-        className="bg-slate-900 flex flex-col fixed h-full z-20 border-r border-slate-800"
+        className={`bg-slate-900 flex flex-col fixed h-full z-40 border-r border-slate-800 transition-transform duration-300
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div id="sidebar-logo" className="p-6 flex items-center justify-between">
           {isSidebarOpen ? (
@@ -1308,7 +1337,7 @@ CORE PROGRAMS:
             icon={<Layout size={20} />} 
             label="Dashboard" 
             active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
+            onClick={() => { setActiveTab('dashboard'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-dashboard"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'dashboard'}
@@ -1317,7 +1346,7 @@ CORE PROGRAMS:
             icon={<FileText size={20} />} 
             label="Proposals" 
             active={activeTab === 'proposals'} 
-            onClick={() => setActiveTab('proposals')} 
+            onClick={() => { setActiveTab('proposals'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-proposals"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'proposals'}
@@ -1327,7 +1356,7 @@ CORE PROGRAMS:
             icon={<Search size={20} />} 
             label="Funder Intelligence" 
             active={activeTab === 'funders'} 
-            onClick={() => setActiveTab('funders')} 
+            onClick={() => { setActiveTab('funders'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-funders"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'funders'}
@@ -1336,7 +1365,7 @@ CORE PROGRAMS:
             icon={<CheckCircle size={20} />} 
             label="Grant Matcher" 
             active={activeTab === 'grants'} 
-            onClick={() => setActiveTab('grants')} 
+            onClick={() => { setActiveTab('grants'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-grants"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'grants'}
@@ -1345,7 +1374,7 @@ CORE PROGRAMS:
             icon={<Mic size={20} />} 
             label="Voice Lab" 
             active={activeTab === 'voice'} 
-            onClick={() => setActiveTab('voice')} 
+            onClick={() => { setActiveTab('voice'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-voice"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'voice'}
@@ -1354,7 +1383,7 @@ CORE PROGRAMS:
             icon={<Mail size={20} />} 
             label="Outreach" 
             active={activeTab === 'outreach'} 
-            onClick={() => setActiveTab('outreach')} 
+            onClick={() => { setActiveTab('outreach'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-outreach"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'outreach'}
@@ -1364,7 +1393,7 @@ CORE PROGRAMS:
             icon={<MessageSquare size={20} />} 
             label="AI Advisor" 
             active={activeTab === 'chat'} 
-            onClick={() => setActiveTab('chat')} 
+            onClick={() => { setActiveTab('chat'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-chat"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'chat'}
@@ -1373,7 +1402,7 @@ CORE PROGRAMS:
             icon={<Calendar size={20} />} 
             label="Calendar" 
             active={activeTab === 'calendar'} 
-            onClick={() => setActiveTab('calendar')} 
+            onClick={() => { setActiveTab('calendar'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-calendar"
             highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'calendar'}
@@ -1383,7 +1412,7 @@ CORE PROGRAMS:
             icon={<Network size={20} />} 
             label="ADR Network" 
             active={activeTab === 'network'} 
-            onClick={() => setActiveTab('network')} 
+            onClick={() => { setActiveTab('network'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-network"
             badge="NEW"
@@ -1393,7 +1422,7 @@ CORE PROGRAMS:
             icon={<BarChart3 size={20} />} 
             label="Analytics" 
             active={activeTab === 'analytics'} 
-            onClick={() => setActiveTab('analytics')} 
+            onClick={() => { setActiveTab('analytics'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-analytics"
             badge="NEW"
@@ -1402,7 +1431,7 @@ CORE PROGRAMS:
             icon={<KanbanSquare size={20} />} 
             label="Funder CRM" 
             active={activeTab === 'crm'} 
-            onClick={() => setActiveTab('crm')} 
+            onClick={() => { setActiveTab('crm'); setIsMobileSidebarOpen(false); }} 
             collapsed={!isSidebarOpen}
             id="nav-crm"
             badge="NEW"
@@ -1454,7 +1483,7 @@ CORE PROGRAMS:
       </motion.aside>
 
       {/* Main Content */}
-      <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-[260px]' : 'ml-[80px]'}`}>
+      <main className="flex-1 transition-all duration-300 md:ml-0">
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 flex items-center justify-between sticky top-0 z-10 font-sans">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
@@ -1551,8 +1580,23 @@ CORE PROGRAMS:
           </div>
         </header>
 
+        {/* Mobile hamburger menu */}
+        <button
+          onClick={() => setIsMobileSidebarOpen(true)}
+          className="fixed top-4 left-4 z-50 md:hidden p-2 bg-slate-900 text-white rounded-lg shadow-lg"
+          aria-label="Open menu"
+        >
+          <Menu size={20} />
+        </button>
         <div className="p-8 max-w-7xl mx-auto flex-1 h-full">
           <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
@@ -1562,8 +1606,9 @@ CORE PROGRAMS:
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
             {activeTab === 'calendar' && <CalendarView grants={grants} proposals={proposals} />}
             {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
-          {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}
-          {activeTab === 'crm' && <FunderCRMView funders={funders} proposals={proposals} orgId={orgId} organization={organization} />}
+            {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}
+            {activeTab === 'crm' && <FunderCRMView funders={funders} proposals={proposals} orgId={orgId} organization={organization} />}
+            </motion.div>
           </AnimatePresence>
         </div>
 
@@ -1727,8 +1772,8 @@ CORE PROGRAMS:
                 <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-xs font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500">ESC</kbd>
               </div>
               <div className="max-h-80 overflow-y-auto">
-                {searchQuery.trim() && getGlobalSearchResults().length === 0 && (
-                  <div className="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">No results found for "{searchQuery}"</div>
+                {debouncedSearchQuery.trim() && getGlobalSearchResults().length === 0 && (
+                  <div className="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">No results found for "{debouncedSearchQuery}"</div>
                 )}
                 {getGlobalSearchResults().map((result) => (
                   <button
@@ -2139,6 +2184,7 @@ function ProposalsView({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [showGuide, setShowGuide] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
@@ -2180,8 +2226,8 @@ function ProposalsView({
   }
 
   const filteredProposals = (proposals || []).filter(p => {
-    const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.funder?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = p.title?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
+      p.funder?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -4504,6 +4550,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   const [editData, setEditData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStage, setFilterStage] = useState('All Stages');
+  const debouncedFunderSearch = useDebounce(searchTerm, 300);
   const [filterTag, setFilterTag] = useState('All Tags');
   const [filterDateRange, setFilterDateRange] = useState('All Time');
   const [showGuide, setShowGuide] = useState(false);
@@ -4733,16 +4780,16 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
 
   const filteredFunders = funders.filter(f => {
     const lastAnalysisStr = f.lastAnalysisAt || f.updatedAt ? new Date(f.lastAnalysisAt || f.updatedAt).toLocaleDateString() : 'N/A';
-    const matchesSearch = searchTerm.toLowerCase() === '' || 
-      (f.funderName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.website || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.relationshipStage || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lastAnalysisStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.tags || []).some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (f.intelligence?.missionAlignmentRationale || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.intelligence?.fundingPriorities || []).some((p: string) => p.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (f.intelligence?.givingPriorities || []).some((p: string) => p.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    const matchesSearch = debouncedFunderSearch.toLowerCase() === '' || 
+      (f.funderName || '').toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      (f.website || '').toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      (f.relationshipStage || '').toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      lastAnalysisStr.toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      (f.notes || '').toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      (f.tags || []).some((tag: string) => tag.toLowerCase().includes(debouncedFunderSearch.toLowerCase())) ||
+      (f.intelligence?.missionAlignmentRationale || '').toLowerCase().includes(debouncedFunderSearch.toLowerCase()) ||
+      (f.intelligence?.fundingPriorities || []).some((p: string) => p.toLowerCase().includes(debouncedFunderSearch.toLowerCase())) ||
+      (f.intelligence?.givingPriorities || []).some((p: string) => p.toLowerCase().includes(debouncedFunderSearch.toLowerCase())) ||
       (f.intelligence?.recentStrategicShifts || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (f.intelligence?.typicalGrantees || []).some((tg: string) => tg.toLowerCase().includes(searchTerm.toLowerCase()));
       
@@ -6701,6 +6748,7 @@ function GrantsView({
   const [aligningId, setAligningId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState('');
   const [filterGeoFocus, setFilterGeoFocus] = useState('All');
+  const debouncedFilterText = useDebounce(filterText, 300);
   const [filterGrantTag, setFilterGrantTag] = useState('All Tags');
   const [selectedAlignmentGrant, setSelectedAlignmentGrant] = useState<any | null>(null);
   const [sortBy, setSortBy] = useState<'match' | 'deadline' | 'name'>('match');
@@ -7090,10 +7138,10 @@ Deadline: 2026-11-15`;
   const filteredGrants = grants
     .filter(g => {
       if (hideUnverified && g.verified === false) return false;
-      const matchText = g.title?.toLowerCase().includes(filterText.toLowerCase()) || 
-                        g.funderName?.toLowerCase().includes(filterText.toLowerCase()) ||
-                        (g.focusAreas && g.focusAreas.some((fa: string) => fa.toLowerCase().includes(filterText.toLowerCase()))) ||
-                        (g.tags && g.tags.some((tg: string) => tg.toLowerCase().includes(filterText.toLowerCase())));
+      const matchText = g.title?.toLowerCase().includes(debouncedFilterText.toLowerCase()) || 
+                        g.funderName?.toLowerCase().includes(debouncedFilterText.toLowerCase()) ||
+                        (g.focusAreas && g.focusAreas.some((fa: string) => fa.toLowerCase().includes(debouncedFilterText.toLowerCase()))) ||
+                        (g.tags && g.tags.some((tg: string) => tg.toLowerCase().includes(debouncedFilterText.toLowerCase())));
       const matchGeo = filterGeoFocus === 'All' || g.geographicFocus === filterGeoFocus;
       const matchTag = filterGrantTag === 'All Tags' || (g.tags || []).includes(filterGrantTag);
       return matchText && matchGeo && matchTag;
@@ -7276,7 +7324,7 @@ Deadline: 2026-11-15`;
             <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700">Tag: {filterGrantTag}</span>
             <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700">Stage: {pipelineFilter}</span>
             <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700">Verified: {hideUnverified ? 'Only' : 'All'}</span>
-            {filterText && <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700">Text: "{filterText}"</span>}
+            {debouncedFilterText && <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded-full border border-slate-200 dark:border-slate-700">Text: "{debouncedFilterText}"</span>}
           </div>
         </div>
       )}
