@@ -1080,6 +1080,7 @@ CORE PROGRAMS:
       {/* Settings Modal */}
       {showSettings && (
         <div
+          ref={settingsModalRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setShowSettings(false)}
           role="dialog" aria-modal="true"
@@ -1687,6 +1688,7 @@ CORE PROGRAMS:
       {/* Keyboard Shortcuts Overlay */}
       {showShortcuts && (
         <div
+          ref={shortcutsModalRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setShowShortcuts(false)}
           role="dialog" aria-modal="true"
@@ -1785,6 +1787,7 @@ CORE PROGRAMS:
       <AnimatePresence>
         {showGlobalSearch && (
           <motion.div
+            ref={globalSearchRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
