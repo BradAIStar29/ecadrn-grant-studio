@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export interface Env {
   GEMINI_API_KEY: string;
@@ -6,6 +7,11 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   GOOGLE_DRIVE_TOKEN?: string;
 }
+
+// Firebase public keys for JWT signature verification (cached by jose)
+const FIREBASE_JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+);
 
 // ── Model & Temperature Configuration ────────────────────────────────────────
 // Gemini 2.5-flash for all actions — native reasoning, better instruction
@@ -1266,30 +1272,21 @@ async function driveRequest(path: string, options: RequestInit, token: string) {
 
 async function verifyFirebaseToken(token: string, projectId: string): Promise<any> {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      console.error('Firebase token expired');
-      return null;
-    }
-    
-    if (payload.aud !== projectId) {
-      console.error('Firebase project mismatch');
-      return null;
-    }
+    // Use jose to cryptographically verify the JWT signature against Google's public keys
+    const { payload } = await jwtVerify(token, FIREBASE_JWKS, {
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
+    });
 
     // ECADRN organization lock: email must end with @ecadrn.org
-    if (!payload.email || !payload.email.endsWith('@ecadrn.org')) {
+    if (!payload.email || typeof payload.email !== 'string' || !payload.email.endsWith('@ecadrn.org')) {
       console.error('Unauthorized email domain:', payload.email);
       return null;
     }
 
     return payload;
-  } catch (err) {
-    console.error('Token verification error:', err);
+  } catch (err: any) {
+    console.error('Token verification error:', err?.message || err);
     return null;
   }
 }
@@ -1447,6 +1444,7 @@ export default {
       const validation = validateResponse(action, parsed);
       if (!validation.valid) {
         console.error(`Validation failed for action "${action}": ${validation.error}`);
+        return json({ error: `AI response schema invalid: ${validation.error}`, parsed }, 422);
       }
 
       return json(parsed);
