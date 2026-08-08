@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
             'editor': ['react-quill'],
             'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
             'motion': ['motion/react'],
+            'icons': ['lucide-react'],
           },
         },
       },
