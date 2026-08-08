@@ -1568,7 +1568,7 @@ CORE PROGRAMS:
                      </div>
                      <div className="max-h-64 overflow-y-auto">
                        {notifications.length > 0 ? notifications.map(n => (
-                         <div key={n.id} className="p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                         <div key={n.id} className="p-4 border-b border-slate-50 last:border-0 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
                            <p className="text-xs text-slate-900 font-medium mb-1">{n.message}</p>
                            <span className="text-[9px] text-slate-400 dark:text-slate-500">{new Date(n.timestamp).toLocaleString()}</span>
                          </div>
@@ -1751,7 +1751,7 @@ CORE PROGRAMS:
                   <div key={cat.name}>
                     <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-1 mt-4 first:mt-0 px-3">{cat.name}</div>
                     {cat.items.map(({ keys, label }) => (
-                      <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-colors">
+                      <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors">
                         <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
                         <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm">{keys}</kbd>
                       </div>
@@ -2450,7 +2450,7 @@ function ProposalsView({
         )}
       </AnimatePresence>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto shadow-sm">
         <table className="w-full text-left">
           <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
             <tr>
@@ -2463,7 +2463,7 @@ function ProposalsView({
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {filteredProposals.length > 0 ? filteredProposals.map(p => (
-              <tr key={p.id} className="hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-colors group">
+              <tr key={p.id} className="hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors group">
                 <td className="px-8 py-5">
                   {compareMode && (
                     <div className="flex items-center gap-2 mb-1">
@@ -2657,7 +2657,7 @@ function ProposalsView({
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   {[p1, p2].map((p, i) => (
-                    <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-indigo-200 bg-indigo-50 dark:bg-slate-800/50' : 'border-violet-200 bg-violet-50/50'}`}>
+                    <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-slate-800/50 dark:bg-slate-800/50' : 'border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-slate-800/50'}`}>
                       <h3 className="font-bold text-slate-900 mb-3">{p.title}</h3>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400 dark:text-slate-500">Funder</span><span className="font-medium">{p.funder || '—'}</span></div>
@@ -2694,7 +2694,7 @@ function ProposalsView({
                       <button
                         key={s.key}
                         onClick={() => setActiveSection(s.key)}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${activeSection === s.key ? 'bg-slate-100 ring-1 ring-indigo-200' : 'hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800'}`}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${activeSection === s.key ? 'bg-slate-100 ring-1 ring-indigo-200' : 'hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50'}`}
                       >
                         <span className={`text-xs font-medium w-36 shrink-0 ${differs ? 'text-slate-700' : 'text-slate-400'}`}>{s.name}</span>
                         <div className="flex-1 flex items-center gap-2">
@@ -3324,7 +3324,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       {!focusMode && (
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <button onClick={onBack} className="p-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500">
+            <button onClick={onBack} className="p-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 rounded-lg text-slate-400 dark:text-slate-500">
               <X size={20} />
             </button>
             <div>
@@ -4307,7 +4307,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                   </div>
                   <div className="space-y-4">
                     {versions.map((v) => (
-                      <div key={v.id} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-all cursor-pointer group">
+                      <div key={v.id} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all cursor-pointer group">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-bold text-slate-900 dark:text-white">{new Date(v.timestamp).toLocaleString()}</span>
                           <button 
@@ -5691,7 +5691,7 @@ function FunderCard({
                     }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, fundersPath));
                   }
                 }}
-                className="text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50 dark:bg-slate-800 text-indigo-700 hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
+                className="text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-slate-800/50 dark:bg-slate-800 text-indigo-700 hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
                 title="Combine extracted priorities into tags automatically"
               >
                 <Sparkles size={8} /> Auto Tag
@@ -7275,7 +7275,7 @@ Deadline: 2026-11-15`;
                   <EmptyState icon={Search} title="No saved searches" description="Apply filters and save your current search for quick access later." />
                 ) : (
                   savedSearches.map(s => (
-                    <div key={s.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-0 group">
+                    <div key={s.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 border-b border-slate-100 dark:border-slate-800 last:border-0 group">
                       <div className="flex-1 cursor-pointer" onClick={() => runSavedSearch(s, false)}>
                         <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{s.name}</p>
                         <p className="text-[10px] text-slate-400 dark:text-slate-500">
@@ -9299,7 +9299,7 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
         <button 
           onClick={checkMissing}
           disabled={isChecking}
-          className="border border-slate-200 dark:border-slate-700 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 flex items-center gap-2"
+          className="border border-slate-200 dark:border-slate-700 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 flex items-center gap-2"
         >
           {isChecking ? <RefreshCw className="animate-spin" size={16} /> : <CheckCircle size={16} />}
           {isChecking ? 'Auditing...' : 'Audit Build'}
@@ -9748,7 +9748,7 @@ function CalendarView({ grants, proposals }: { grants: any[], proposals: any[] }
       </div>
 
       {activeTab === 'grid' && (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xl shadow-slate-100">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-x-auto shadow-xl shadow-slate-100">
           {/* Month navigation */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
             <button onClick={goPrevMonth} className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors">
@@ -9946,7 +9946,7 @@ function PageGuide({ isOpen, onClose, title, steps }: { isOpen: boolean, onClose
             {step > 0 && (
               <button
                 onClick={() => setStep(step - 1)}
-                className="flex-1 py-3.5 border-2 border-slate-100 dark:border-slate-800 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-slate-400 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-all"
+                className="flex-1 py-3.5 border-2 border-slate-100 dark:border-slate-800 rounded-2xl font-bold text-[10px] uppercase tracking-widest text-slate-400 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all"
               >
                 ← Back
               </button>
@@ -10877,7 +10877,7 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xl shadow-slate-100/50">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-x-auto shadow-xl shadow-slate-100/50">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
@@ -10889,7 +10889,7 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
           </thead>
           <tbody className="divide-y divide-slate-100">
             {lineItems.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-all">
+              <tr key={item.id} className="hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all">
                 <td className="px-6 py-4">
                   <input 
                     type="text" 
@@ -10902,8 +10902,9 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
                 <td className="px-6 py-4">
                   <input 
                     type="number" 
+                    min="0"
                     value={item.amount}
-                    onChange={(e) => updateItem(item.id, 'amount', e.target.value)}
+                    onChange={(e) => updateItem(item.id, 'amount', Math.max(0, Number(e.target.value)))}
                     className="w-full bg-transparent border-none focus:ring-0 text-sm font-black text-indigo-600 placeholder:text-slate-300"
                   />
                 </td>
@@ -10937,7 +10938,7 @@ function BudgetBuilder({ budget, onUpdate, proposalDescription }: { budget: any[
         </table>
         <button 
           onClick={addLineItem}
-          className="w-full py-6 flex items-center justify-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 transition-all border-t border-slate-100 dark:border-slate-800"
+          className="w-full py-6 flex items-center justify-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all border-t border-slate-100 dark:border-slate-800"
         >
           <Plus size={14} /> Add Line Item
         </button>
