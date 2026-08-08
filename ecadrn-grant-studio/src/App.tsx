@@ -1070,7 +1070,8 @@ CORE PROGRAMS:
       {showSettings && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick role="dialog" aria-modal="true"={() => setShowSettings(false)}
+          onClick={() => setShowSettings(false)}
+          role="dialog" aria-modal="true"
         >
           <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
@@ -1276,7 +1277,7 @@ CORE PROGRAMS:
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
-          onClick={() = role="dialog" aria-modal="true"> setIsMobileSidebarOpen(false)}
+          onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
       <motion.aside 
@@ -1487,6 +1488,7 @@ CORE PROGRAMS:
           <div className="flex items-center gap-2 mt-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               className="flex-1 flex items-center justify-center p-2 text-slate-500 hover:text-white rounded-lg transition-colors bg-slate-800/50"
             >
               {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
@@ -1675,7 +1677,8 @@ CORE PROGRAMS:
       {showShortcuts && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick role="dialog" aria-modal="true"={() => setShowShortcuts(false)}
+          onClick={() => setShowShortcuts(false)}
+          role="dialog" aria-modal="true"
         >
           <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-slate-200 dark:border-slate-700"
@@ -1751,7 +1754,7 @@ CORE PROGRAMS:
       )}
     </div>
       {/* Toast notifications */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none" role="status" aria-live="polite" aria-atomic="false">
         <AnimatePresence>
           {toasts.map(t => (
             <motion.div
@@ -2633,7 +2636,7 @@ function ProposalsView({
         const identicalSections = sectionWordCounts.filter(s => s.content1 === s.content2);
 
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick role="dialog" aria-modal="true"={() => setShowCompareModal(false)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCompareModal(false)} role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><GitCompare size={20} /> Proposal Comparison</h2>
@@ -3872,7 +3875,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           </h5>
                           <p className="text-slate-500 text-sm font-medium">Score: {preSubmitResults.overallScore}/100</p>
                         </div>
-                        <button onClick={() => setShowPreSubmitCheck(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"><X size={20} /></button>
+                        <button onClick={() => setShowPreSubmitCheck(false)} aria-label="Close pre-submit check" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"><X size={20} /></button>
                       </div>
 
                       <div className={`p-4 rounded-xl mb-6 ${preSubmitResults.recommendation === 'go' ? 'bg-emerald-50 dark:bg-slate-800 border border-emerald-200' : preSubmitResults.recommendation === 'revise' ? 'bg-amber-50 dark:bg-slate-800 border border-amber-200' : 'bg-rose-50 border border-rose-200'}`}>
@@ -4525,7 +4528,7 @@ function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, 
             <h4 className="text-2xl font-bold text-slate-900 dark:text-white">Choose Template</h4>
             <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Pick a pre-configured structure or use your custom saved drafts.</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400 dark:text-slate-500"><X size={24} /></button>
+          <button onClick={onClose} aria-label="Close modal" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-400 dark:text-slate-500"><X size={24} /></button>
         </div>
         <div className="p-8 grid grid-cols-2 gap-6 overflow-y-auto max-h-[70vh]">
           {allTemplates.map((t, idx) => (
@@ -5177,7 +5180,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 <Users size={20} className="text-purple-600" />
                 Competitor Analysis: {competitorResults.funderName}
               </h3>
-              <button onClick={() => setShowCompetitorModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"><X size={20} /></button>
+              <button onClick={() => setShowCompetitorModal(false)} aria-label="Close competitor analysis" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"><X size={20} /></button>
             </div>
 
             {competitorResults.similarOrganizations && competitorResults.similarOrganizations.length > 0 && (
@@ -7321,7 +7324,7 @@ Deadline: 2026-11-15`;
         <div className="bg-indigo-50 dark:bg-slate-800 border border-indigo-200 rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Save size={14} /> Save Current Search</h4>
-            <button onClick={() => setShowSaveSearch(false)} className="text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:text-slate-500"><X size={16} /></button>
+            <button onClick={() => setShowSaveSearch(false)} aria-label="Close save search" className="text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:text-slate-500"><X size={16} /></button>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-500">Saves your current filters, geographic focus, tag filter, pipeline stage, and verification toggle. Anyone on the team can re-apply it later.</p>
           <div className="flex gap-2">
@@ -7964,7 +7967,7 @@ Deadline: 2026-11-15`;
                 <BarChart3 size={20} className="text-indigo-600" />
                 Grant Prioritization
               </h3>
-              <button onClick={() => setShowPrioritizeModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"><X size={20} /></button>
+              <button onClick={() => setShowPrioritizeModal(false)} aria-label="Close prioritize modal" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"><X size={20} /></button>
             </div>
 
             {prioritizeResults.topPicks && prioritizeResults.topPicks.length > 0 && (
