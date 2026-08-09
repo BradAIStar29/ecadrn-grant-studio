@@ -458,7 +458,6 @@ export default function App() {
   // Recurring grant detection results
   const [recurringResults, setRecurringResults] = useState<Record<string, any>>({});
   // Proposal attachments
-  const [proposalAttachments, setProposalAttachments] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
@@ -2338,7 +2337,7 @@ function ProposalsView({
         updatedAt: new Date().toISOString(),
         createdBy: auth.currentUser?.email || '',
         lastEditedBy: auth.currentUser?.email || '',
-        collaborators: [auth.currentUser!.email]
+        collaborators: [auth.currentUser?.email || '']
       }).catch(e => handleFirestoreError(e, OperationType.WRITE, `organizations/${orgId}/proposals`));
       
       setShowNewForm(false);
@@ -3063,7 +3062,6 @@ function ProposalEditor({
   const [isEditingSection, setIsEditingSection] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [isAIWorking, setIsAIWorking] = useState<string | null>(null);
-  const [showChecklist, setShowChecklist] = useState(false);
 
   // Pre-submission checklist — compute completeness
   const checklistItems = [
@@ -3206,13 +3204,13 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     });
 
     // Presence
-    const presenceRef = doc(db, propPath, 'presence', auth.currentUser!.uid);
+    const presenceRef = doc(db, propPath, 'presence', auth.currentUser?.uid || 'anonymous');
     const updatePresence = async () => {
       if (!auth.currentUser) return;
       try {
         await setDoc(presenceRef, {
-          userId: auth.currentUser!.uid,
-          userEmail: auth.currentUser!.email,
+          userId: auth.currentUser?.uid || 'anonymous',
+          userEmail: auth.currentUser?.email || '',
           sectionIndex: activeSectionIdx,
           isEditing: isEditingSection,
           lastSeen: new Date().toISOString()
@@ -3289,7 +3287,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
           content: sections,
           budget,
           timestamp: new Date().toISOString(),
-          author: auth.currentUser!.email,
+          author: auth.currentUser?.email || '',
           type: 'manual_save',
           message: customMsg.trim() || 'User explicitly saved a version.'
         }).catch(err => handleFirestoreError(err, OperationType.WRITE, versionsPath));
@@ -3311,7 +3309,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         description: proposal.description || "Custom template saved from draft.",
         sections: sections,
         createdAt: new Date().toISOString(),
-        creatorEmail: auth.currentUser!.email
+        creatorEmail: auth.currentUser?.email || ''
       }).catch(err => handleFirestoreError(err, OperationType.WRITE, templatesPath));
     } catch (e: any) {
       console.error(e);
@@ -3330,7 +3328,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     
     const notifPath = `organizations/${orgId}/notifications`;
     await addDoc(collection(db, notifPath), {
-      userId: auth.currentUser!.uid, // In real app, look up user's ID
+      userId: auth.currentUser?.uid || '',
       type: 'assignment',
       message: `You've been assigned to section: ${sections[sectionIdx].title} in ${proposal.title}`,
       link: proposal.id,
@@ -3348,7 +3346,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       const propPath = `organizations/${orgId}/proposals/${proposal.id}`;
       await addDoc(collection(db, propPath, 'comments'), {
         text: newComment,
-        author: auth.currentUser!.email,
+        author: auth.currentUser?.email || '',
         sectionIndex: activeSectionIdx,
         timestamp: new Date().toISOString(),
         resolved: false
@@ -3357,10 +3355,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
       // Trigger Notification for other collaborators
       const collaborators = proposal.collaborators || [];
       for (const email of collaborators) {
-        if (email !== auth.currentUser!.email) {
+        if (email !== auth.currentUser?.email) {
           // In a real app we'd look up the UID by email. Here we'll stick to a simple org-wide alert for demo.
           await addDoc(collection(db, `organizations/${orgId}/notifications`), {
-            userId: auth.currentUser!.uid, // Simplified for AI Studio
+            userId: auth.currentUser?.uid || ''
             type: 'comment',
             message: `New comment on ${proposal.title}: "${newComment.slice(0, 30)}..."`,
             link: proposal.id,
@@ -4774,7 +4772,6 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
 
 function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, onClose: () => void, onSelect: (t: any) => void, orgId: string }) {
   const [customTemplates, setCustomTemplates] = useState<any[]>([]);
-  const [editingTemplate, setEditingTemplate] = useState<any>(null);
 
   useEffect(() => {
     if (!isOpen || !auth.currentUser) return;
@@ -4816,7 +4813,7 @@ function TemplateModal({ isOpen, onClose, onSelect, orgId }: { isOpen: boolean, 
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this template?')) {
       try {
-        const templateRef = doc(db, 'organizations', auth.currentUser!.uid, 'templates', id);
+        const templateRef = doc(db, 'organizations', auth.currentUser?.uid || '', 'templates', id);
         await deleteDoc(templateRef).catch(e => handleFirestoreError(e, OperationType.DELETE, templateRef.path));
       } catch (e) {
         console.error(e);
@@ -5106,10 +5103,8 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   // Analyze competitors for a funder
   const [competitorResults, setCompetitorResults] = useState<any>(null);
   const [showCompetitorModal, setShowCompetitorModal] = useState(false);
-  const [analyzingCompetitorId, setAnalyzingCompetitorId] = useState<string | null>(null);
 
   const analyzeCompetitors = async (funder: any) => {
-    setAnalyzingCompetitorId(funder.id || funder.funderName);
     try {
       const result = await callAI('analyze-competitors', {
         funderName: funder.funderName,
@@ -5123,7 +5118,6 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       console.error('Competitor analysis error:', e);
       showToast('Competitor analysis failed. Please try again.');
     } finally {
-      setAnalyzingCompetitorId(null);
     }
   };
 
@@ -10783,7 +10777,6 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
   const [filterType, setFilterType] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [showGuide, setShowGuide] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<any>(null);
   const [savingPartner, setSavingPartner] = useState<string | null>(null);
   const [searchMode, setSearchMode] = useState<'all' | 'funders' | 'schools' | 'partnerships'>('all');
   const [stateFilter, setStateFilter] = useState('');
