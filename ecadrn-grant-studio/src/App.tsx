@@ -4102,7 +4102,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div className="mb-4">
                           <h6 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Must Fix</h6>
                           <ul className="space-y-1.5">
-                            {preSubmitResults.mustFix.map((item: string, i: number) => (
+                            {(preSubmitResults.mustFix || []).map((item: string, i: number) => (
                               <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-rose-50 p-2 rounded-lg">
                                 <span className="text-rose-500 mt-0.5 shrink-0">[!]</span> {item}
                               </li>
@@ -4115,7 +4115,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div className="mb-4">
                           <h6 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Should Fix</h6>
                           <ul className="space-y-1.5">
-                            {preSubmitResults.shouldFix.map((item: string, i: number) => (
+                            {(preSubmitResults.shouldFix || []).map((item: string, i: number) => (
                               <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-amber-50 dark:bg-slate-800 p-2 rounded-lg">
                                 <span className="text-amber-500 mt-0.5 shrink-0">[~]</span> {item}
                               </li>
@@ -4128,7 +4128,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div className="mb-4">
                           <h6 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">AI Cliches Detected</h6>
                           <div className="flex flex-wrap gap-2">
-                            {preSubmitResults.aiClichesFound.map((phrase: string, i: number) => (
+                            {(preSubmitResults.aiClichesFound || []).map((phrase: string, i: number) => (
                               <span key={i} className="text-[10px] bg-purple-50 text-purple-700 px-2 py-1 rounded-lg border border-purple-200 font-medium">{phrase}</span>
                             ))}
                           </div>
@@ -4139,7 +4139,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div className="mb-4">
                           <h6 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-2">Unsourced Claims</h6>
                           <ul className="space-y-1.5">
-                            {preSubmitResults.unsourcedClaims.map((claim: string, i: number) => (
+                            {(preSubmitResults.unsourcedClaims || []).map((claim: string, i: number) => (
                               <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-orange-50 p-2 rounded-lg">
                                 <span className="text-orange-500 mt-0.5 shrink-0">[#]</span> {claim}
                               </li>
@@ -4152,7 +4152,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div>
                           <h6 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nice to Have</h6>
                           <ul className="space-y-1.5">
-                            {preSubmitResults.niceToHave.map((item: string, i: number) => (
+                            {(preSubmitResults.niceToHave || []).map((item: string, i: number) => (
                               <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
                                 <span className="text-slate-300 mt-0.5 shrink-0">[*]</span> {item}
                               </li>
@@ -4340,7 +4340,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         const updated = [...attachments, ...newAttachments];
                         setAttachments(updated);
                         const path = `organizations/${orgId}/proposals/${proposal.id}`;
-                        await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true });
+                        await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, path));
                         showToast('Attachments uploaded', 'success');
                       } catch (err: any) {
                         showToast('Upload failed: ' + (err.message || 'Unknown error'), 'error');
@@ -4376,11 +4376,15 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         </div>
                         <button
                           onClick={async () => {
+                            try {
                             const updated = attachments.filter((_, i) => i !== idx);
                             setAttachments(updated);
                             const path = `organizations/${orgId}/proposals/${proposal.id}`;
-                            await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true });
+                            await setDoc(doc(db, path), { attachments: updated, updatedAt: new Date().toISOString(), lastEditedBy: auth.currentUser?.email || '' }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, path));
                             showToast('Attachment removed', 'info');
+                            } catch (err: any) {
+                              showToast('Failed to remove attachment: ' + (err?.message || 'Unknown error'), 'error');
+                            }
                           }}
                           className="text-slate-400 hover:text-rose-500 transition-colors p-1"
                         >
@@ -4582,7 +4586,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                     <div>
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Claim Verification</h4>
                       <div className="space-y-2">
-                        {factCheckResults.verified.map((item: any, i: number) => (
+                        {(factCheckResults.verified || []).map((item: any, i: number) => (
                           <div key={i} className={`p-3 rounded-xl border flex items-start gap-3 ${
                             item.status === 'verified' ? 'bg-emerald-50 dark:bg-slate-800 border-emerald-200' :
                             item.status === 'false' ? 'bg-rose-50 dark:bg-slate-800 border-rose-200' :
@@ -4604,7 +4608,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                     <div>
                       <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Missing Sources</h4>
                       <ul className="space-y-1.5">
-                        {factCheckResults.missingSources.map((src: string, i: number) => (
+                        {(factCheckResults.missingSources || []).map((src: string, i: number) => (
                           <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2 bg-rose-50 dark:bg-slate-800 p-2 rounded-lg">
                             <span className="text-rose-500 mt-0.5">!</span> {src}
                           </li>
@@ -5516,7 +5520,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
               <div className="mb-4">
                 <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">Similar Organizations</h4>
                 <div className="space-y-2">
-                  {competitorResults.similarOrganizations.map((org: any, i: number) => (
+                  {(competitorResults.similarOrganizations || []).map((org: any, i: number) => (
                     <div key={i} className="p-3 bg-purple-50 rounded-lg border border-purple-100">
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{org.name || org}</p>
                       {typeof org === 'object' && org.strength && <p className="text-xs text-slate-500 mt-1">{org.strength}</p>}
@@ -5531,7 +5535,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
               <div className="mb-4">
                 <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Your Differentiators</h4>
                 <ul className="space-y-1.5">
-                  {competitorResults.differentiators.map((item: string, i: number) => (
+                  {(competitorResults.differentiators || []).map((item: string, i: number) => (
                     <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-emerald-50 dark:bg-slate-800 p-2 rounded-lg">
                       <span className="text-emerald-500 mt-0.5">+</span> {item}
                     </li>
@@ -5544,7 +5548,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
               <div className="mb-4">
                 <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Gaps to Address</h4>
                 <ul className="space-y-1.5">
-                  {competitorResults.gaps.map((item: string, i: number) => (
+                  {(competitorResults.gaps || []).map((item: string, i: number) => (
                     <li key={i} className="text-xs text-slate-700 flex items-start gap-2 bg-rose-50 p-2 rounded-lg">
                       <span className="text-rose-500 mt-0.5">-</span> {item}
                     </li>
@@ -5586,7 +5590,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
               {funderRecs.recommendations && funderRecs.recommendations.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Top Recommendations</h4>
-                  {funderRecs.recommendations.map((rec: any, i: number) => (
+                  {(funderRecs.recommendations || []).map((rec: any, i: number) => (
                     <div key={i} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-sm font-bold text-slate-900">{rec.funderName}</p>
@@ -5611,7 +5615,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 <div>
                   <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Untouched Funders</h4>
                   <div className="flex flex-wrap gap-2">
-                    {funderRecs.untouchedFunders.map((f: string, i: number) => (
+                    {(funderRecs.untouchedFunders || []).map((f: string, i: number) => (
                       <span key={i} className="px-3 py-1 bg-amber-50 dark:bg-slate-800 text-amber-700 rounded-full text-xs border border-amber-100">{f}</span>
                     ))}
                   </div>
@@ -5621,7 +5625,7 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 <div>
                   <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Warm Follow-Ups</h4>
                   <div className="flex flex-wrap gap-2">
-                    {funderRecs.warmFollowUps.map((f: string, i: number) => (
+                    {(funderRecs.warmFollowUps || []).map((f: string, i: number) => (
                       <span key={i} className="px-3 py-1 bg-emerald-50 dark:bg-slate-800 text-emerald-700 rounded-full text-xs border border-emerald-100">{f}</span>
                     ))}
                   </div>
