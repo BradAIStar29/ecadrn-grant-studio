@@ -3487,6 +3487,23 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     }
   };
 
+  // Fact verification check
+  const runFactCheck = async () => {
+    setIsFactChecking(true);
+    try {
+      const result = await callAI('verify-facts', {
+        proposal: { title: proposal.title, sections, funder: proposal.funder },
+      });
+      setFactCheckResults(result);
+      setShowFactCheck(true);
+      showToast('Fact check complete', 'success');
+    } catch (err: any) {
+      showToast('Fact check failed: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setIsFactChecking(false);
+    }
+  };
+
   const currentSection = sections[activeSectionIdx] || { title: 'No Section', content: '' };
   const sectionWordCount = currentSection.content ? currentSection.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0;
   const totalWordCount = sections.reduce((acc, s) => acc + (s.content ? s.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0), 0);
@@ -4540,6 +4557,65 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Fact Check Results */}
+          {showFactCheck && factCheckResults && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowFactCheck(false)} role="dialog" aria-modal="true">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><FileSearch size={20} className="text-violet-500" /> Fact Check Results</h2>
+                  <button onClick={() => setShowFactCheck(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+                </div>
+                <div className="p-8 space-y-6">
+                  {factCheckResults.overallConfidence != null && (
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-sm font-medium text-slate-600">Overall Confidence</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${factCheckResults.overallConfidence >= 75 ? 'bg-emerald-500' : factCheckResults.overallConfidence >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${factCheckResults.overallConfidence}%` }} />
+                        </div>
+                        <span className="text-sm font-bold text-slate-900">{factCheckResults.overallConfidence}%</span>
+                      </div>
+                    </div>
+                  )}
+                  {factCheckResults.verified && factCheckResults.verified.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Claim Verification</h4>
+                      <div className="space-y-2">
+                        {factCheckResults.verified.map((item: any, i: number) => (
+                          <div key={i} className={`p-3 rounded-xl border flex items-start gap-3 ${
+                            item.status === 'verified' ? 'bg-emerald-50 dark:bg-slate-800 border-emerald-200' :
+                            item.status === 'false' ? 'bg-rose-50 dark:bg-slate-800 border-rose-200' :
+                            'bg-amber-50 dark:bg-slate-800 border-amber-200'
+                          }`}>
+                            <span className={`text-lg ${item.status === 'verified' ? 'text-emerald-500' : item.status === 'false' ? 'text-rose-500' : 'text-amber-500'}`}>
+                              {item.status === 'verified' ? '✓' : item.status === 'false' ? '✗' : '?'}
+                            </span>
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">{item.claim}</p>
+                              <p className="text-[10px] text-slate-500 mt-1">Status: <span className="font-bold uppercase">{item.status}</span> — {item.note}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {factCheckResults.missingSources && factCheckResults.missingSources.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Missing Sources</h4>
+                      <ul className="space-y-1.5">
+                        {factCheckResults.missingSources.map((src: string, i: number) => (
+                          <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2 bg-rose-50 dark:bg-slate-800 p-2 rounded-lg">
+                            <span className="text-rose-500 mt-0.5">!</span> {src}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {showTemplateConfirm && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
