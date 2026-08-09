@@ -3358,7 +3358,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         if (email !== auth.currentUser?.email) {
           // In a real app we'd look up the UID by email. Here we'll stick to a simple org-wide alert for demo.
           await addDoc(collection(db, `organizations/${orgId}/notifications`), {
-            userId: auth.currentUser?.uid || ''
+            userId: auth.currentUser?.uid || '',
             type: 'comment',
             message: `New comment on ${proposal.title}: "${newComment.slice(0, 30)}..."`,
             link: proposal.id,
