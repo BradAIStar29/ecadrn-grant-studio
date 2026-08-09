@@ -66,6 +66,7 @@ import {
   Bookmark,
   Save,
   ShieldCheck,
+  FileSearch,
   Moon,
   Sun,
   Command,
@@ -2233,6 +2234,7 @@ function ProposalsView({
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [aiComparison, setAiComparison] = useState<any>(null);
   const [aiComparisonLoading, setAiComparisonLoading] = useState(false);
+  const [showWinLossModal, setShowWinLossModal] = useState(false);
   
   const guideSteps = [
     { title: "Create a New Draft", content: "Click 'New Draft' in the top-right to open the proposal form. Enter the grant title, target funder, and a brief project description. The AI uses this to shape the entire proposal." },
@@ -2252,6 +2254,10 @@ function ProposalsView({
     funder: '',
     description: ''
   });
+
+  useEffect(() => {
+    if (winLossResults) setShowWinLossModal(true);
+  }, [winLossResults]);
 
   if (selectedProposal) {
     return <ProposalEditor 
@@ -2889,6 +2895,125 @@ function ProposalsView({
         title="Proposals" 
         steps={guideSteps} 
       />
+
+      {/* Win/Loss Analysis Results Modal */}
+      {showWinLossModal && winLossResults && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowWinLossModal(false)} role="dialog" aria-modal="true">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                {winLossResults.outcome === 'awarded' ? <><Trophy size={20} className="text-emerald-500" /> Win Analysis</> : <><TrendingDown size={20} className="text-rose-500" /> Loss Analysis</>}
+              </h2>
+              <button onClick={() => setShowWinLossModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+            <div className="p-8 space-y-6">
+              {winLossResults.summary && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 italic">
+                  {winLossResults.summary}
+                </div>
+              )}
+
+              {winLossResults.analysis && (
+                <>
+                  <div>
+                    <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Strengths</h4>
+                    <ul className="space-y-1.5">
+                      {(winLossResults.analysis.strengths || []).map((item: string, i: number) => (
+                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2 bg-emerald-50 dark:bg-slate-800 p-2 rounded-lg">
+                          <span className="text-emerald-500 mt-0.5">+</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Weaknesses</h4>
+                    <ul className="space-y-1.5">
+                      {(winLossResults.analysis.weaknesses || []).map((item: string, i: number) => (
+                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2 bg-rose-50 dark:bg-slate-800 p-2 rounded-lg">
+                          <span className="text-rose-500 mt-0.5">−</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: 'Funder Fit', value: winLossResults.analysis.funderFit },
+                      { label: 'Voice Alignment', value: winLossResults.analysis.voiceAlignment },
+                      { label: 'Budget Accuracy', value: winLossResults.analysis.budgetAccuracy },
+                    ].map((score, i) => (
+                      <div key={i} className="text-center p-3 bg-indigo-50 dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{score.label}</p>
+                        <p className="text-lg font-bold text-indigo-600">{score.value || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {winLossResults.analysis.keyFactors && winLossResults.analysis.keyFactors.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Key Factors</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {winLossResults.analysis.keyFactors.map((factor: string, i: number) => (
+                          <span key={i} className="px-3 py-1 bg-amber-50 dark:bg-slate-800 text-amber-700 rounded-full text-xs border border-amber-100">{factor}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {winLossResults.lessonsLearned && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Do's</h4>
+                    <ul className="space-y-1.5">
+                      {(winLossResults.lessonsLearned.dos || []).map((item: string, i: number) => (
+                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2">
+                          <span className="text-emerald-500 mt-0.5">✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Don'ts</h4>
+                    <ul className="space-y-1.5">
+                      {(winLossResults.lessonsLearned.donts || []).map((item: string, i: number) => (
+                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2">
+                          <span className="text-rose-500 mt-0.5">✗</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {winLossResults.funderSpecificInsights && (
+                <div>
+                  <h4 className="text-[10px] font-black text-violet-600 uppercase tracking-widest mb-2">Funder-Specific Insights</h4>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 p-3 bg-violet-50 dark:bg-slate-800 rounded-lg border border-violet-100">{winLossResults.funderSpecificInsights}</p>
+                </div>
+              )}
+
+              {winLossResults.recommendedVoiceProfile && (
+                <div>
+                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Recommended Voice Profile</h4>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 p-3 bg-indigo-50 dark:bg-slate-800 rounded-lg border border-indigo-100">{winLossResults.recommendedVoiceProfile}</p>
+                </div>
+              )}
+
+              {winLossResults.confidenceScore != null && (
+                <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <span className="text-xs text-slate-400">Analysis Confidence</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${winLossResults.confidenceScore}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-indigo-600">{winLossResults.confidenceScore}%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -2910,6 +3035,26 @@ function ProposalEditor({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [showDriveExport, setShowDriveExport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [diffExplanation, setDiffExplanation] = useState<any>(null);
+  const [diffLoading, setDiffLoading] = useState<number | null>(null);
+
+  const explainVersionDiff = async (versionId: number, v: any) => {
+    setDiffLoading(versionId);
+    try {
+      const oldContent = (v.content || []).map((s: any) => s.content || '').join('\n\n');
+      const newContent = (sections || []).map((s: any) => s.content || '').join('\n\n');
+      const result = await callAI('explain-diff', {
+        sectionName: 'Full proposal',
+        oldContent,
+        newContent,
+      });
+      setDiffExplanation(result);
+    } catch (err: any) {
+      showToast('Failed to analyze diff: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setDiffLoading(null);
+    }
+  };
   const [versions, setVersions] = useState<any[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
@@ -2952,6 +3097,9 @@ function ProposalEditor({
   const [showRefineBox, setShowRefineBox] = useState(false);
   const [preSubmitResults, setPreSubmitResults] = useState<any>(null);
   const [showPreSubmitCheck, setShowPreSubmitCheck] = useState(false);
+  const [factCheckResults, setFactCheckResults] = useState<any>(null);
+  const [showFactCheck, setShowFactCheck] = useState(false);
+  const [isFactChecking, setIsFactChecking] = useState(false);
 
   const editorGuideSteps = [
     { title: "Navigate Sections", content: "Use the section list on the left to jump between proposal sections. The active section is highlighted in indigo. Click any section to start editing it immediately." },
@@ -3497,12 +3645,21 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
               </button>
               <button 
                 onClick={() => runPreSubmitCheck()}
-                disabled={!!isAIWorking}
+                disabled={!!isAIWorking || isFactChecking}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm cursor-pointer ${isAIWorking === 'presubmit' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 animate-pulse' : 'bg-emerald-50 dark:bg-slate-800 hover:bg-emerald-100 text-emerald-700 border-emerald-150'}`}
                 title="Pre-Submission Quality Gate"
               >
                 <ShieldCheck size={13} className={isAIWorking === 'presubmit' ? 'animate-spin' : 'text-emerald-600'} />
                 <span>Pre-Submit Check</span>
+              </button>
+              <button 
+                onClick={runFactCheck}
+                disabled={isFactChecking || !!isAIWorking}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border shadow-sm cursor-pointer bg-violet-50 dark:bg-slate-800 hover:bg-violet-100 text-violet-700 border-violet-200 dark:border-slate-700 disabled:opacity-50"
+                title="Verify claims and check for missing sources"
+              >
+                <FileSearch size={13} className={isFactChecking ? 'animate-spin' : ''} />
+                <span>{isFactChecking ? 'Verifying...' : 'Fact Check'}</span>
               </button>
             </div>
             <button
@@ -4338,14 +4495,44 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       <div key={v.id} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all cursor-pointer group">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-bold text-slate-900 dark:text-white">{new Date(v.timestamp).toLocaleString()}</span>
-                          <button 
-                            onClick={() => { if(confirm('Revert proposal to this version?')) setSections(v.content); }}
-                            className="text-indigo-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            Revert
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => explainVersionDiff(v.id, v)}
+                              disabled={diffLoading === v.id}
+                              className="text-violet-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            >
+                              {diffLoading === v.id ? 'Analyzing...' : 'Diff'}
+                            </button>
+                            <button
+                              onClick={() => { if(confirm('Revert proposal to this version?')) setSections(v.content); }}
+                              className="text-indigo-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              Revert
+                            </button>
+                          </div>
                         </div>
                         <p className="text-[10px] text-slate-400 font-medium truncate">By: {v.author}</p>
+                        {diffExplanation && diffLoading === null && (
+                          <div className="mt-3 p-3 bg-violet-50 dark:bg-slate-800 rounded-lg border border-violet-100 text-[10px] space-y-2">
+                            {diffExplanation.overallAssessment && <p className="text-slate-600 italic">{diffExplanation.overallAssessment}</p>}
+                            {diffExplanation.changes && diffExplanation.changes.length > 0 && (
+                              <div className="space-y-1">
+                                {diffExplanation.changes.map((c: any, ci: number) => (
+                                  <div key={ci} className="flex items-start gap-1">
+                                    <span className={`font-bold ${c.assessment === 'improvement' ? 'text-emerald-500' : c.assessment === 'regression' ? 'text-rose-500' : 'text-slate-400'}`}>
+                                      {c.type === 'addition' ? '+' : c.type === 'deletion' ? '−' : '~'}
+                                    </span>
+                                    <span className="text-slate-500">{c.description}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {diffExplanation.recommendation && (
+                              <p className="text-violet-600 font-bold">→ {diffExplanation.recommendation}</p>
+                            )}
+                            <button onClick={() => setDiffExplanation(null)} className="text-slate-400 hover:text-slate-600 text-[9px]">Dismiss</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -4618,6 +4805,8 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   const [filterTag, setFilterTag] = useState('All Tags');
   const [filterDateRange, setFilterDateRange] = useState('All Time');
   const [showGuide, setShowGuide] = useState(false);
+  const [funderRecs, setFunderRecs] = useState<any>(null);
+  const [isLoadingRecs, setIsLoadingRecs] = useState(false);
 
   // Manual Creation States
   const [showAddManualForm, setShowAddManualForm] = useState(false);
@@ -4684,6 +4873,22 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       showToast(err?.message || 'Failed to add funder. Make sure the website URL is valid.');
     } finally {
       setIsSubmittingManual(false);
+    }
+  };
+
+  const loadFunderRecommendations = async () => {
+    setIsLoadingRecs(true);
+    try {
+      const result = await callAI('recommend-funders', {
+        funders,
+        orgProfile: organization,
+        grants: [],
+      });
+      setFunderRecs(result);
+    } catch (err: any) {
+      showToast('Failed to load recommendations: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      setIsLoadingRecs(false);
     }
   };
 
@@ -4958,6 +5163,15 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 </button>
               </div>
 
+              <button
+                onClick={loadFunderRecommendations}
+                disabled={isLoadingRecs}
+                className="px-3 py-2 rounded-lg text-sm font-medium border bg-violet-50 dark:bg-slate-800 border-violet-200 dark:border-slate-700 text-violet-700 hover:bg-violet-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer disabled:opacity-50"
+                title="AI recommends which funders to prioritize"
+              >
+                {isLoadingRecs ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                <span>{isLoadingRecs ? 'Analyzing...' : 'AI Recommendations'}</span>
+              </button>
               <button 
                 onClick={() => setShowAddManualForm(!showAddManualForm)}
                 className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer ${
@@ -5278,6 +5492,69 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
         title="Intelligence" 
         steps={guideSteps} 
       />
+
+      {/* AI Funder Recommendations Modal */}
+      {funderRecs && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setFunderRecs(null)} role="dialog" aria-modal="true">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex items-center justify-between rounded-t-2xl z-10">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Sparkles size={20} className="text-indigo-500" /> AI Funder Recommendations</h2>
+              <button onClick={() => setFunderRecs(null)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+            <div className="p-8 space-y-6">
+              {funderRecs.summary && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 italic">
+                  {funderRecs.summary}
+                </div>
+              )}
+              {funderRecs.recommendations && funderRecs.recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Top Recommendations</h4>
+                  {funderRecs.recommendations.map((rec: any, i: number) => (
+                    <div key={i} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-bold text-slate-900">{rec.funderName}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                          rec.priority === 'critical' ? 'bg-rose-50 text-rose-600' :
+                          rec.priority === 'high' ? 'bg-amber-50 text-amber-600' :
+                          rec.priority === 'medium' ? 'bg-indigo-50 dark:bg-slate-800 text-indigo-600' :
+                          'bg-slate-50 dark:bg-slate-800 text-slate-500'
+                        }`}>{rec.priority}</span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">{rec.reasoning}</p>
+                      <div className="flex flex-wrap gap-2 text-[10px]">
+                        {rec.suggestedAction && <span className="px-2 py-1 bg-indigo-50 dark:bg-slate-700 text-indigo-600 rounded-lg font-medium">{rec.suggestedAction}</span>}
+                        {rec.estimatedAskRange && <span className="px-2 py-1 bg-emerald-50 dark:bg-slate-700 text-emerald-600 rounded-lg font-medium">{rec.estimatedAskRange}</span>}
+                        {rec.timing && <span className="px-2 py-1 bg-violet-50 dark:bg-slate-700 text-violet-600 rounded-lg font-medium">{rec.timing}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {funderRecs.untouchedFunders && funderRecs.untouchedFunders.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Untouched Funders</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {funderRecs.untouchedFunders.map((f: string, i: number) => (
+                      <span key={i} className="px-3 py-1 bg-amber-50 dark:bg-slate-800 text-amber-700 rounded-full text-xs border border-amber-100">{f}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {funderRecs.warmFollowUps && funderRecs.warmFollowUps.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Warm Follow-Ups</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {funderRecs.warmFollowUps.map((f: string, i: number) => (
+                      <span key={i} className="px-3 py-1 bg-emerald-50 dark:bg-slate-800 text-emerald-700 rounded-full text-xs border border-emerald-100">{f}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
