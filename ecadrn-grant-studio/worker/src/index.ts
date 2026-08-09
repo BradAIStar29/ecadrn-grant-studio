@@ -980,21 +980,20 @@ Programs: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Care
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
 {
-  "competitors": [
+  "similarOrganizations": [
     {
       "name": "string — real organization name",
       "website": "string or null",
       "yearAwarded": "string",
       "amount": "string or null",
-      "projectSummary": "string — what they were funded to do, if known",
-      "strengths": ["string — what likely made their proposal competitive"],
-      "ecadrnDifferentiator": "string — how ECADRN differs from or improves on this approach"
+      "strength": "string — 1-2 sentences on what likely made their proposal competitive",
+      "overlap": "string — 1 sentence on how their work overlaps with ECADRN's mission"
     }
   ],
   "commonWinningElements": ["string — patterns across successful proposals"],
-  "ecadrnCompetitiveAdvantages": ["string — ECADRN's unique strengths vs. competitors"],
-  "ecadrnGaps": ["string — areas where competitors are stronger and ECADRN should address"],
-  "recommendedStrategy": "string — 4-5 sentence strategy for how ECADRN should position against these competitors",
+  "differentiators": ["string — ECADRN's unique strengths vs. competitors"],
+  "gaps": ["string — areas where competitors are stronger and ECADRN should address"],
+  "recommendation": "string — 4-5 sentence strategy for how ECADRN should position against these competitors",
   "researchConfidence": "high | medium | low"
 }`;
 
@@ -1022,13 +1021,13 @@ PRIORITIZATION FACTORS:
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
 {
-  "rankings": [
+  "topPicks": [
     {
-      "grantTitle": "string",
+      "title": "string — grant title",
       "funderName": "string",
       "rank": number,
       "priority": "critical | high | medium | low | skip",
-      "reasoning": "string — 2-3 sentences explaining this ranking",
+      "reason": "string — 2-3 sentences explaining this ranking",
       "estimatedEffort": "string — 'low' | 'medium' | 'high'",
       "estimatedEffortHours": number,
       "winProbability": number 0-100,
@@ -1036,9 +1035,9 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No markdown fences.
       "recommendedAction": "string — specific next step"
     }
   ],
-  "summary": "string — 3-4 sentence strategic overview of the pipeline",
+  "strategy": "string — 3-4 sentence strategic overview of the pipeline",
   "topPick": "string — grant title of the #1 recommendation",
-  "skipRecommendation": ["string — grants to skip and why"]
+  "deprioritize": ["string — grants to skip and why"]
 }`;
 
     case 'explain-diff':
@@ -1198,8 +1197,8 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'chat': ['reply'],
     'refine-section': ['content'],
     'pre-submit-check': ['recommendation', 'overallScore'],
-    'analyze-competitors': ['competitors'],
-    'prioritize-grants': ['rankings'],
+    'analyze-competitors': ['similarOrganizations'],
+    'prioritize-grants': ['topPicks'],
     'explain-diff': ['changes'],
     'recommend-funders': ['recommendations'],
     'align-grant-ecadrn': ['alignmentScore', 'rationale', 'suggestedApproach'],
