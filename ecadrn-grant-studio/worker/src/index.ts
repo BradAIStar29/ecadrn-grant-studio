@@ -407,39 +407,6 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
     "verified": boolean
   }
 ]`;
-
-    case 'align-proposal':
-      return `You are a nonprofit fundraising strategist and editor specializing in ADR/conflict resolution grant proposals.
-
-TASK: Compare the draft proposal text below against the funder's priority guidelines and voice rules, then provide concrete, actionable improvements for each section.
-
-DRAFT SECTIONS:
-${JSON.stringify(data.sections)}
-
-FUNDER GUIDELINES:
-Title: ${data.grantTitle}
-Funder: ${data.funderName}
-Description: ${data.grantDescription}
-Focus areas: ${data.focusAreas}
-Key selection criteria: ${data.keySelectionCriteria || 'None'}
-
-VOICE PROFILE:
-Tone: ${data.toneDescriptors}
-Style rules: ${data.voiceRules}
-
-OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
-{
-  "executiveSummary": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "needStatement": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "projectDescription": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "goalsObjectives": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "methodology": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "evaluationPlan": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "sustainability": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "organizationalCapacity": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" },
-  "budgetNarrative": { "critique": "string", "recommendations": ["string"], "rewrittenSnippet": "string" }
-}`;
-
     case 'verify-facts':
       return `You are an expert grant reviewer and fact-checker.
 Verify the claims in this grant proposal against known facts. Return JSON:
@@ -509,41 +476,6 @@ ${(data.text || '').slice(0, 8000)}`;
 
 Documents:
 ${safeTruncateContext(data.documents, 8000)}`;
-
-    case 'search-grants':
-      return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
-
-TASK: Search the web to identify up to ${data.count || 10} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities matching these parameters:
-
-Search Query: ${data.searchQuery || data.query || 'ADR conflict resolution grants'}
-Geographic Focus: ${data.geographicFocus || 'US National'}
-Award Amount: ${data.amount ? '$' + data.amount : 'Any'}
-Focus Areas: ${data.focusAreas || 'Alternative Dispute Resolution, conflict resolution, mediation, restorative justice'}
-
-STRICT ANTI-HALLUCINATION REQUIREMENTS:
-1. Every grant MUST be a real, verifiable opportunity findable on the web
-2. Include the exact funder name, program name, and URL
-3. Include the actual deadline (or "Ongoing" if rolling)
-4. Include the actual award range
-5. Do NOT fabricate or infer opportunities — if you cannot verify a grant, omit it
-6. If you find fewer than requested, return only what you can verify
-
-Return a JSON array of grant opportunities:
-[
-  {
-    "grantTitle": "string",
-    "funderName": "string",
-    "amountMax": number,
-    "deadline": "YYYY-MM-DD or Ongoing",
-    "description": "string (2-3 sentences)",
-    "url": "string (direct URL to grant page)",
-    "focusAreas": ["string"],
-    "geographicFocus": "string",
-    "eligibility": "string",
-    "verified": true
-  }
-]`;
-
     case 'autopilot-search':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
 
@@ -762,45 +694,6 @@ Return JSON with:
 
 Voice Profile: ${JSON.stringify(data.voiceProfile || {}).slice(0, 2000)}
 Content: ${data.content || ''}`;
-
-    case 'score-alignment':
-      return `You are an expert grant alignment analyst for ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation).
-
-TASK: Score how well this grant opportunity aligns with ECADRN's mission and programs.
-
-ECADRN MISSION: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
-ECADRN PROGRAMS: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network.
-
-GRANT OPPORTUNITY:
-${JSON.stringify(data.grant || data).slice(0, 4000)}
-
-Score each dimension 0-100 and provide specific reasoning:
-1. Mission Alignment — how closely does the grant's purpose match ECADRN's mission?
-2. Program Fit — which ECADRN programs could this grant fund?
-3. Population Match — does the grant serve populations ECADRN works with?
-4. Geographic Fit — is the geographic scope appropriate?
-5. Budget Feasibility — is the award range realistic for ECADRN's capacity?
-6. Competitive Position — how well-positioned is ECADRN to win this grant?
-7. Strategic Value — does this grant advance ECADRN's long-term strategy?
-
-Return JSON:
-{
-  "overallScore": number,
-  "dimensionScores": {
-    "missionAlignment": number,
-    "programFit": number,
-    "populationMatch": number,
-    "geographicFit": number,
-    "budgetFeasibility": number,
-    "competitivePosition": number,
-    "strategicValue": number
-  },
-  "rationale": "string — 3-4 sentence overall assessment",
-  "bestPrograms": ["string — which ECADRN programs this grant should fund"],
-  "risks": ["string — potential challenges or misalignments"],
-  "recommendation": "string — pursue | monitor | skip, with brief reasoning"
-}`;
-
     case 'find-adr-partners':
       return `You are a research specialist in Alternative Dispute Resolution (ADR) organizations, university programs, and educational institutions in the United States. You have access to web search — USE IT EXTENSIVELY to find REAL organizations.
 
