@@ -6018,13 +6018,26 @@ function AgentProposalWriter({
         additionalContext,
       });
 
+      if (!research || typeof research !== 'object') {
+        throw new Error('Grant URL research failed to return structured data.');
+      }
+      const safeResearch = {
+        ...research,
+        grantTitle: research.grantTitle || research.title || grantName,
+        funderName: research.funderName || research.funder || 'Unknown Funder',
+        funderType: research.funderType || 'Foundation',
+        amountMin: typeof research.amountMin === 'number' ? research.amountMin : (Number(research.amountMin) || 0),
+        amountMax: typeof research.amountMax === 'number' ? research.amountMax : (Number(research.amountMax) || 0),
+        ecadrnAlignmentScore: research.ecadrnAlignmentScore || 50,
+        deadline: research.deadline || 'Unspecified'
+      };
       addLog('✅ Research complete.');
-      addLog(`   Funder: ${research.funderName}`);
-      addLog(`   Type: ${research.funderType}`);
-      addLog(`   Award range: $${research.amountMin?.toLocaleString()} – $${research.amountMax?.toLocaleString()}`);
-      addLog(`   ECADRN alignment: ${research.ecadrnAlignmentScore}/100`);
-      addLog(`   Deadline: ${research.deadline}`);
-      setResearchData(research);
+      addLog(`   Funder: ${safeResearch.funderName}`);
+      addLog(`   Type: ${safeResearch.funderType}`);
+      addLog(`   Award range: $${safeResearch.amountMin.toLocaleString()} – $${safeResearch.amountMax.toLocaleString()}`);
+      addLog(`   ECADRN alignment: ${safeResearch.ecadrnAlignmentScore}/100`);
+      addLog(`   Deadline: ${safeResearch.deadline}`);
+      setResearchData(safeResearch);
 
       // PHASE 2 — Write the proposal
       setStep('writing');
@@ -6038,7 +6051,7 @@ function AgentProposalWriter({
 
       const sections = await callAI('agent-write-proposal', {
         orgProfile: organization,
-        ...research,
+        ...safeResearch,
         userInstructions,
         toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || 'Scholarly, Equitable, Community-centered',
         keyPhrases: activeVoice?.keyPhrases?.join(', ') || 'access to justice, early-career ADR professionals',
@@ -6084,7 +6097,7 @@ function AgentProposalWriter({
       const response = await callAI('chat', {
         message: userMsg,
         history: chatHistory.slice(-6),
-        context: `You are ECADRN's grant writing agent. You just wrote the following proposal for the "${researchData?.grantTitle}" grant from ${researchData?.funderName}. The user wants edits or has questions.
+        context: `You are ECADRN's grant writing agent. You just wrote the following proposal for the "${researchData?.grantTitle || researchData?.title || 'this grant'}" grant from ${researchData?.funderName || 'the funder'}. The user wants edits or has questions.
 
 CURRENT PROPOSAL:
 ${fullProposalText}
@@ -6691,18 +6704,21 @@ function GrantsView({
       showToast(`Re-running: ${search.name}...`, 'info');
       setIsDiscovering(true);
       try {
+        const rawFocus = search.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice'];
         const results = await callAI('discover-grants', {
           orgProfile: organization,
-          focusAreas: (search.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice']).join(', '),
+          focusAreas: Array.isArray(rawFocus) ? rawFocus.join(', ') : String(rawFocus),
           geographicFocus: search.geographicFocus || 'National',
           amountMin: search.amountMin || 10000,
           amountMax: search.amountMax || 100000,
-          searchQuery: search.searchQuery || ''
+          searchQuery: search.filterText || search.searchQuery || ''
         });
         if (Array.isArray(results) && results.length > 0) {
           const grantsPath = `organizations/${orgId}/grants`;
           const grantsRef = collection(db, grantsPath);
-          const verifiedResults = results.filter((g: any) => g?.title && g?.funderName);
+          const verifiedResults = results
+            .map((g: any) => ({ ...g, title: g?.title || g?.grantTitle || '', funderName: g?.funderName || g?.funder || '' }))
+            .filter((g: any) => Boolean(g.title && g.funderName));
           for (const g of verifiedResults) {
             await addDoc(grantsRef, {
               ...g, tags: Array.isArray(g.focusAreas) ? [...g.focusAreas] : [],
@@ -6819,13 +6835,14 @@ function GrantsView({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showGuide, setShowGuide] = useState(false);
 
-  // Automatically calculate missing alignment scores
+  // Automatically calculate missing alignment scores (with loop prevention)
+  const [failedScoreIds, setFailedScoreIds] = useState<Set<string>>(new Set());
   useEffect(() => {
-    const missingGrant = grants.find(g => g.ecadrnAlignmentScore === undefined || g.ecadrnAlignmentScore === null);
+    const missingGrant = grants.find(g => g.id && !failedScoreIds.has(g.id) && (g.ecadrnAlignmentScore === undefined || g.ecadrnAlignmentScore === null));
     if (missingGrant && !aligningId) {
       calculateECADRNAlignment(missingGrant);
     }
-  }, [grants, aligningId]);
+  }, [grants, aligningId, failedScoreIds]);
 
   // Custom upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -6930,22 +6947,26 @@ Deadline: 2026-11-15`;
   };
 
   const calculateECADRNAlignment = async (grant: any) => {
+    if (!grant?.id || !orgId) return;
     setAligningId(grant.id);
     try {
       const data = await callAI('align-grant-ecadrn', {
-        grantTitle: grant.title,
-        funderName: grant.funderName,
-        grantDescription: grant.description,
-        focusAreas: grant.focusAreas?.join(', ') || 'Alternative Dispute Resolution',
+        grantTitle: grant.title || grant.grantTitle || '',
+        funderName: grant.funderName || grant.funder || '',
+        grantDescription: grant.description || '',
+        focusAreas: Array.isArray(grant.focusAreas) ? grant.focusAreas.join(', ') : (grant.focusAreas || 'Alternative Dispute Resolution'),
         geographicFocus: grant.geographicFocus || 'National',
         eligibility: grant.eligibility || '501(c)(3) Nonprofit'
       });
       
+      const score = typeof data?.ecadrnAlignmentScore === 'number' ? data.ecadrnAlignmentScore : 50;
+      const rationale = data?.ecadrnAlignmentRationale || 'Evaluated for ECADRN alignment.';
+
       const grantsPath = `organizations/${orgId}/grants`;
       const docRef = doc(db, grantsPath, grant.id);
       await setDoc(docRef, {
-        ecadrnAlignmentScore: data.ecadrnAlignmentScore,
-        ecadrnAlignmentRationale: data.ecadrnAlignmentRationale,
+        ecadrnAlignmentScore: score,
+        ecadrnAlignmentRationale: rationale,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
 
@@ -6953,14 +6974,15 @@ Deadline: 2026-11-15`;
         if (prev && prev.id === grant.id) {
           return {
             ...prev,
-            ecadrnAlignmentScore: data.ecadrnAlignmentScore,
-            ecadrnAlignmentRationale: data.ecadrnAlignmentRationale
+            ecadrnAlignmentScore: score,
+            ecadrnAlignmentRationale: rationale
           };
         }
         return prev;
       });
     } catch (err) {
       console.error("Failed to compute ECADRN alignment:", err);
+      setFailedScoreIds(prev => new Set(prev).add(grant.id));
     } finally {
       setAligningId(null);
     }
@@ -6996,9 +7018,15 @@ Deadline: 2026-11-15`;
 
     try {
       log('🔍 Searching for best-match grants for ECADRN...');
+      const orgFocus = Array.isArray(organization?.focusAreas) ? organization.focusAreas.join(', ')
+        : (organization?.focusAreas || 'ADR, conflict resolution, access to justice, restorative justice, civic equity');
       const results = await callAI('autopilot-search', {
         orgProfile: organization,
-        focusAreas: organization?.voiceProfile?.keyPhrases?.join(', ') || 'ADR, conflict resolution, civic equity'
+        focusAreas: orgFocus,
+        geographicFocus: organization?.geographicFocus || 'National',
+        amountMin: organization?.typicalGrantMin || 10000,
+        amountMax: organization?.typicalGrantMax || 100000,
+        searchQuery: organization?.discoveryKeywords || ''
       });
 
       if (!Array.isArray(results) || results.length === 0) {
@@ -7011,7 +7039,9 @@ Deadline: 2026-11-15`;
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
       const savedGrants: any[] = [];
-      const verifiedResults = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
+      const verifiedResults = Array.isArray(results)
+        ? results.map((g: any) => ({ ...g, title: g?.title || g?.grantTitle || '', funderName: g?.funderName || g?.funder || '' })).filter((g: any) => Boolean(g.title && g.funderName))
+        : [];
       // Score grants by ECADRN alignment
       const alignmentKw = ['adr', 'mediation', 'dispute resolution', 'conflict', 'justice', 'equity', 'restorative', 'peacebuilding', 'access to justice'];
       verifiedResults.forEach((g: any) => {
@@ -7027,11 +7057,11 @@ Deadline: 2026-11-15`;
       for (const g of verifiedResults) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         const ref = await addDoc(grantsRef, {
-          ...g, tags: autoTags, source: 'autopilot', status: 'discovery',
+          ...g, orgId, tags: autoTags, source: 'autopilot', status: 'discovery', pipelineStage: 'Discovered',
           updatedAt: new Date().toISOString()
         });
         savedGrants.push({ id: ref.id, ...g });
-        log(`  📌 ${g.title} (${g.funderName}) — ${g.matchScore}% match`);
+        log(`  📌 ${g.title} (${g.funderName}) — ${g.ecadrnAlignmentScore || g.matchScore || 0}% match`);
       }
 
       // Also fetch existing ADR Network grants from Firestore that haven't been drafted yet
@@ -7165,7 +7195,11 @@ Deadline: 2026-11-15`;
 
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
-      const validGrants = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
+      const validGrants = Array.isArray(results)
+        ? results
+            .map((g: any) => ({ ...g, title: g?.title || g?.grantTitle || '', funderName: g?.funderName || g?.funder || '' }))
+            .filter((g: any) => Boolean(g.title && g.funderName))
+        : [];
       if (validGrants.length === 0) throw new Error('AI returned no verifiable grants — nothing saved.');
 
       // Score grants by ECADRN alignment keywords
@@ -7181,9 +7215,12 @@ Deadline: 2026-11-15`;
         }
         await addDoc(grantsRef, {
           ...g,
-          title: g.grantTitle || g.title,
+          orgId,
+          title: g.title,
+          funderName: g.funderName,
           tags: autoTags,
           status: 'discovery',
+          pipelineStage: 'Discovered',
           ecadrnAlignmentScore,
           source: 'discovery',
           updatedAt: new Date().toISOString(),
@@ -7201,7 +7238,10 @@ Deadline: 2026-11-15`;
 
   const filteredGrants = grants
     .filter(g => {
-      if (hideUnverified && g.verified === false) return false;
+      if (hideUnverified) {
+        if (g.verified === false) return false;
+        if (g.source === 'discovery' && g.verified !== true) return false;
+      }
       const matchText = g.title?.toLowerCase().includes(debouncedFilterText.toLowerCase()) || 
                         g.funderName?.toLowerCase().includes(debouncedFilterText.toLowerCase()) ||
                         (g.focusAreas && g.focusAreas.some((fa: string) => fa.toLowerCase().includes(debouncedFilterText.toLowerCase()))) ||
@@ -7971,7 +8011,7 @@ Deadline: 2026-11-15`;
                   onClick={() => calculateECADRNAlignment(selectedAlignmentGrant)}
                   className="flex-1 sm:flex-initial px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  {aligningId === selectedAlignmentGrant.id ? (
+                  {aligningId === selectedAlignmentGrant?.id ? (
                     <>
                       <RefreshCw size={11} className="animate-spin text-white" />
                       <span>Computing Alignment...</span>
@@ -10423,7 +10463,7 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
       });
       if (Array.isArray(results)) {
         // Sort by alignment score
-        const sorted = results.sort((a: any, b: any) => (b.alignmentScore || 0) - (a.alignmentScore || 0));
+        const sorted = [...results].sort((a: any, b: any) => (b.alignmentScore || 0) - (a.alignmentScore || 0));
         setPartners(sorted);
       } else {
         setPartners([]);
@@ -10512,7 +10552,10 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
 
   const filteredPartners = partners.filter((p: any) => {
     if (filterType !== 'All' && p.type !== filterType) return false;
-    if (stateFilter && p.location && !p.location.toLowerCase().includes(stateFilter.toLowerCase())) return false;
+    if (stateFilter) {
+      const loc = (p.location || '').toLowerCase();
+      if (!loc.includes(stateFilter.toLowerCase())) return false;
+    }
     return true;
   }).sort((a: any, b: any) => {
     if (sortBy === 'alignment') return (b.alignmentScore || 0) - (a.alignmentScore || 0);
@@ -10691,13 +10734,18 @@ function AdrNetworkView({ organization, orgId, user }: { organization: any, orgI
                     {partner.programOrDepartment && (
                       <p className="text-sm text-slate-600 mb-2"><span className="font-medium">Program:</span> {partner.programOrDepartment}</p>
                     )}
-                    {partner.adrFocus && partner.adrFocus.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {partner.adrFocus.map((focus: string, j: number) => (
-                          <span key={j} className="text-[10px] bg-indigo-50 dark:bg-slate-800 text-indigo-600 px-2 py-0.5 rounded-full">{focus}</span>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const focusList = Array.isArray(partner.adrFocus) ? partner.adrFocus
+                        : (typeof partner.adrFocus === 'string' ? partner.adrFocus.split(',').map((s: string) => s.trim()) : []);
+                      if (focusList.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {focusList.map((focus: string, j: number) => (
+                            <span key={j} className="text-[10px] bg-indigo-50 dark:bg-slate-800 text-indigo-600 px-2 py-0.5 rounded-full">{focus}</span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {partner.fundingHistory && (
                       <p className="text-xs text-slate-500 mb-2"><span className="font-medium">Funding History:</span> {partner.fundingHistory}</p>
                     )}
