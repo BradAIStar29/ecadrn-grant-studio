@@ -706,11 +706,19 @@ ANALYZE FOR:
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 {
-  "score": number,
+  "aiProbabilityScore": number (0-100, probability an AI detector would flag this text as AI-generated),
+  "humanScore": number (0-100, how natural and human the text sounds),
+  "funderAiCheckRisk": "High" | "Medium" | "Low" (likelihood a funder's AI screening tool would flag this),
+  "readabilityGrade": "string — Flesch-Kincaid grade level estimate (e.g. 'Grade 12'),
+  "structuralVarianceAdvice": "string — 2-3 sentences on how to vary sentence structure to reduce AI detection",
+  "bannedWordsFound": ["string — exact banned/AI-cliché words found in the text"],
+  "flaggedPhrases": ["string — exact phrases that sound AI-generated, with the section name"],
+  "sectionAverages": [
+    {"sectionName": "string — section name", "detectionProbability": number (0-100, AI detection probability for this section)}
+  ],
+  "verdict": "string — 1-2 sentence overall verdict on the proposal's naturalness",
   "suggestions": ["string — specific, actionable improvement with the exact text to change"],
-  "rewrittenSection": "string — a fully rewritten version of the weakest section, showing what natural grant writing looks like",
-  "aiPhraseCount": number,
-  "flaggedPhrases": ["string — exact AI-sounding phrases found in the text"]
+  "rewrittenSection": "string — a fully rewritten version of the weakest section, showing what natural grant writing looks like"
 }`;
 
     case 'identify-missing':
@@ -1185,7 +1193,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'research-grant-url': ['grantTitle', 'funderName'],
     'score-alignment': ['overallScore', 'dimensionScores'],
     'review-proposal': ['overallScore', 'sectionScores'],
-    'humanize-proposal': ['score', 'suggestions'],
+    'humanize-proposal': ['aiProbabilityScore', 'humanScore'],
     'generate-outreach-email': ['subject', 'body'],
     'chat': ['reply'],
     'refine-section': ['content'],

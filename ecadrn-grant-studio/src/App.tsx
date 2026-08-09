@@ -3881,7 +3881,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         <div className="space-y-4">
                           <span className="text-[10px] font-black text-rose-400 uppercase tracking-[0.2em]">Priority Revisions</span>
                           <ul className="space-y-2">
-                            {reviewResults.priorityRevisions?.map((r: string, i: number) => (
+                            {(reviewResults.priorityRevisions || reviewResults.recommendations || [])?.map((r: string, i: number) => (
                               <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
                                 <span className="text-rose-400 mt-0.5">•</span> {r}
                               </li>
@@ -3891,7 +3891,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       </div>
 
                       <div className="mt-10 p-6 bg-white dark:bg-slate-900/5 rounded-2xl border border-white/10 italic text-sm text-indigo-200 leading-relaxed font-medium">
-                        "{reviewResults.verdict}"
+                        "{reviewResults.verdict || (reviewResults.overallScore >= 80 ? "Strong proposal with room for refinement." : "Needs significant revision before submission.")}"
                       </div>
                     </div>
                   </motion.div>
@@ -6959,8 +6959,8 @@ Deadline: 2026-11-15`;
         eligibility: grant.eligibility || '501(c)(3) Nonprofit'
       });
       
-      const score = typeof data?.ecadrnAlignmentScore === 'number' ? data.ecadrnAlignmentScore : 50;
-      const rationale = data?.ecadrnAlignmentRationale || 'Evaluated for ECADRN alignment.';
+      const score = typeof data?.alignmentScore === 'number' ? data.alignmentScore : (typeof data?.ecadrnAlignmentScore === 'number' ? data.ecadrnAlignmentScore : 50);
+      const rationale = data?.rationale || data?.ecadrnAlignmentRationale || 'Evaluated for ECADRN alignment.';
 
       const grantsPath = `organizations/${orgId}/grants`;
       const docRef = doc(db, grantsPath, grant.id);
