@@ -86,6 +86,7 @@ import {
   Mail as MailIcon,
   Plus as PlusIcon,
   GitBranch,
+  Phone,
 } from 'lucide-react';
 
 // ── Debounce hook for search inputs ─────────────────────────────────────────
@@ -3173,6 +3174,65 @@ function ProposalEditor({
   const [isEditingSection, setIsEditingSection] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [isAIWorking, setIsAIWorking] = useState<string | null>(null);
+  const [showActivityFeed, setShowActivityFeed] = useState(false);
+
+  // Color hash for collaborator avatars — consistent color per user
+  const avatarColors = ['bg-rose-400', 'bg-amber-400', 'bg-emerald-400', 'bg-cyan-400', 'bg-violet-400', 'bg-pink-400', 'bg-blue-400', 'bg-orange-400'];
+  const getAvatarColor = (email: string) => {
+    if (!email) return 'bg-slate-400';
+    const hash = email.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    return avatarColors[hash % avatarColors.length];
+  };
+
+  // Activity feed: transforms presence + comments into a chronological feed
+  const getActivityFeed = () => {
+    const items: Array<{ type: string; user: string; action: string; section?: string; timestamp: any; color: string; isRecent?: boolean }> = [];;
+    const now = new Date().getTime();
+
+    presence.forEach(p => {
+      if (p.id === auth.currentUser?.uid) return; // Skip self
+      const ts = new Date(p.lastSeen).getTime();
+      const sectionTitle = sections[p.sectionIndex]?.title || 'Unknown section';
+      const isRecent = now - ts < 30000;
+
+      items.push({
+        type: p.isEditing ? 'editing' : 'viewing',
+        user: p.userEmail?.split('@')[0] || 'Teammate',
+        action: p.isEditing ? 'is editing' : 'is viewing',
+        section: sectionTitle,
+        timestamp: p.lastSeen,
+        color: getAvatarColor(p.userEmail || ''),
+        isRecent,
+      });
+    });
+
+    comments.forEach(c => {
+      if (c.userId === auth.currentUser?.uid) return;
+      const sectionTitle = sections[c.sectionIndex]?.title || 'a section';
+      items.push({
+        type: 'comment',
+        user: c.userEmail?.split('@')[0] || 'Teammate',
+        action: 'commented on',
+        section: sectionTitle,
+        timestamp: c.timestamp,
+        color: getAvatarColor(c.userEmail || ''),
+      });
+    });
+
+    // Sort by most recent first
+    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return items;
+  };
+
+  const formatRelativeTime = (ts: string) => {
+    const diff = new Date().getTime() - new Date(ts).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return new Date(ts).toLocaleDateString();
+  };
 
   // Pre-submission checklist — compute completeness
   const checklistItems = [
@@ -3640,11 +3700,26 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
           </div>
           <div className="flex items-center gap-4">
             <div className="flex -space-x-2 mr-4">
-              {presence.map(p => (
-                <div key={p.id} className="w-8 h-8 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600" title={p.userEmail}>
+              {presence.filter(p => p.id !== auth.currentUser?.uid).map(p => (
+                <div key={p.id}
+                  className={`w-8 h-8 rounded-full border-2 border-white ${getAvatarColor(p.userEmail || '')} flex items-center justify-center text-[10px] font-bold text-white relative`}
+                  title={p.userEmail + (p.isEditing ? ' (editing)' : ' (viewing)')}
+                >
                   {p.userEmail?.slice(0, 1).toUpperCase()}
+                  {p.isEditing && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white animate-pulse" />
+                  )}
                 </div>
               ))}
+              {presence.filter(p => p.id !== auth.currentUser?.uid).length > 0 && (
+                <button
+                  onClick={() => setShowActivityFeed(!showActivityFeed)}
+                  className="ml-1.5 px-2 py-1 text-[9px] font-bold text-slate-500 hover:text-indigo-600 uppercase tracking-wider bg-slate-50 dark:bg-slate-800 rounded transition-colors flex items-center gap-1"
+                  title="Activity feed"
+                >
+                  <Bell size={10} /> Feed
+                </button>
+              )}
             </div>
             <button 
               onClick={() => setFocusMode(true)}
@@ -3932,7 +4007,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                             <Menu size={10} />
                           </div>
                           {presence.filter(p => p.sectionIndex === i && p.id !== auth.currentUser?.uid).map(p => (
-                            <div key={p.id} className="w-3 h-3 rounded-full bg-emerald-400 border border-white" title={`${p.userEmail} is here`} />
+                            <div key={p.id}
+                              className={`w-3.5 h-3.5 rounded-full ${getAvatarColor(p.userEmail || '')} border border-white ${p.isEditing ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}
+                              title={`${p.userEmail?.split('@')[0]} is ${p.isEditing ? 'editing' : 'viewing'} this section`}
+                            />
                           ))}
                         </div>
                       </div>
@@ -4691,6 +4769,204 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Version Diff Modal */}
+          {showDiffModal && diffVersion && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDiffModal(false)} role="dialog" aria-modal="true">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+                  <div className="flex items-center gap-3">
+                    <GitCompare size={20} className="text-blue-500" />
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white">Version Diff</h2>
+                      <p className="text-[10px] text-slate-400">
+                        Comparing current version vs {new Date(diffVersion.timestamp).toLocaleString()} by {diffVersion.author}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Mode toggle */}
+                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                      {(['side-by-side', 'inline'] as const).map(mode => (
+                        <button key={mode} onClick={() => setDiffMode(mode)}
+                          className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${
+                            diffMode === mode ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400'
+                          }`}>
+                          {mode === 'side-by-side' ? 'Side by Side' : 'Inline'}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setShowDiffModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl">✕</button>
+                  </div>
+                </div>
+
+                {/* Diff content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {(() => {
+                    const stats = getDiffStats(diffVersion);
+                    if (stats.sectionDiffs.length === 0) {
+                      return (
+                        <div className="text-center py-16">
+                          <CheckCircle size={40} className="mx-auto text-emerald-500 mb-3" />
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No changes detected</p>
+                          <p className="text-xs text-slate-400 mt-1">This version is identical to the current proposal.</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-6">
+                        {/* Summary bar */}
+                        <div className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                            {stats.sectionDiffs.length} section{stats.sectionDiffs.length !== 1 ? 's' : ''} changed
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-slate-700 px-2 py-0.5 rounded">+{stats.additions} words added</span>
+                          <span className="text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-slate-700 px-2 py-0.5 rounded">−{stats.deletions} words removed</span>
+                        </div>
+
+                        {/* Section diffs */}
+                        {stats.sectionDiffs.map((sd: any, si: number) => (
+                          <div key={si} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            {/* Section header */}
+                            <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{sd.title}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-emerald-600">+{sd.additions}</span>
+                                <span className="text-[9px] font-bold text-rose-500">−{sd.deletions}</span>
+                              </div>
+                            </div>
+
+                            {/* Diff body */}
+                            {diffMode === 'side-by-side' ? (
+                              <div className="grid grid-cols-2 divide-x divide-slate-200 dark:divide-slate-700">
+                                {/* Old version */}
+                                <div className="p-4 bg-rose-50/30 dark:bg-slate-900/50">
+                                  <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest block mb-2">Old Version</span>
+                                  <div className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                                    {sd.diff.map((d: any, di: number) => (
+                                      d.type === 'add' ? null :
+                                      d.type === 'remove' ? (
+                                        <span key={di} className="bg-rose-200/60 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 rounded px-0.5">{d.text} </span>
+                                      ) : (
+                                        <span key={di}>{d.text} </span>
+                                      )
+                                    ))}
+                                  </div>
+                                </div>
+                                {/* New version */}
+                                <div className="p-4 bg-emerald-50/30 dark:bg-slate-900/50">
+                                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block mb-2">Current Version</span>
+                                  <div className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                                    {sd.diff.map((d: any, di: number) => (
+                                      d.type === 'remove' ? null :
+                                      d.type === 'add' ? (
+                                        <span key={di} className="bg-emerald-200/60 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded px-0.5">{d.text} </span>
+                                      ) : (
+                                        <span key={di}>{d.text} </span>
+                                      )
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              /* Inline diff */
+                              <div className="p-4">
+                                <div className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                                  {sd.diff.map((d: any, di: number) => (
+                                    d.type === 'add' ? (
+                                      <span key={di} className="bg-emerald-200/60 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded px-0.5">{d.text} </span>
+                                    ) : d.type === 'remove' ? (
+                                      <span key={di} className="bg-rose-200/60 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 rounded px-0.5 line-through">{d.text} </span>
+                                    ) : (
+                                      <span key={di}>{d.text} </span>
+                                    )
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Footer with actions */}
+                <div className="border-t border-slate-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                  <button
+                    onClick={() => {
+                      if (confirm('Revert proposal to this version? This will replace the current content.')) {
+                        setSections(diffVersion.content);
+                        setShowDiffModal(false);
+                        showToast('Reverted to version from ' + new Date(diffVersion.timestamp).toLocaleString(), 'success');
+                      }
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
+                  >
+                    <History size={12} /> Revert to this version
+                  </button>
+                  <button onClick={() => setShowDiffModal(false)} className="px-4 py-2 text-slate-500 text-xs font-bold uppercase tracking-wider hover:text-slate-700 dark:hover:text-slate-300">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Collaboration Activity Feed */}
+          {showActivityFeed && presence.filter(p => p.id !== auth.currentUser?.uid).length > 0 && (
+            <div className="fixed bottom-4 right-4 z-[90] w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <Users size={12} /> Live Activity
+                </span>
+                <button onClick={() => setShowActivityFeed(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-3 max-h-72 overflow-y-auto">
+                {getActivityFeed().length === 0 ? (
+                  <p className="text-[10px] text-slate-400 text-center py-3">No recent team activity.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {getActivityFeed().map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div className={`w-7 h-7 rounded-full ${item.color} flex items-center justify-center text-[10px] font-bold text-white shrink-0`}>
+                          {item.user.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-snug">
+                            <span className="font-bold">{item.user}</span>{' '}
+                            <span className="text-slate-500">{item.action}</span>{' '}
+                            {item.section && <span className="font-medium text-slate-600 dark:text-slate-400">{item.section}</span>}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[8px] text-slate-400">{formatRelativeTime(item.timestamp)}</span>
+                            {item.type === 'editing' && (
+                              <span className="text-[8px] font-bold text-amber-600 flex items-center gap-0.5">
+                                <PenTool size={7} className="animate-bounce" /> editing now
+                              </span>
+                            )}
+                            {item.type === 'comment' && (
+                              <span className="text-[8px] font-bold text-indigo-500 flex items-center gap-0.5">
+                                <MessageSquare size={7} /> comment
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+                <p className="text-[8px] text-slate-400 text-center">
+                  {presence.length} {presence.length === 1 ? 'person' : 'people'} in this proposal · updates in real-time
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Fact Check Results */}
           {showFactCheck && factCheckResults && (
