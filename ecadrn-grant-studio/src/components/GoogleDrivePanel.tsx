@@ -12,7 +12,7 @@ import {
   Folder, Settings
 } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { GoogleAuthProvider, reauthenticateWithPopup, signInWithPopup } from 'firebase/auth';
+import { connectGoogle, getToken } from '../services/googleAuth';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev';
@@ -99,43 +99,19 @@ export default function GoogleDrivePanel({ isOpen, onClose, mode, proposalToExpo
   const [syncFolderName, setSyncFolderName] = useState(() => localStorage.getItem('ecadrn_sync_folder_name') || '');
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('ecadrn_last_synced') || '');
 
-  // ── Authorize Drive access ──────────────────────────────────────────────────
+  // ── Authorize Drive access ────────────────────────────────────────────────
+  // Uses the unified per-user Google connection (Drive + Gmail scopes together,
+  // one consent screen). Token handling lives in services/googleAuth.
   const authorizeWithDrive = async () => {
     setIsAuthorizing(true);
     setError('');
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('You must be signed in to connect Drive');
-      const provider = new GoogleAuthProvider();
-      provider.addScope(DRIVE_SCOPE);
-      // Force account selection so user can confirm which Google account to use
-      provider.setCustomParameters({ prompt: 'select_account', hd: 'ecadrn.org' });
-
-      let credential;
-      try {
-        // Try reauthenticate first (preserves session)
-        const result = await reauthenticateWithPopup(user, provider);
-        credential = GoogleAuthProvider.credentialFromResult(result);
-      } catch (reAuthErr: any) {
-        // If reauthenticate fails (e.g. different provider), fall back to signInWithPopup
-        if (reAuthErr.code !== 'auth/popup-closed-by-user') {
-          const result = await signInWithPopup(auth, provider);
-          credential = GoogleAuthProvider.credentialFromResult(result);
-        } else {
-          return; // User closed popup — not an error
-        }
-      }
-
-      if (credential?.accessToken) {
-        setDriveToken(credential.accessToken);
-        saveDriveToken(credential.accessToken);
-        setError('');
-      } else {
-        throw new Error('Google did not return a Drive access token. Make sure your @ecadrn.org account has Drive enabled.');
-      }
+      await connectGoogle();
+      setDriveToken(getToken());
+      setError('');
     } catch (e: any) {
-      if (e.code !== 'auth/popup-closed-by-user') {
-        setError('Drive authorization failed: ' + (e.message || 'Unknown error'));
+      if (e?.message !== 'popup-closed') {
+        setError('Google authorization failed: ' + (e?.message || 'Unknown error'));
       }
     } finally {
       setIsAuthorizing(false);
