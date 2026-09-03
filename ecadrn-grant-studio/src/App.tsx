@@ -80,6 +80,12 @@ import {
   Keyboard,
   Building2,
   Target,
+  Clock,
+  MessageSquare as MessageSquareIcon,
+  FileEdit,
+  Mail as MailIcon,
+  Plus as PlusIcon,
+  GitBranch,
 } from 'lucide-react';
 
 // ── Debounce hook for search inputs ─────────────────────────────────────────
@@ -5110,9 +5116,20 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
           lastAnalysisAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
+
+        // Auto-log research interaction to timeline
+        try {
+          await addDoc(collection(db, `${fundersPath}/${funder.id}/interactions`), {
+            type: 'research',
+            description: `AI deep-researched ${data.funderName || funder.funderName}. Updated intelligence: mission alignment ${data.missionAlignmentScore || 'N/A'}%, giving priorities extracted, ${data.recentGrants?.length || 0} recent grants found.`,
+            timestamp: new Date().toISOString(),
+            author: auth.currentUser?.email || 'system',
+            funderName: data.funderName || funder.funderName,
+          }).catch(() => {});
+        } catch {}
       } else {
         const fundersRef = collection(db, fundersPath);
-        await addDoc(fundersRef, {
+        const newFunderRef = await addDoc(fundersRef, {
           funderName: data.funderName || "Target Funder",
           website: url,
           contactName: '',
@@ -5122,6 +5139,19 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
           lastAnalysisAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
+
+        // Auto-log initial research interaction
+        if (newFunderRef?.id) {
+          try {
+            await addDoc(collection(db, `${fundersPath}/${newFunderRef.id}/interactions`), {
+              type: 'research',
+              description: `Funder discovered and AI-researched. Initial intelligence profile created with mission alignment ${data.missionAlignmentScore || 'N/A'}%.`,
+              timestamp: new Date().toISOString(),
+              author: auth.currentUser?.email || 'system',
+              funderName: data.funderName || "Target Funder",
+            }).catch(() => {});
+          } catch {}
+        }
         setNewFunderUrl('');
       }
     } catch (err: any) {
@@ -5673,6 +5703,150 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
         </div>
       )}
     </motion.div>
+  );
+}
+
+// ── Funder Relationship Timeline ─────────────────────────────────────────────
+function FunderTimeline({ funderId, funderName, orgId }: { funderId: string, funderName: string, orgId: string }) {
+  const [interactions, setInteractions] = useState<any[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [noteType, setNoteType] = useState<'note' | 'call' | 'meeting' | 'email_sent'>('note');
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    const interactionsPath = `organizations/${orgId}/funders/${funderId}/interactions`;
+    const unsub = onSnapshot(
+      query(collection(db, interactionsPath), orderBy('timestamp', 'desc'), limit(50)),
+      (snap) => { setInteractions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
+      (err) => { console.warn('Timeline listener error:', err); }
+    );
+    return () => unsub();
+  }, [funderId, orgId]);
+
+  const addInteraction = async () => {
+    if (!newNote.trim()) return;
+    setIsAdding(true);
+    try {
+      const interactionsPath = `organizations/${orgId}/funders/${funderId}/interactions`;
+      await addDoc(collection(db, interactionsPath), {
+        type: noteType,
+        description: newNote.trim(),
+        timestamp: new Date().toISOString(),
+        author: auth.currentUser?.email || 'Unknown',
+        funderName: funderName,
+      }).catch(err => handleFirestoreError(err, OperationType.WRITE, interactionsPath));
+      setNewNote('');
+    } catch (e: any) {
+      showToast('Failed to log interaction: ' + (e?.message || ''), 'error');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const typeConfig: Record<string, { icon: any, color: string, bg: string, label: string }> = {
+    research:     { icon: Sparkles,     color: 'text-indigo-600',  bg: 'bg-indigo-50 dark:bg-slate-800',  label: 'AI Research' },
+    proposal_created: { icon: FileText,  color: 'text-blue-600',    bg: 'bg-blue-50 dark:bg-slate-800',    label: 'Proposal Created' },
+    proposal_submitted: { icon: Send,    color: 'text-purple-600',  bg: 'bg-purple-50 dark:bg-slate-800',  label: 'Proposal Submitted' },
+    email_sent:   { icon: MailIcon,     color: 'text-cyan-600',    bg: 'bg-cyan-50 dark:bg-slate-800',    label: 'Email Sent' },
+    call:         { icon: Phone,        color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-slate-800', label: 'Call Logged' },
+    meeting:      { icon: Users,        color: 'text-amber-600',   bg: 'bg-amber-50 dark:bg-slate-800',   label: 'Meeting' },
+    note:         { icon: FileEdit,     color: 'text-slate-500',   bg: 'bg-slate-50 dark:bg-slate-800',   label: 'Note' },
+    stage_change: { icon: GitBranch,    color: 'text-rose-600',    bg: 'bg-rose-50 dark:bg-slate-800',    label: 'Stage Changed' },
+    award:        { icon: Trophy,       color: 'text-yellow-600',  bg: 'bg-yellow-50 dark:bg-slate-800',  label: 'Award!' },
+    default:      { icon: Clock,        color: 'text-slate-400',   bg: 'bg-slate-50 dark:bg-slate-800',   label: 'Activity' },
+  };
+
+  const formatDate = (ts: string) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays === 1) return `Yesterday, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: diffDays > 365 ? 'numeric' : undefined });
+  };
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+          <Clock size={10} /> Relationship Timeline
+        </span>
+        <span className="text-[9px] text-slate-400">{interactions.length} {interactions.length === 1 ? 'entry' : 'entries'}</span>
+      </div>
+
+      {/* Add interaction */}
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 mb-3 border border-slate-100 dark:border-slate-700/40">
+        <div className="flex gap-1 mb-1.5">
+          {(['note', 'call', 'meeting', 'email_sent'] as const).map(t => {
+            const cfg = typeConfig[t];
+            const Icon = cfg.icon;
+            return (
+              <button key={t} onClick={() => setNoteType(t)}
+                className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 ${
+                  noteType === t ? `${cfg.bg} ${cfg.color} border border-current` : 'bg-white dark:bg-slate-900 text-slate-400 border border-slate-100 dark:border-slate-700'
+                }`}>
+                <Icon size={9} /> {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && newNote.trim()) addInteraction(); }}
+            placeholder="Log an interaction..."
+            className="flex-1 text-[11px] px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded text-slate-600 dark:text-slate-300 outline-none focus:border-indigo-200"
+          />
+          <button
+            onClick={addInteraction}
+            disabled={isAdding || !newNote.trim()}
+            className="px-2.5 py-1.5 bg-indigo-600 text-white rounded text-[9px] font-bold uppercase tracking-wider hover:bg-indigo-700 transition-colors disabled:opacity-40"
+          >
+            {isAdding ? <Loader2 size={10} className="animate-spin" /> : <PlusIcon size={10} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Timeline entries */}
+      {interactions.length === 0 ? (
+        <div className="text-center py-4 text-[10px] text-slate-400">
+          No interactions logged yet. Start building this relationship.
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+          {interactions.map((item, idx) => {
+            const cfg = typeConfig[item.type] || typeConfig.default;
+            const Icon = cfg.icon;
+            const isLast = idx === interactions.length - 1;
+            return (
+              <div key={item.id} className="flex gap-2 group">
+                {/* Timeline line + dot */}
+                <div className="flex flex-col items-center pt-0.5">
+                  <div className={`w-6 h-6 rounded-full ${cfg.bg} ${cfg.color} flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-700`}>
+                    <Icon size={10} />
+                  </div>
+                  {!isLast && <div className="w-px flex-1 bg-slate-100 dark:bg-slate-700 my-0.5"></div>}
+                </div>
+                {/* Content */}
+                <div className={`flex-1 pb-2 ${isLast ? '' : 'border-b border-slate-50 dark:border-slate-800/50'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[9px] font-bold ${cfg.color} uppercase tracking-wider`}>{cfg.label}</span>
+                    <span className="text-[8px] text-slate-400 shrink-0">{formatDate(item.timestamp)}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">{item.description}</p>
+                  {item.author && item.author !== 'system' && (
+                    <span className="text-[8px] text-slate-400 font-medium">by {item.author.split('@')[0]}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -6300,6 +6474,9 @@ function FunderCard({
 
           {/* Funder Documents */}
           <FunderDocuments funderId={f.id} funderName={f.funderName || f.name || 'Unknown'} orgId={orgId} />
+
+          {/* Funder Relationship Timeline */}
+          <FunderTimeline funderId={f.id} funderName={f.funderName || f.name || 'Unknown'} orgId={orgId} />
 
           <div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 border-t border-slate-100 dark:border-slate-800 mt-auto -mx-6 -mb-6 flex justify-between items-center">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
