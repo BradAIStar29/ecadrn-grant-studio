@@ -14,7 +14,6 @@ import {
 import { auth } from '../lib/firebase';
 import { connectGoogle, getToken } from '../services/googleAuth';
 
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -50,13 +49,6 @@ export interface Props {
 const DRIVE_TOKEN_KEY = 'ecadrn_drive_token';
 
 const DRIVE_TOKEN_EXPIRY_KEY = 'ecadrn_drive_token_expiry';
-
-function saveDriveToken(token: string) {
-  sessionStorage.setItem(DRIVE_TOKEN_KEY, token);
-  // Drive tokens last ~1 hour; store expiry 55 minutes from now
-  const expiry = Date.now() + 55 * 60 * 1000;
-  sessionStorage.setItem(DRIVE_TOKEN_EXPIRY_KEY, String(expiry));
-}
 
 function loadDriveToken(): string | null {
   const token = sessionStorage.getItem(DRIVE_TOKEN_KEY);

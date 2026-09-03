@@ -1575,14 +1575,16 @@ export default {
       if (!driveToken) return json({ error: 'Google connection required. Connect your Google account in Settings.' }, 400);
       const body = await request.json() as any;
       const to = String(body?.to || '').trim();
-      const subject = String(body?.subject || '').trim();
       const messageBody = String(body?.body || '').trim();
-      if (!to || !subject || !messageBody) return json({ error: 'to, subject, and body are required' }, 400);
+      if (!to || !messageBody) return json({ error: 'to, subject, and body are required' }, 400);
       // Basic email validation
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return json({ error: 'Invalid recipient email address' }, 400);
 
       // Build a simple RFC 2822 MIME message
-      const from = String(body?.from || user.email || '').trim();
+      // Hardening: strip CR/LF from header fields to prevent MIME header injection
+      const subject = String(body?.subject || '').replace(/[\r\n]+/g, ' ').trim();
+      if (!subject) return json({ error: 'to, subject, and body are required' }, 400);
+      const from = String(body?.from || user.email || '').replace(/[\r\n]+/g, ' ').trim();
       const lines = [
         `From: ${from}`,
         `To: ${to}`,
