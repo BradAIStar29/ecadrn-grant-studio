@@ -87,6 +87,10 @@ import {
   Plus as PlusIcon,
   GitBranch,
   Phone,
+  ListChecks,
+  FolderArchive,
+  FileDown,
+  Link2,
 } from 'lucide-react';
 
 // ── Debounce hook for search inputs ─────────────────────────────────────────
@@ -148,7 +152,7 @@ import GoogleDrivePanel from './components/GoogleDrivePanel';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import 'react-quill/dist/quill.snow.css';
 
-type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics' | 'crm';
+type Tab = 'dashboard' | 'proposals' | 'funders' | 'grants' | 'voice' | 'outreach' | 'chat' | 'calendar' | 'network' | 'analytics' | 'crm' | 'vault';
 
 const WALKTHROUGH_STEPS = [
   {
@@ -1529,6 +1533,16 @@ CORE PROGRAMS:
             collapsed={!isSidebarOpen}
             id="nav-crm"
             badge="NEW"
+          />
+          <NavItem 
+            icon={<FolderArchive size={20} />} 
+            label="Doc Vault" 
+            active={activeTab === 'vault'} 
+            onClick={() => { setActiveTab('vault'); setIsMobileSidebarOpen(false); }} 
+            collapsed={!isSidebarOpen}
+            id="nav-vault"
+            badge="NEW"
+            highlighted={walkthroughStep !== null && WALKTHROUGH_STEPS[walkthroughStep]?.tab === 'vault'}
           />
         </nav>
 

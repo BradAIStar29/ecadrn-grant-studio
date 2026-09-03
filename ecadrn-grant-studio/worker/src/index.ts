@@ -182,6 +182,21 @@ IMPORTANT: Use the funder intelligence above to:
 - If recent grants show a pattern (e.g. preference for community-based programs), emphasize that alignment`
         : '';
 
+      const winningExamplesSection = Array.isArray(data.winningExamples) && data.winningExamples.length > 0
+        ? `
+WINNING PROPOSAL EXAMPLES (real proposals from this organization that were FUNDED):
+${data.winningExamples.map((ex: any, i: number) => `
+--- WINNING EXAMPLE ${i + 1}: "${ex.title || 'Untitled'}" (Funder: ${ex.funder || 'Unknown'}, Status: ${ex.status || 'awarded'}) ---
+${(ex.sections || []).map((s: any) => `${s?.title || 'Section'}:\n${(s?.content || '').replace(/<[^>]*>/g, '').slice(0, 1200)}`).join('\n\n')}
+`).join('\n')}
+
+HOW TO USE THE WINNING EXAMPLES:
+- These proposals actually WON funding. Study their structure, argument patterns, evidence density, and specificity.
+- Mirror the patterns that made them win: how they open sections, how they quantify outcomes, how they connect programs to funder priorities.
+- DO NOT copy text verbatim or reuse the same winning grant's specifics — extract the PATTERNS (rhythm, structure, level of detail) and apply them to this new opportunity.
+- If a winning example was funded by the SAME funder, pay extra attention: that funder has already rewarded this organization's style once.`
+        : '';
+
       return `You are an expert nonprofit grant writer with deep experience in Alternative Dispute Resolution, conflict resolution, access to justice, and civic equity funding.
 
 TASK: Write a complete 9-section grant proposal for the organization below, tailored precisely to the grant opportunity provided.
@@ -199,6 +214,7 @@ Award range: $${data.amountMin}–$${data.amountMax}
 Eligibility: ${data.eligibility}
 Geographic focus: ${data.geographicFocus}
 ${funderIntelSection}
+${winningExamplesSection}
 
 VOICE PROFILE:
 Tone descriptors: ${data.toneDescriptors}
@@ -489,6 +505,7 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
     "deadline": "YYYY-MM-DD or Varies or Rolling",
     "url": "string or null — MUST be the actual URL or domain of the funder, or null if uncertain",
     "alignmentRationale": "string — 2 sentences explaining why this specifically fits ECADRN's mission and programs",
+    "matchExplanation": "string — ONE sentence: 'Strong: <specific strength — name a program/priority that maps directly>; Watch: <specific gap — budget size, geography, eligibility, or competition level>'",
     "verified": boolean
   }
 ]`;
@@ -502,12 +519,52 @@ Verify the claims in this grant proposal against known facts. Return JSON:
 Grant Proposal:
 ${JSON.stringify(data.proposal || data).slice(0, 8000)}`;
 
+    case 'extract-requirements':
+      return `You are an expert grant application compliance officer with deep experience reviewing RFPs, grant guidelines, and eligibility criteria for foundation, government, and corporate funding.
+
+TASK: Extract every concrete requirement this organization must satisfy to submit a complete, compliant application for the grant below. Then map it against the organization profile to flag anything they clearly cannot check off today.
+
+GRANT OPPORTUNITY:
+Title: ${data.grantTitle || 'N/A'}
+Funder: ${data.funderName || 'N/A'}
+Description: ${data.grantDescription || 'N/A'}
+Eligibility (as stated): ${data.eligibility || 'Not specified'}
+Focus areas: ${data.focusAreas || 'Not specified'}
+Geographic focus: ${data.geographicFocus || 'Not specified'}
+Award range: $${data.amountMin || 0}–$${data.amountMax || 0}
+Deadline: ${data.deadline || 'Not specified'}
+
+ORGANIZATION PROFILE:
+${safeTruncateContext(data.orgProfile || {}, 2500)}
+
+RULES:
+1. Each requirement must be ONE concrete, checkable action or qualification (e.g. "Hold active 501(c)(3) status", "Provide 2 letters of support from community partners", "Submit budget not exceeding $75,000", "Operate within California").
+2. Set "isEligibilityGate" true ONLY for hard gates that would disqualify the application outright (legal status, geography, budget cap, deadline registration).
+3. Set "orgStatus" to "met", "unmet", or "unknown" based ONLY on what the org profile states. Use "unknown" liberally — do not guess.
+4. Derive requirements ONLY from the grant info provided. Do NOT invent requirements not implied by the text.
+5. If the grant info is too vague to extract a category of requirements, add a note to "missingInfo" describing what guideline details should be confirmed on the funder's website.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
+{
+  "requirements": [
+    {
+      "text": "string — one concrete, checkable requirement",
+      "category": "Eligibility | Geography | Budget | Documents | Formatting | Logistics | Reporting",
+      "isEligibilityGate": boolean,
+      "orgStatus": "met | unmet | unknown",
+      "note": "string — brief guidance on how to satisfy it, or '' if obvious"
+    }
+  ],
+  "missingInfo": ["string — guideline details that could not be determined from the info provided"]
+}`;
+
     case 'align-grant-ecadrn':
       return `You are an expert grant writer for ECADRN (Equity Center for Alternative Dispute Resolution & Negotiation). Align the following grant opportunity with ECADRN's mission of advancing ADR, conflict resolution, and civic equity.
 
 Return JSON:
 {
   "alignmentScore": number 0-100,
+  "matchExplanation": "string — ONE sentence, format: 'Strong: <single biggest specific strength>; Watch: <single biggest specific risk/weakness>' — cite concrete details like program names, locations, budget history, or eligibility constraints",
   "rationale": "string — 2-3 sentences explaining the alignment",
   "suggestedApproach": "string — how ECADRN should frame their application",
   "keyPrograms": ["string — which ECADRN programs fit this grant"]
@@ -616,6 +673,7 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
     "url": "string or null",
     "matchScore": number,
     "alignmentRationale": "string — 2 sentences on ECADRN fit",
+    "matchExplanation": "string — ONE sentence: 'Strong: <specific strength — name a program/priority that maps directly>; Watch: <specific gap — budget size, geography, eligibility, or competition level>'",
     "verified": boolean
   }
 ]`;
