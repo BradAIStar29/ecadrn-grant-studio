@@ -5,3 +5,14 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ALLOWED_ORIGIN = "https://bradaistar29.github.io"
+
+# AI Model Fallback State — Cloudflare KV stores the current model tier and
+# cooldown state for automatic model switching when rate limits are hit.
+#
+# To create this KV namespace, run:
+#   npx wrangler kv:namespace create AI_CONFIG
+# Then paste the returned ID below.
+#
+# [(kv_namespaces)]
+# binding = "AI_CONFIG"
+# id = "<your-namespace-id>"

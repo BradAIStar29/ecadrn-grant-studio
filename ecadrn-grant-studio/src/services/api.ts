@@ -17,6 +17,48 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+// ── AI Model Status Tracking ──────────────────────────────────────────────────
+// Tracks which AI model the worker is using (primary vs fallback) via response headers.
+// The UI subscribes to show a status badge and notify when fallback activates.
+
+export interface AIModelInfo {
+  model: string;
+  isFallback: boolean;
+  tier: number;
+}
+
+let _aiModelInfo: AIModelInfo | null = null;
+const _listeners: Array<(info: AIModelInfo | null) => void> = [];
+
+export function getAIModelInfo(): AIModelInfo | null {
+  return _aiModelInfo;
+}
+
+export function subscribeToAIModelStatus(cb: (info: AIModelInfo | null) => void): () => void {
+  _listeners.push(cb);
+  // Immediately push current state to new subscriber
+  cb(_aiModelInfo);
+  return () => {
+    const idx = _listeners.indexOf(cb);
+    if (idx >= 0) _listeners.splice(idx, 1);
+  };
+}
+
+function _notifyAIModelInfo(info: AIModelInfo): boolean {
+  const wasFallback = _aiModelInfo?.isFallback ?? false;
+  const justEnteredFallback = info.isFallback && !wasFallback;
+  const justReturnedToPrimary = !info.isFallback && wasFallback;
+
+  if (justEnteredFallback || justReturnedToPrimary || !_aiModelInfo || _aiModelInfo.model !== info.model) {
+    _aiModelInfo = info;
+    _listeners.forEach(cb => cb(_aiModelInfo));
+  }
+
+  return justEnteredFallback;
+}
+
+export { _notifyAIModelInfo as _pushAIModelUpdate };
+
 export async function callAI<T = any>(action: string, data: any): Promise<T> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/ai/${action}`, {
@@ -25,11 +67,36 @@ export async function callAI<T = any>(action: string, data: any): Promise<T> {
     body: JSON.stringify(data),
   });
 
+  // Capture AI model status from response headers
+  const aiModel = response.headers.get('X-AI-Model');
+  const aiFallback = response.headers.get('X-AI-Fallback') === 'true';
+  const aiTier = parseInt(response.headers.get('X-AI-Tier') || '0', 10);
+  if (aiModel) {
+    _notifyAIModelInfo({ model: aiModel, isFallback: aiFallback, tier: aiTier });
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(error.error || 'AI request failed');
   }
 
+  return response.json();
+}
+
+/**
+ * Check the AI model health/status from the worker.
+ */
+export async function checkAIHealth(): Promise<{
+  status: string;
+  activeModel: string;
+  activeTier: number;
+  isFallback: boolean;
+  availableModels: Array<{ model: string; label: string }>;
+  fallbackState: { activatedAt: string; cooldownMinutes: number; consecutiveFailures: number; failedModel: string; fallbackModel: string } | null;
+}> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/ai/health`, { headers });
+  if (!response.ok) throw new Error('AI health check failed');
   return response.json();
 }
 
