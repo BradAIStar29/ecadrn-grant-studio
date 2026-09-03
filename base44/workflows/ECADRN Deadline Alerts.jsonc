@@ -1,0 +1,44 @@
+{
+  "name": "ECADRN Deadline Alerts",
+  "description": "Delivers alerts for ECADRN grant deadlines due within 7 days. A GitHub Actions cron scans Firestore daily at 7am ET and publishes alerts/deadlines.json to the repo's alerts branch; this workflow checks it at 8am ET and messages Bradley with any urgent deadlines.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 8 * * *",
+      "one_time_date": null,
+      "timezone": "America/New_York",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "do": [
+      {
+        "check_deadlines": {
+          "call": "invoke_superagent_step",
+          "with": {
+            "message": "Daily ECADRN grant deadline check (automated). Do exactly this:\n\n1. Run: curl -sL https://raw.githubusercontent.com/BradAIStar29/ecadrn-grant-studio/alerts/deadlines.json\n2. If the fetch fails or the file is missing, stop silently \u2014 do not message the owner.\n3. Parse the JSON. Check generatedAt: if it is older than 26 hours, the GitHub Actions scan did not run today \u2014 do not alert on stale data, and do not spam the owner about it unless this keeps happening.\n4. If urgentCount is 0, stop silently. No alert needed.\n5. If urgentCount > 0, broadcast a concise deadline alert to the owner (broadcast_message). Group grants by days-left urgency: list each grant title, funder, deadline date, days left, and match score if present. Sort by days left ascending. Use a clear urgent tone with the nearest deadline first. Keep it short \u2014 a scannable list, not an essay. Suggest opening ECADRN Grant Studio for details.\n\nData shape: { generatedAt, scanned, urgentCount, urgent: [{ grantTitle, funderName, deadline, daysLeft, url, matchScore, orgId }] }"
+          },
+          "then": "end",
+          "x-base44": {
+            "description": "Reads the alerts branch and alerts Bradley",
+            "title": "Deliver urgent deadline alert"
+          }
+        }
+      }
+    ],
+    "document": {
+      "dsl": "1.0.0",
+      "name": "ecadrn_deadline_alerts",
+      "namespace": "base44",
+      "version": "1.0"
+    }
+  }
+}
