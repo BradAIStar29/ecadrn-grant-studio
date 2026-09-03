@@ -148,7 +148,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, type AIModelInfo } from './services/api';
-import { connectGoogle, disconnect, isConnected, getConnectedEmail, GOOGLE_SCOPES } from './services/googleAuth';
+import { connectGoogle, disconnect, isConnected, getConnectedEmail, GOOGLE_SCOPES, isDeadlineAlertsEnabled, setDeadlineAlertsEnabled, getAlertLastSentDate, markAlertSentToday, collectUrgentGrants } from './services/googleAuth';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import { useFocusTrap } from './hooks/useFocusTrap';
@@ -401,6 +401,7 @@ export default function App() {
   const [googleConnTick, setGoogleConnTick] = useState(0); // re-render trigger for Google connection status
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const deadlineAlertRanRef = useRef(false);
   const [aiModelStatus, setAIModelStatus] = useState<AIModelInfo | null>(null);
   // Modal refs for focus trapping
   const settingsModalRef = useRef<HTMLDivElement>(null);
@@ -496,6 +497,28 @@ export default function App() {
 
   // Focus trapping for App-scoped modals
   useFocusTrap(settingsModalRef, showSettings, () => setShowSettings(false));
+
+  // ── Deadline alerts → connected Gmail ──────────────────────────────────────
+  // Once per session, after grants load: if the user opted in and their Google
+  // account is connected, email them any deadlines due within 7 days (max once/day).
+  useEffect(() => {
+    if (deadlineAlertRanRef.current || !user?.uid || !user?.email || grants.length === 0) return;
+    deadlineAlertRanRef.current = true;
+    (async () => {
+      try {
+        if (!isDeadlineAlertsEnabled(user.uid!) || !isConnected()) return;
+        const today = new Date().toISOString().slice(0, 10);
+        if (getAlertLastSentDate(user.uid!) === today) return;
+        const urgent = collectUrgentGrants(grants, 7);
+        if (urgent.length === 0) return;
+        await sendDeadlineAlertEmail(urgent, user.email!, user.displayName || '');
+        markAlertSentToday(user.uid!);
+        showToast(`⏰ Deadline alert sent to your Gmail (${urgent.length} due within 7 days)`, 'info');
+      } catch (err) {
+        console.warn('Deadline alert email failed:', err);
+      }
+    })();
+  }, [grants, user]);
   useFocusTrap(shortcutsModalRef, showShortcuts, () => setShowShortcuts(false));
   useFocusTrap(globalSearchRef, showGlobalSearch, () => setShowGlobalSearch(false));
   const [searchQuery, setSearchQuery] = useState('');
@@ -1299,6 +1322,7 @@ CORE PROGRAMS:
                         </p>
                         <button
                           onClick={async () => {
+                            if (!user?.uid || !orgId) { showToast('Unable to connect — please sign in again.', 'error'); return; }
                             setIsConnectingGoogle(true);
                             try {
                               const email = await connectGoogle();
@@ -1348,6 +1372,43 @@ CORE PROGRAMS:
                         <span className="text-[8px] font-black uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">Gmail Inbox</span>
                         <span className="text-[8px] font-black uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">Drive</span>
                       </div>
+                      <div className="flex items-start justify-between gap-3 pt-1">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Deadline alerts via Gmail</p>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">Emails {connEmail} when a grant deadline is ≤7 days away — at most once per day, when the app is open and Gmail is connected.</p>
+                        </div>
+                        <button
+                          role="switch"
+                          aria-checked={user?.uid ? isDeadlineAlertsEnabled(user.uid) : false}
+                          aria-label="Toggle deadline alerts via Gmail"
+                          onClick={() => {
+                            if (!user?.uid) return;
+                            setDeadlineAlertsEnabled(user.uid, !isDeadlineAlertsEnabled(user.uid));
+                            setGoogleConnTick(t => t + 1);
+                          }}
+                          className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${user?.uid && isDeadlineAlertsEnabled(user.uid) ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                        >
+                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all`} style={{ left: user?.uid && isDeadlineAlertsEnabled(user.uid) ? '18px' : '2px' }} />
+                        </button>
+                      </div>
+                      {user?.uid && isDeadlineAlertsEnabled(user.uid) && (
+                        <button
+                          onClick={async () => {
+                            const urgent = collectUrgentGrants(grants, 7);
+                            if (urgent.length === 0) { showToast('No grant deadlines within the next 7 days — nothing to send.', 'info'); return; }
+                            try {
+                              await sendDeadlineAlertEmail(urgent, connEmail, user?.displayName || '');
+                              markAlertSentToday(user.uid!);
+                              showToast(`Deadline digest sent to ${connEmail} (${urgent.length} grants)`, 'success');
+                            } catch (err: any) {
+                              showToast('Digest failed: ' + (err?.message || 'Unknown error'), 'error');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
+                        >
+                          <Send size={11} /> Send digest now
+                        </button>
+                      )}
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           onClick={async () => {
@@ -3635,12 +3696,12 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     // Versions
     const unsubVersions = onSnapshot(query(collection(db, propPath, 'versions'), orderBy('timestamp', 'desc'), limit(20)), (snap) => {
       setVersions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `${propPath}/versions`));
 
     // Comments
     const unsubComments = onSnapshot(query(collection(db, propPath, 'comments'), orderBy('timestamp', 'asc')), (snap) => {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `${propPath}/comments`));
 
     // Presence
     const presenceRef = doc(db, propPath, 'presence', auth.currentUser?.uid || 'anonymous');
@@ -5394,6 +5455,10 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                   <button
                     onClick={() => {
                       if (confirm('Revert proposal to this version? This will replace the current content.')) {
+                        if (!Array.isArray(diffVersion.content)) {
+                          showToast('This version is corrupted and cannot be restored.', 'error');
+                          return;
+                        }
                         setSections(diffVersion.content);
                         setShowDiffModal(false);
                         showToast('Reverted to version from ' + new Date(diffVersion.timestamp).toLocaleString(), 'success');
@@ -10683,6 +10748,25 @@ We bridge the gap between ADR theory and transformative community practice by fo
       />
     </motion.div>
   );
+}
+
+/**
+ * Email the user's connected Gmail with urgent grant deadlines.
+ * Template-based (no AI) so it's deterministic and cheap.
+ */
+async function sendDeadlineAlertEmail(urgent: any[], toEmail: string, userName: string) {
+  const now = Date.now();
+  const list = urgent.map((g: any, i: number) => {
+    const d = new Date(g.deadline);
+    const daysLeft = Math.ceil((d.getTime() - now) / 86400000);
+    const url = (typeof g.url === 'string' && g.url.startsWith('http')) ? `\n   ${g.url}` : '';
+    return `${i + 1}. ${g.title || 'Untitled grant'} — ${g.funderName || 'Unknown funder'}\n   Due ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)${url}`;
+  }).join('\n\n');
+  await sendGmailMessage({
+    to: toEmail,
+    subject: `Deadline alert: ${urgent.length} grant${urgent.length === 1 ? '' : 's'} due within 7 days`,
+    body: `Hi ${userName || 'there'},\n\nThis is your deadline digest from ECADRN Grant Studio.\n\n${urgent.length} grant deadline${urgent.length === 1 ? ' is' : 's are'} coming up within the next 7 days:\n\n${list}\n\nOpen the Grant Studio for full details, requirements checklists, and submission tracking.\n\n— ECADRN Grant Studio (sent from your connected Gmail)`,
+  });
 }
 
 function OutreachView({ organization, funders, proposals }: { organization: any, funders: any[], proposals: any[] }) {
