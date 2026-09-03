@@ -1498,6 +1498,7 @@ export default {
       }
 
       let resultText = '';
+      let servedModel = ''; // actual model that produced the result (for X-AI-Model)
       if (prefModel === QUALITY_MODEL) {
         // Quality-first: try 2.5 Pro before the standard chain
         for (let attempt = 0; attempt < 2 && !resultText; attempt++) {
@@ -1508,14 +1509,18 @@ export default {
             const proText = await runGeneration(ai, attemptPrompt, { ...config, model: QUALITY_MODEL }, attempt === 0);
             if (proText) {
               resultText = proText;
-              await clearModelFallback(env);
+              servedModel = QUALITY_MODEL;
+              // Only clear cooldown if the primary tier wasn't cooling down —
+              // Pro succeeding doesn't mean 2.5-flash recovered from its quota.
+              if (startTier === 0) await clearModelFallback(env);
             }
           } catch (err: any) {
             if (err.message === 'TIMEOUT') {
               return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
             }
             console.error(`Quality model (${QUALITY_MODEL}) attempt ${attempt + 1} failed for "${action}": ${err.message}`);
-            if (!isQuotaError(err)) break;
+            if (isQuotaError(err)) break; // quota: skip retry, fall straight to the standard chain
+            // non-quota: loop continues to attempt 1 (explicit JSON instruction)
           }
         }
         if (!resultText) {
@@ -1546,6 +1551,7 @@ export default {
             if (resultText) {
               tierSucceeded = true;
               activeTier = tier;
+              servedModel = MODEL_TIERS[tier].model;
               usedFallback = tier > 0;
               break;
             }
@@ -1605,7 +1611,7 @@ export default {
 
       // Include which model was used in response headers for frontend status display
       const aiHeaders: Record<string, string> = {
-        'X-AI-Model': MODEL_TIERS[activeTier].model,
+        'X-AI-Model': servedModel || MODEL_TIERS[activeTier].model,
         'X-AI-Fallback': usedFallback ? 'true' : 'false',
         'X-AI-Tier': String(activeTier),
         'Access-Control-Expose-Headers': 'X-AI-Model, X-AI-Fallback, X-AI-Tier',
