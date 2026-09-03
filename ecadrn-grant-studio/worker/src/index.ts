@@ -1383,7 +1383,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': responseOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Drive-Token',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Drive-Token, X-Google-Token',
       'Access-Control-Max-Age': '86400',
       'Access-Control-Expose-Headers': 'Content-Disposition',
     };
@@ -1568,7 +1568,119 @@ export default {
     }
 
     // ── Google Drive Routes ────────────────────────────────────────────────
-    const driveToken = request.headers.get('X-Drive-Token');
+    const driveToken = request.headers.get('X-Drive-Token') || request.headers.get('X-Google-Token');
+
+    // ── Gmail Routes (per-user Google connection) ───────────────────────────
+    if (path === '/gmail/send' && request.method === 'POST') {
+      if (!driveToken) return json({ error: 'Google connection required. Connect your Google account in Settings.' }, 400);
+      const body = await request.json() as any;
+      const to = String(body?.to || '').trim();
+      const subject = String(body?.subject || '').trim();
+      const messageBody = String(body?.body || '').trim();
+      if (!to || !subject || !messageBody) return json({ error: 'to, subject, and body are required' }, 400);
+      // Basic email validation
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return json({ error: 'Invalid recipient email address' }, 400);
+
+      // Build a simple RFC 2822 MIME message
+      const from = String(body?.from || user.email || '').trim();
+      const lines = [
+        `From: ${from}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'Content-Type: text/plain; charset="UTF-8"',
+        'MIME-Version: 1.0',
+        '',
+        messageBody,
+      ].join('\r\n');
+      const b64 = btoa(unescape(encodeURIComponent(lines)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${driveToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: b64 }),
+      });
+      if (!res.ok) {
+        const details = await res.text();
+        return json({ error: 'Gmail API error', details: details.slice(0, 400) }, res.status);
+      }
+      const result = await res.json() as any;
+      return json({ success: true, messageId: result?.id || null, threadId: result?.threadId || null });
+    }
+
+    if (path === '/gmail/inbox' && request.method === 'GET') {
+      if (!driveToken) return json({ error: 'Google connection required. Connect your Google account in Settings.' }, 400);
+      const max = Math.min(Math.max(parseInt(url.searchParams.get('max') || '20'), 1), 50);
+      const q = (url.searchParams.get('q') || '').slice(0, 200);
+      const params = new URLSearchParams({ maxResults: String(max), labelIds: 'INBOX' });
+      if (q) params.set('q', q);
+      const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, {
+        headers: { 'Authorization': `Bearer ${driveToken}` },
+      });
+      if (!listRes.ok) return json({ error: 'Gmail API error', details: (await listRes.text()).slice(0, 400) }, listRes.status);
+      const list = await listRes.json() as any;
+      const messages: any[] = [];
+      const ids: string[] = (list.messages || []).map((m: any) => m.id).slice(0, max);
+      const BATCH = 8;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map(async (id) => {
+          const mRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+            { headers: { 'Authorization': `Bearer ${driveToken}` } }
+          );
+          if (!mRes.ok) return null;
+          const m = await mRes.json() as any;
+          const headers = (m.payload?.headers || []);
+          const get = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name)?.value || '';
+          const fromRaw = get('from');
+          const match = fromRaw.match(/<([^>]+)>/);
+          return {
+            id,
+            from: fromRaw,
+            fromEmail: match ? match[1] : fromRaw,
+            subject: get('subject') || '(no subject)',
+            date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : get('date'),
+            snippet: m.snippet || '',
+            unread: (m.labelIds || []).includes('UNREAD'),
+          };
+        }));
+        for (const r of results) if (r) messages.push(r);
+      }
+      return json({ messages, total: (list.resultSizeEstimate || messages.length) });
+    }
+
+    if (path.match(/^\/gmail\/message\/[^/]+$/) && request.method === 'GET') {
+      if (!driveToken) return json({ error: 'Google connection required. Connect your Google account in Settings.' }, 400);
+      const messageId = path.split('/')[3];
+      const mRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
+        headers: { 'Authorization': `Bearer ${driveToken}` },
+      });
+      if (!mRes.ok) return json({ error: 'Gmail API error', details: (await mRes.text()).slice(0, 400) }, mRes.status);
+      const m = await mRes.json() as any;
+      const headers = (m.payload?.headers || []);
+      const get = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name)?.value || '';
+      // Extract body text (traverse parts for text/plain)
+      let body = '';
+      const extractText = (part: any): void => {
+        if (!part) return;
+        if (part.mimeType === 'text/plain' && part.body?.data) {
+          body += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+        }
+        if (Array.isArray(part.parts)) part.parts.forEach(extractText);
+      };
+      extractText(m.payload);
+      if (!body && m.payload?.body?.data) body = atob(m.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      const fromRaw = get('from');
+      const match = fromRaw.match(/<([^>]+)>/);
+      return json({
+        id: messageId,
+        from: fromRaw,
+        fromEmail: match ? match[1] : fromRaw,
+        subject: get('subject') || '(no subject)',
+        date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : get('date'),
+        body: body.slice(0, 20000),
+      });
+    }
 
     if (path === '/drive/files' && request.method === 'POST') {
       if (!driveToken) return json({ error: 'Drive token required' }, 400);

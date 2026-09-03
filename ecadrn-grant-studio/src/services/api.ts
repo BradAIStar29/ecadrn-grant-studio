@@ -195,3 +195,76 @@ export async function listDriveFolders(): Promise<DriveFolder[]> {
   const data = await response.json();
   return data.folders;
 }
+
+// ── Per-User Gmail Integration ───────────────────────────────────────────────
+import { getToken } from './googleAuth';
+
+export interface GmailMessage {
+  id: string;
+  from: string;
+  fromEmail: string;
+  subject: string;
+  date: string;
+  snippet: string;
+  unread: boolean;
+}
+
+export interface GmailMessageFull extends Omit<GmailMessage, 'snippet' | 'unread'> {
+  body: string;
+}
+
+async function gmailHeaders(includeContentType = true): Promise<Record<string, string>> {
+  const firebaseToken = await auth.currentUser?.getIdToken();
+  const googleToken = getToken();
+  if (!googleToken) {
+    throw new Error('Google account not connected. Connect your Google account in Settings → Google Account.');
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${firebaseToken || ''}`,
+    'X-Google-Token': googleToken,
+  };
+  if (includeContentType) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
+/** Send an email from the connected user's own Gmail. */
+export async function sendGmailMessage(params: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<{ messageId: string }> {
+  const response = await fetch(`${API_BASE_URL}/gmail/send`, {
+    method: 'POST',
+    headers: await gmailHeaders(),
+    body: JSON.stringify(params),
+  });
+  const data = await response.json().catch(() => ({ error: 'Gmail send failed' }));
+  if (!response.ok) throw new Error(data.error || data.details || 'Gmail send failed');
+  return { messageId: data.messageId };
+}
+
+/** List recent messages from the connected user's Gmail inbox. */
+export async function fetchGmailInbox(params?: {
+  max?: number;
+  query?: string;
+}): Promise<{ messages: GmailMessage[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params?.max) qs.set('max', String(params.max));
+  if (params?.query) qs.set('q', params.query);
+  const response = await fetch(`${API_BASE_URL}/gmail/inbox${qs.toString() ? `?${qs}` : ''}`, {
+    headers: await gmailHeaders(false),
+  });
+  const data = await response.json().catch(() => ({ error: 'Gmail inbox fetch failed' }));
+  if (!response.ok) throw new Error(data.error || data.details || 'Gmail inbox fetch failed');
+  return { messages: Array.isArray(data.messages) ? data.messages : [], total: data.total || 0 };
+}
+
+/** Fetch the full body of a single Gmail message. */
+export async function fetchGmailMessage(messageId: string): Promise<GmailMessageFull> {
+  const response = await fetch(`${API_BASE_URL}/gmail/message/${encodeURIComponent(messageId)}`, {
+    headers: await gmailHeaders(false),
+  });
+  const data = await response.json().catch(() => ({ error: 'Message fetch failed' }));
+  if (!response.ok) throw new Error(data.error || data.details || 'Message fetch failed');
+  return data;
+}

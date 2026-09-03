@@ -134,6 +134,36 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isValidId(profileId);
       }
 
+      // ── Document Vault ─────────────────────────────────────────────────────────
+      match /vault/{docId} {
+        allow list:   if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(docId);
+        allow create: if isOrgMember(orgId) && isValidId(docId) &&
+                        incoming().keys().hasAll(['name', 'type', 'uploadedBy', 'uploadedAt']) &&
+                        incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 300 &&
+                        incoming().type is string && incoming().type.size() <= 40 &&
+                        incoming().uploadedBy is string && incoming().uploadedBy.size() <= 200 &&
+                        incoming().uploadedAt is string && incoming().uploadedAt.size() <= 40;
+        allow update: if isOrgMember(orgId) && isValidId(docId);
+        allow delete: if isOrgMember(orgId) && isValidId(docId);
+      }
+
+      // ── Google Connections (per-user) ────────────────────────────────────────
+      // Each user writes only their own connection record (id == their uid).
+      // No tokens are ever stored here — only connection status metadata.
+      match /googleConnections/{uid} {
+        allow list:   if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isOwner(uid);
+        allow create: if isOrgMember(orgId) && isOwner(uid) &&
+                        incoming().keys().hasAll(['email', 'scopes', 'connectedAt', 'lastConnectedAt']) &&
+                        incoming().email is string && incoming().email.matches('.*@ecadrn\\.org') &&
+                        incoming().scopes is list && incoming().scopes.size() <= 10;
+        allow update: if isOrgMember(orgId) && isOwner(uid) &&
+                        incoming().diff(existing()).affectedKeys()
+                          .hasOnly(['email', 'scopes', 'displayName', 'connectedAt', 'lastConnectedAt']);
+        allow delete: if isOrgMember(orgId) && isOwner(uid);
+      }
+
       // ── Templates ────────────────────────────────────────────────────────────
       match /templates/{templateId} {
         allow list:   if isOrgMember(orgId);
@@ -164,7 +194,8 @@ service cloud.firestore {
                                      'reviewResults', 'collaborators', 'budget',
                                      'createdBy', 'lastEditedBy', 'funder', 'assignee',
                                      'description', 'source', 'autopilot', 'matchScore',
-                                     'createdAt']);
+                                     'createdAt', 'requirements', 'requirementsMissingInfo',
+                                     'requirementsUpdatedAt', 'attachments']);
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);
 
         // Comments — any org member can read/write

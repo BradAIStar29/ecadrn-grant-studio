@@ -147,7 +147,8 @@ import {
   getDoc,
   getDocs
 } from 'firebase/firestore';
-import { callAI, subscribeToAIModelStatus, checkAIHealth, type AIModelInfo } from './services/api';
+import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, type AIModelInfo } from './services/api';
+import { connectGoogle, disconnect, isConnected, getConnectedEmail, GOOGLE_SCOPES } from './services/googleAuth';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import { useFocusTrap } from './hooks/useFocusTrap';
@@ -397,6 +398,9 @@ export default function App() {
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
   const [showSettings, setShowSettings] = useState(false);
+  const [googleConnTick, setGoogleConnTick] = useState(0); // re-render trigger for Google connection status
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   const [aiModelStatus, setAIModelStatus] = useState<AIModelInfo | null>(null);
   // Modal refs for focus trapping
   const settingsModalRef = useRef<HTMLDivElement>(null);
@@ -1275,6 +1279,112 @@ CORE PROGRAMS:
                   placeholder="Describe your organization's mission, vision, and programs..."
                 />
                 <p className="text-[11px] text-slate-400 mt-1">Used by AI to tailor proposals and outreach to your organization.</p>
+              </div>
+
+              {/* Google Account (per-user) */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Mail size={16} className="text-indigo-600" />
+                  Google Account
+                </h3>
+                {(() => { setGoogleConnTick; // recompute on tick
+                  const connected = isConnected();
+                  if (!connected) {
+                    return (
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Connect your own Google account to send outreach emails from your Gmail, read funder replies
+                          in-app, and import/export Google Drive documents — all under your identity. Each teammate
+                          connects their own account; nothing is shared.
+                        </p>
+                        <button
+                          onClick={async () => {
+                            setIsConnectingGoogle(true);
+                            try {
+                              const email = await connectGoogle();
+                              const connPath = `organizations/${orgId}/googleConnections/${user?.uid}`;
+                              await setDoc(doc(db, connPath), {
+                                email,
+                                scopes: GOOGLE_SCOPES,
+                                displayName: user?.displayName || '',
+                                connectedAt: new Date().toISOString(),
+                                lastConnectedAt: new Date().toISOString(),
+                              }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, connPath));
+                              showToast(`✓ Google account connected: ${email}`, 'success');
+                              setGoogleConnTick(t => t + 1);
+                            } catch (err: any) {
+                              if (err?.message !== 'popup-closed') {
+                                showToast('Google connection failed: ' + (err?.message || 'Unknown error'), 'error');
+                              }
+                            } finally {
+                              setIsConnectingGoogle(false);
+                            }
+                          }}
+                          disabled={isConnectingGoogle}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                        >
+                          {isConnectingGoogle ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                          {isConnectingGoogle ? 'Connecting...' : 'Connect Google Account'}
+                        </button>
+                        <p className="text-[10px] text-slate-400">
+                          Your access token stays in this browser session only (~55 min) and is never stored in the
+                          database. Reconnect after it expires.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const connEmail = getConnectedEmail() || user?.email || '';
+                  return (
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/10 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">{connEmail}</span>
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded">Connected</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-[8px] font-black uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">Gmail Send</span>
+                        <span className="text-[8px] font-black uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">Gmail Inbox</span>
+                        <span className="text-[8px] font-black uppercase tracking-widest bg-white dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">Drive</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          onClick={async () => {
+                            setIsSendingTestEmail(true);
+                            try {
+                              await sendGmailMessage({
+                                to: connEmail,
+                                subject: 'ECADRN Grant Studio — Google account connected',
+                                body: `Hi ${user?.displayName?.split(' ')[0] || 'there'},\n\nYour Google account is now connected to ECADRN Grant Studio. You can send outreach emails from your Gmail, read funder replies in the Outreach inbox, and import/export Drive documents.\n\n— ECADRN Grant Studio`,
+                              });
+                              showToast('Test email sent — check your Gmail inbox ✓', 'success');
+                            } catch (err: any) {
+                              showToast('Test email failed: ' + (err?.message || 'Unknown error'), 'error');
+                            } finally {
+                              setIsSendingTestEmail(false);
+                            }
+                          }}
+                          disabled={isSendingTestEmail}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:border-indigo-300 transition-colors disabled:opacity-50"
+                        >
+                          {isSendingTestEmail ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                          Send test email
+                        </button>
+                        <button
+                          onClick={() => {
+                            disconnect();
+                            setGoogleConnTick(t => t + 1);
+                            showToast('Google account disconnected', 'info');
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Display Preferences */}
@@ -10582,11 +10692,12 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
     { title: "AI Outreach Email Composer", content: "Select a funder from your intelligence database, choose an email type (Cold Intro, LOI Announcement, Follow-Up, or Thank You), and click Generate. The AI drafts a 250–400 word personalized email using both your org's profile and that funder's known giving priorities." },
     { title: "Email Types Explained", content: "Cold Intro: first contact to introduce ECADRN. LOI Announcement: formal letter of inquiry. Follow-Up: after a meeting or prior submission. Thank You: post-award or post-meeting gratitude. Each has a distinct tone and structure." },
     { title: "Link a Proposal", content: "Optionally select an existing proposal to reference in the email. The AI will mention the specific project, its alignment to the funder's priorities, and the funding amount requested — making the email concrete and credible." },
-    { title: "Edit Before Sending", content: "All generated emails appear in the editable text area below. Review, customize, and personalize before copying. Click 'Copy to Clipboard' and paste into your email client — the app does not send emails directly." },
+    { title: "Edit Before Sending", content: "All generated emails appear in the text area below. Review and personalize, then either copy it to your email client, or — if you've connected your Google account in Settings — send it directly from your own Gmail with the 'Send via Gmail' panel." },
     { title: "Funder Intelligence Integration", content: "The AI uses your funder's full intelligence profile (giving priorities, geographic focus, award ranges, past grantees) to craft language that mirrors what that funder cares about — not a generic template." },
     { title: "Calendar & Deadlines", content: "Grant deadlines and proposal due dates are tracked on the main Calendar view. Use it to prioritize your outreach — target funders with upcoming deadlines first." },
     { title: "System Notifications", content: "The Notifications panel shows autopilot submission confirmations, deadline reminders, and team activity alerts. Mark items as read to keep your inbox clean." },
-    { title: "Replay This Guide", content: "Click the ? icon any time to reopen this guide. All 8 steps are always available." }
+    { title: "Gmail Inbox Tab", content: "With your Google account connected (Settings → Google Account), the Inbox tab pulls in your actual Gmail — search funder replies with Gmail search syntax (e.g. from:fordfoundation.org), click any message to read the full text without leaving the app." },
+    { title: "Replay This Guide", content: "Click the ? icon any time to reopen this guide. All 9 steps are always available." }
   ];
   const [selectedFunderId, setSelectedFunderId] = useState<string>('');
   const [emailType, setEmailType] = useState<'introduction' | 'loi' | 'followup' | 'thankyou'>('introduction');
@@ -10596,6 +10707,18 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
   const [copied, setCopied] = useState(false);
   const [missingComponents, setMissingComponents] = useState<string[]>([]);
   const [isChecking, setIsChecking] = useState(false);
+  // ── Per-user Gmail state ──────────────────────────────────────────────────
+  const [gmailTick, setGmailTick] = useState(0); // re-render when connection changes
+  const [outreachMode, setOutreachMode] = useState<'compose' | 'inbox'>('compose');
+  const [gmailTo, setGmailTo] = useState('');
+  const [isSendingGmail, setIsSendingGmail] = useState(false);
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+  const [inboxMessages, setInboxMessages] = useState<any[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState('');
+  const [inboxQuery, setInboxQuery] = useState('');
+  const [inboxSearchInput, setInboxSearchInput] = useState('');
+  const [openMessage, setOpenMessage] = useState<any>(null);
 
   const selectedFunder = funders.find(f => f.id === selectedFunderId);
   const relatedProposal = proposals.find(p => p.id === relatedProposalId);
@@ -10680,6 +10803,19 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
       <div className="flex justify-between items-center text-slate-900 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div className="flex items-center gap-4">
           <h3 className="text-2xl font-bold tracking-tight">Strategic Outreach</h3>
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+            <button onClick={() => setOutreachMode('compose')} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${outreachMode === 'compose' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Compose</button>
+            <button onClick={() => setOutreachMode('inbox')} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${outreachMode === 'inbox' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Inbox</button>
+          </div>
+          {(() => { setGmailTick; // recompute on tick
+            const connected = isConnected();
+            return (
+              <span title={connected ? `Connected: ${getConnectedEmail()}` : 'Connect your Google account in Settings'} className={`hidden sm:inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${connected ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 border border-emerald-200 dark:border-emerald-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                {connected ? 'Gmail on' : 'Gmail off'}
+              </span>
+            );
+          })()}
           <button 
             onClick={() => setShowGuide(true)}
             className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 dark:bg-slate-800 rounded-lg transition-all"
@@ -10697,6 +10833,8 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
         </button>
       </div>
 
+      {outreachMode === 'compose' && (
+      <>
       {/* Email Generator Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-50 to-white flex items-center gap-3">
@@ -10787,7 +10925,204 @@ function OutreachView({ organization, funders, proposals }: { organization: any,
           <div className="p-6">
             <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">{generatedEmail}</pre>
           </div>
+          {(() => { setGmailTick; // recompute on tick
+            const connected = isConnected();
+            const sendViaGmail = async () => {
+              if (!gmailTo.trim()) { showToast('Enter the recipient email address first.', 'error'); return; }
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(gmailTo.trim())) { showToast('That recipient address looks invalid.', 'error'); return; }
+              setIsSendingGmail(true);
+              try {
+                const subjectMatch = generatedEmail.match(/^Subject:\s*(.+)$/m);
+                const bodyWithoutSubject = generatedEmail.replace(/^Subject:\s*.+\n+/, '');
+                const subject = subjectMatch ? subjectMatch[1] : `${emailTypeLabels[emailType].label} — ${organization?.name || 'ECADRN'}`;
+                await sendGmailMessage({ to: gmailTo.trim(), subject, body: bodyWithoutSubject });
+                showToast(`✓ Email sent to ${gmailTo.trim()} from your Gmail`, 'success');
+                setGmailTo('');
+              } catch (err: any) {
+                showToast('Gmail send failed: ' + (err?.message || 'Unknown error'), 'error');
+              } finally {
+                setIsSendingGmail(false);
+              }
+            };
+            return (
+              <div className="px-6 pb-6 pt-0">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <Send size={12} className="text-indigo-500" /> Send via your Gmail
+                  </div>
+                  {connected ? (
+                    <>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          aria-label="Recipient email address"
+                          value={gmailTo}
+                          onChange={(e) => setGmailTo(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') sendViaGmail(); }}
+                          placeholder="funder@example.org"
+                          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-sm outline-none focus:border-indigo-400"
+                        />
+                        <button
+                          onClick={sendViaGmail}
+                          disabled={isSendingGmail}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {isSendingGmail ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                          {isSendingGmail ? 'Sending...' : 'Send Email'}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Sent from {getConnectedEmail() || 'your connected Gmail'} — the "Subject:" line of the draft is used as the email subject. Appears in your Gmail Sent folder.</p>
+                    </>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <p className="text-xs text-slate-500">Connect your Google account to send this directly from your Gmail — no copy-paste needed.</p>
+                      <button
+                        onClick={async () => {
+                          setIsConnectingGoogle(true);
+                          try {
+                            await connectGoogle();
+                            setGmailTick(t => t + 1);
+                            showToast('✓ Google account connected', 'success');
+                          } catch (err: any) {
+                            if (err?.message !== 'popup-closed') showToast('Connection failed: ' + (err?.message || 'Unknown error'), 'error');
+                          } finally {
+                            setIsConnectingGoogle(false);
+                          }
+                        }}
+                        disabled={isConnectingGoogle}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {isConnectingGoogle ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+                        {isConnectingGoogle ? 'Connecting...' : 'Connect Google'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </motion.div>
+      )}
+
+      </>)}
+
+      {outreachMode === 'inbox' && (
+        (() => { setGmailTick; // recompute on tick
+          const connected = isConnected();
+          const loadInbox = async (q?: string) => {
+            setInboxLoading(true); setInboxError(''); setOpenMessage(null);
+            try {
+              const res = await fetchGmailInbox({ max: 25, query: q || undefined });
+              setInboxMessages(res.messages || []);
+            } catch (err: any) {
+              setInboxError(err?.message || 'Failed to load inbox');
+            } finally {
+              setInboxLoading(false);
+            }
+          };
+          if (!connected) {
+            return (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-10 text-center">
+                <Mail className="mx-auto text-slate-300 mb-3" size={36} />
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Connect your Google account to read funder replies</p>
+                <p className="text-xs text-slate-400 mt-1 mb-5 max-w-sm mx-auto">Your Gmail inbox appears here — see funder responses, LOI replies, and follow-ups without leaving the app.</p>
+                <button
+                  onClick={async () => {
+                    setIsConnectingGoogle(true);
+                    try {
+                      await connectGoogle();
+                      setGmailTick(t => t + 1);
+                      showToast('✓ Google account connected', 'success');
+                    } catch (err: any) {
+                      if (err?.message !== 'popup-closed') showToast('Connection failed: ' + (err?.message || 'Unknown error'), 'error');
+                    } finally {
+                      setIsConnectingGoogle(false);
+                    }
+                  }}
+                  disabled={isConnectingGoogle}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isConnectingGoogle ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                  {isConnectingGoogle ? 'Connecting...' : 'Connect Google Account'}
+                </button>
+              </div>
+            );
+          }
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    aria-label="Search Gmail inbox"
+                    value={inboxSearchInput}
+                    onChange={(e) => setInboxSearchInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setInboxQuery(inboxSearchInput); loadInbox(inboxSearchInput); } }}
+                    placeholder="Search inbox (e.g. from: fordfoundation.org) — Enter to search"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <button
+                  onClick={() => loadInbox(inboxQuery)}
+                  disabled={inboxLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {inboxLoading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                  {inboxLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+
+              {inboxError && (
+                <div className="rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 p-3 text-xs text-rose-600 flex items-start gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>{inboxError}{String(inboxError).includes('not connected') ? ' — reconnect in Settings → Google Account.' : ''}</span>
+                </div>
+              )}
+
+              {!inboxLoading && inboxMessages.length === 0 && !inboxError && (
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-10 text-center">
+                  <Mail className="mx-auto text-slate-300 mb-2" size={30} />
+                  <p className="text-sm text-slate-500">No messages loaded — hit Refresh to pull your latest inbox.</p>
+                </div>
+              )}
+
+              {inboxMessages.length > 0 && (
+                <div className="space-y-2">
+                  {inboxMessages.map((m: any) => (
+                    <div key={m.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                      <button
+                        onClick={async () => {
+                          if (openMessage?.id === m.id) { setOpenMessage(null); return; }
+                          try {
+                            const full = await fetchGmailMessage(m.id);
+                            setOpenMessage(full);
+                          } catch (err: any) {
+                            showToast('Could not open message: ' + (err?.message || 'Unknown error'), 'error');
+                          }
+                        }}
+                        className="w-full text-left p-3.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${m.unread ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className={`text-sm truncate ${m.unread ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-600 dark:text-slate-400'}`}>{m.from}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">{m.date ? new Date(m.date).toLocaleDateString() : ''}</span>
+                          </div>
+                          <div className={`text-xs truncate mt-0.5 ${m.unread ? 'font-semibold text-slate-700 dark:text-slate-300' : 'text-slate-500'}`}>{m.subject}</div>
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">{m.snippet}</div>
+                        </div>
+                      </button>
+                      {openMessage?.id === m.id && (
+                        <div className="border-t border-slate-100 dark:border-slate-800 p-4 bg-slate-50 dark:bg-slate-800/30">
+                          <pre className="whitespace-pre-wrap text-xs text-slate-700 dark:text-slate-300 font-sans leading-relaxed max-h-80 overflow-y-auto">{openMessage.body || '(no text content)'}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {missingComponents.length > 0 && (
