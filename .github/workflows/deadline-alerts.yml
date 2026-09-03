@@ -1,8 +1,10 @@
 name: Grant Deadline Alerts
 
 on:
-  schedule:
-    - cron: '0 11 * * *'  # Daily 11:00 UTC = 7:00 AM America/New_York
+  # Daily scan is DISABLED until Bradley activates alerts.
+  # To activate: uncomment the schedule line below.
+  # schedule:
+  #   - cron: '0 11 * * *'  # Daily 11:00 UTC = 7:00 AM America/New_York
   workflow_dispatch:
 
 permissions:
@@ -34,6 +36,7 @@ jobs:
 
       - name: Scan grants for deadlines within 7 days
         run: node scripts/deadline-scan.mjs
+        working-directory: ecadrn-grant-studio
         env:
           ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           FIREBASE_PROJECT_ID: gen-lang-client-0456143672
@@ -44,6 +47,6 @@ jobs:
           git config user.name "ecadrn-bot"
           git config user.email "actions@github.com"
           git checkout -B alerts
-          git add alerts/deadlines.json
+          git add ecadrn-grant-studio/alerts/deadlines.json
           git commit -m "chore: refresh deadline alerts [skip ci]" || echo "No changes"
           git push origin alerts
