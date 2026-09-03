@@ -134,6 +134,45 @@ async function recordModelFallback(env: Env, failedTier: number): Promise<void> 
   }
 }
 
+// Actions where max quality matters most — in 'auto' mode these get a
+// quality-first attempt on 2.5 Pro before the standard chain.
+const PRO_ACTIONS = new Set(['generate-draft', 'agent-write-proposal']);
+const PRO_COOLDOWN_KEY = 'ai_pro_cooldown';
+const PRO_COOLDOWN_MINUTES = 60;
+
+async function isProCoolingDown(env: Env): Promise<boolean> {
+  if (!env.AI_CONFIG) return false;
+  try {
+    const raw = await env.AI_CONFIG.get(PRO_COOLDOWN_KEY);
+    if (!raw) return false;
+    const until = new Date(JSON.parse(raw).until).getTime();
+    if (Date.now() >= until) return false;
+    return true;
+  } catch { return false; }
+}
+
+async function recordProCooldown(env: Env): Promise<void> {
+  if (!env.AI_CONFIG) return;
+  try {
+    await env.AI_CONFIG.put(PRO_COOLDOWN_KEY, JSON.stringify({
+      until: new Date(Date.now() + PRO_COOLDOWN_MINUTES * 60 * 1000).toISOString(),
+    }));
+    console.log(`⏸️ Pro cooldown set: ${PRO_COOLDOWN_MINUTES}min`);
+  } catch {}
+}
+
+async function getFallbackWaitMinutes(env: Env): Promise<number | null> {
+  if (!env.AI_CONFIG) return null;
+  try {
+    const raw = await env.AI_CONFIG.get('ai_model_state');
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    const minutesSince = Math.floor((Date.now() - new Date(state.lastQuotaHit).getTime()) / (1000 * 60));
+    const remaining = (state.cooldownMinutes || 15) - minutesSince;
+    return remaining > 0 ? remaining : 1;
+  } catch { return null; }
+}
+
 async function clearModelFallback(env: Env): Promise<void> {
   if (!env.AI_CONFIG) return;
   try {
@@ -1499,7 +1538,12 @@ export default {
 
       let resultText = '';
       let servedModel = ''; // actual model that produced the result (for X-AI-Model)
-      if (prefModel === QUALITY_MODEL) {
+      // Quality-first on Pro when: user picked Pro, or auto mode on a
+      // quality-critical action. Skipped entirely while Pro is cooling down
+      // from a recent quota hit (so its tight free limits aren't re-burned).
+      const tryProFirst = (prefModel === QUALITY_MODEL || (prefModel === 'auto' && PRO_ACTIONS.has(action)))
+        && !(await isProCoolingDown(env));
+      if (tryProFirst) {
         // Quality-first: try 2.5 Pro before the standard chain
         for (let attempt = 0; attempt < 2 && !resultText; attempt++) {
           const attemptPrompt = attempt === 0
@@ -1519,7 +1563,10 @@ export default {
               return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
             }
             console.error(`Quality model (${QUALITY_MODEL}) attempt ${attempt + 1} failed for "${action}": ${err.message}`);
-            if (isQuotaError(err)) break; // quota: skip retry, fall straight to the standard chain
+            if (isQuotaError(err)) {
+              await recordProCooldown(env);
+              break; // quota: skip retry, fall straight to the standard chain
+            }
             // non-quota: loop continues to attempt 1 (explicit JSON instruction)
           }
         }
@@ -1582,7 +1629,12 @@ export default {
 
       if (!resultText) {
         if (lastErrorIsQuota) {
-          return json({ error: 'All AI models are currently at capacity. The system will automatically retry with the primary model later. Please try again in a few minutes.' }, 503);
+          const waitMin = await getFallbackWaitMinutes(env);
+          const hint = waitMin ? ` Please try again in ~${waitMin} minute${waitMin === 1 ? '' : 's'}.` : ' Please try again in a few minutes.';
+          const headers: Record<string, string> = {
+            'Retry-After': String((waitMin || 15) * 60),
+          };
+          return json({ error: `All AI models are currently at capacity.${hint}` }, 503, headers);
         }
         return json({ error: lastError || 'AI generation failed. Please try again.' }, 500);
       }
