@@ -152,7 +152,19 @@ function safeTruncateContext(obj: any, maxLen = 4000): string {
 
 // ── Prompt builder ──────────────────────────────────────────────────────────
 
+// ECADRN-exclusive preamble injected into EVERY prompt — the AI serves only ECADRN.
+const ECADRN_PREAMBLE = `You are the AI grant engine built exclusively for ECADRN (ecadrn.org) — a nonprofit advancing Appropriate Dispute Resolution (ADR): conflict resolution, access to justice, restorative justice, and civic equity.
+You serve ONLY ECADRN. Ground everything in the organization data provided; never invent facts; never write on behalf of any other organization. If the request appears to be for a different organization, refuse and state that you serve ECADRN only.
+
+`;
+
 function getPrompt(action: string, data: any): string {
+  const actionPrompt = buildActionPrompt(action, data);
+  if (actionPrompt === 'INVALID') return actionPrompt;
+  return ECADRN_PREAMBLE + actionPrompt;
+}
+
+function buildActionPrompt(action: string, data: any): string {
   switch (action) {
     case 'generate-draft':
       const funderIntelSection = data.funderIntelligence
@@ -1439,7 +1451,8 @@ export default {
           activeModel: MODEL_TIERS[activeTier].model,
           activeTier,
           isFallback: activeTier > 0,
-          availableModels: MODEL_TIERS.map(m => ({ model: m.model, label: m.label })),
+          availableModels: [...MODEL_TIERS.map(m => ({ model: m.model, label: m.label })), { model: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (opt-in max quality)' }],
+          userSelectable: ['auto', ...MODEL_TIERS.map(m => m.model), 'gemini-2.5-pro'],
           fallbackState: kvState ? {
             activatedAt: kvState.lastQuotaHit,
             cooldownMinutes: kvState.cooldownMinutes,
@@ -1474,15 +1487,48 @@ export default {
       // Try models in order: primary → secondary → lite
       // Per model: attempt 1 = JSON mode, attempt 2 = non-JSON with explicit instruction
       // On quota error: switch to next model tier and record in KV
-      const startTier = await getActiveModelTier(env);
+      // User preference (body.model): 'auto' = smart chain; a specific model id
+      // starts at that tier; 'gemini-2.5-pro' gets one quality-first attempt
+      // before falling back to the normal chain.
+      const QUALITY_MODEL = 'gemini-2.5-pro';
+      const prefModel = typeof body.model === 'string' ? body.model.trim() : '';
+      let startTier = await getActiveModelTier(env);
+      if (prefModel && prefModel !== 'auto' && MODEL_TIERS.some(t => t.model === prefModel)) {
+        startTier = MODEL_TIERS.findIndex(t => t.model === prefModel);
+      }
 
       let resultText = '';
+      if (prefModel === QUALITY_MODEL) {
+        // Quality-first: try 2.5 Pro before the standard chain
+        for (let attempt = 0; attempt < 2 && !resultText; attempt++) {
+          const attemptPrompt = attempt === 0
+            ? prompt
+            : `${prompt}\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no preamble. Start with { or [ and end with } or ].`;
+          try {
+            const proText = await runGeneration(ai, attemptPrompt, { ...config, model: QUALITY_MODEL }, attempt === 0);
+            if (proText) {
+              resultText = proText;
+              await clearModelFallback(env);
+            }
+          } catch (err: any) {
+            if (err.message === 'TIMEOUT') {
+              return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+            }
+            console.error(`Quality model (${QUALITY_MODEL}) attempt ${attempt + 1} failed for "${action}": ${err.message}`);
+            if (!isQuotaError(err)) break;
+          }
+        }
+        if (!resultText) {
+          console.log(`⤵️ Pro failed — falling back to standard chain for "${action}"`);
+        }
+      }
+
       let lastError = '';
       let lastErrorIsQuota = false;
       let activeTier = startTier;
       let usedFallback = false;
 
-      for (let tier = startTier; tier < MODEL_TIERS.length; tier++) {
+      for (let tier = startTier; tier < MODEL_TIERS.length && !resultText; tier++) {
         const tierConfig = { ...config, model: MODEL_TIERS[tier].model };
         const tierAi = (tier >= 1 && fallbackAi) ? fallbackAi : ai;
         let tierSucceeded = false;

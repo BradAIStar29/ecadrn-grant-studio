@@ -59,12 +59,34 @@ function _notifyAIModelInfo(info: AIModelInfo): boolean {
 
 export { _notifyAIModelInfo as _pushAIModelUpdate };
 
+// ── AI Model Preference (per-user, local) ─────────────────────────────────────
+// 'auto' = smart chain (worker decides + auto-fallbacks).
+// Anything else must match a worker-supported model id.
+const AI_MODEL_PREF_KEY = 'ecadrn_ai_model_pref';
+
+export const AI_MODEL_OPTIONS = [
+  { id: 'auto',               label: 'Smart (auto — recommended)' },
+  { id: 'gemini-2.5-flash',   label: 'Gemini 2.5 Flash — fast & sharp' },
+  { id: 'gemini-2.5-pro',     label: 'Gemini 2.5 Pro — max quality (slower)' },
+  { id: 'gemini-2.0-flash',   label: 'Gemini 2.0 Flash — reliable backup' },
+  { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite — lightest' },
+] as const;
+
+export function getPreferredAIModel(): string {
+  const v = localStorage.getItem(AI_MODEL_PREF_KEY) || 'auto';
+  return AI_MODEL_OPTIONS.some(o => o.id === v) ? v : 'auto';
+}
+
+export function setPreferredAIModel(id: string) {
+  localStorage.setItem(AI_MODEL_PREF_KEY, id);
+}
+
 export async function callAI<T = any>(action: string, data: any): Promise<T> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/ai/${action}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, model: getPreferredAIModel() }),
   });
 
   // Capture AI model status from response headers

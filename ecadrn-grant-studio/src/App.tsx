@@ -147,7 +147,7 @@ import {
   getDoc,
   getDocs
 } from 'firebase/firestore';
-import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, type AIModelInfo } from './services/api';
+import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, type AIModelInfo, AI_MODEL_OPTIONS, getPreferredAIModel, setPreferredAIModel } from './services/api';
 import { connectGoogle, disconnect, isConnected, getConnectedEmail, GOOGLE_SCOPES, isDeadlineAlertsEnabled, setDeadlineAlertsEnabled, getAlertLastSentDate, markAlertSentToday, collectUrgentGrants } from './services/googleAuth';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
@@ -269,6 +269,12 @@ const WALKTHROUGH_STEPS = [
     title: "Compliance Checklist",
     tab: 'proposals',
     content: "New: Open any proposal and click the 'Requirements' tab. The AI reads the grant's eligibility criteria and builds a checkable compliance list — 501(c)(3) status, geographic restrictions, budget caps, required documents, formatting rules. Red-flagged eligibility gates warn you before you submit something that would be disqualified.",
+    highlight: "dashboard-overview"
+  },
+  {
+    title: "✦ NEW: AI Model Selector",
+    tab: 'dashboard',
+    content: "In Settings → AI Model, choose how the AI runs: Smart mode (recommended) auto-falls-back to backup models on rate limits — or pick a specific model, including Gemini 2.5 Pro for max-quality drafting. A live status dot shows which model is currently serving. The AI is locked to ECADRN — every prompt is stamped with the ECADRN mission and serves no other organization.",
     highlight: "dashboard-overview"
   },
   {
@@ -1491,6 +1497,41 @@ CORE PROGRAMS:
                       <option value="closed">Closed</option>
                     </select>
                   </div>
+                </div>
+              </div>
+
+              {/* AI Model */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                  <Sparkles size={16} className="text-indigo-600" />
+                  AI Model
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="ai-model-pref" className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Model preference</label>
+                    <select
+                      id="ai-model-pref"
+                      value={getPreferredAIModel()}
+                      onChange={(e) => { setPreferredAIModel(e.target.value); setGoogleConnTick(t => t + 1); }}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      {AI_MODEL_OPTIONS.map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed">
+                      Smart mode picks the best available model and auto-falls-back to a backup on rate limits. Pick a specific model to start there — capacity fallback still protects you.
+                    </p>
+                  </div>
+                  {aiModelStatus && (
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500">
+                      <span className={`w-1.5 h-1.5 rounded-full ${aiModelStatus.isFallback ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                      <span>
+                        Serving: <span className="font-medium text-slate-500 dark:text-slate-400">{aiModelStatus.model}</span>
+                        {aiModelStatus.isFallback ? ' (fallback active)' : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
