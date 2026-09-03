@@ -144,7 +144,8 @@ import {
   deleteDoc,
   orderBy,
   limit,
-  getDoc
+  getDoc,
+  getDocs
 } from 'firebase/firestore';
 import { callAI, subscribeToAIModelStatus, checkAIHealth, type AIModelInfo } from './services/api';
 import ReactQuill from 'react-quill';
@@ -255,6 +256,18 @@ const WALKTHROUGH_STEPS = [
     title: "⌨️ Keyboard Shortcuts — Power User Mode",
     tab: 'dashboard',
     content: "Speed through the entire app without touching your mouse. Press ⌘/Ctrl + / anytime to see all shortcuts. Navigation: ⌘K = Search, ⌘G = Grants, ⌘P = Proposals, ⌘F = Funders, ⌘C = Calendar, ⌘A = ADR Network, ⌘Y = Analytics, ⌘O = Outreach, ⌘V = Voice, ⌘T = AI Chat. Actions: ⌘N = New Proposal, ⌘E = Export CSV. UI: ⌘D = Dark mode, ⌘B = Toggle sidebar, Esc = Close overlays.",
+    highlight: "dashboard-overview"
+  },
+  {
+    title: "Document Vault",
+    tab: 'vault',
+    content: "New: The Doc Vault holds your org's standard application documents — 501(c)(3) letter, W-9, board list, audited financials, letters of support. Add them once, then attach them to any proposal in one click from the Attachments tab. No more hunting for the same files every application.",
+    highlight: "sidebar-nav"
+  },
+  {
+    title: "Compliance Checklist",
+    tab: 'proposals',
+    content: "New: Open any proposal and click the 'Requirements' tab. The AI reads the grant's eligibility criteria and builds a checkable compliance list — 501(c)(3) status, geographic restrictions, budget caps, required documents, formatting rules. Red-flagged eligibility gates warn you before you submit something that would be disqualified.",
     highlight: "dashboard-overview"
   },
   {
@@ -899,6 +912,82 @@ CORE PROGRAMS:
     } catch (err: any) {
       console.error('DOCX export error:', err);
       showToast('Failed to export DOCX: ' + (err.message || 'Unknown error'), 'error');
+    }
+  };
+
+  // ── PDF Export (true formatted PDF, not print-to-PDF) ────────────────────────
+  const exportProposalAsPdf = async (proposal: any) => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 56;
+      const maxW = pageW - margin * 2;
+      let y = 0;
+
+      const ensureSpace = (needed: number) => {
+        if (y + needed > pageH - 60) { pdf.addPage(); y = margin; }
+      };
+      const writeWrapped = (text: string, size: number, style: 'normal' | 'bold', color: [number, number, number], gap = 6) => {
+        const clean = (text || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+        if (!clean) return;
+        pdf.setFont('helvetica', style);
+        pdf.setFontSize(size);
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const lines = pdf.splitTextToSize(clean, maxW);
+        for (const line of lines) {
+          ensureSpace(size * 1.45);
+          pdf.text(line, margin, y);
+          y += size * 1.45;
+        }
+        y += gap;
+      };
+
+      // Title page
+      y = pageH / 2 - 120;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(79, 70, 229);
+      pdf.text('ECADRN GRANT STUDIO', pageW / 2, y, { align: 'center' });
+      y += 60;
+      pdf.setFontSize(26); pdf.setTextColor(17, 24, 39);
+      const titleLines = pdf.splitTextToSize(proposal.title || 'Untitled Proposal', maxW - 60);
+      for (const line of titleLines) { pdf.text(line, pageW / 2, y, { align: 'center' }); y += 32; }
+      y += 30;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(13); pdf.setTextColor(107, 114, 128);
+      pdf.text(`Funder: ${proposal.funder || 'N/A'}`, pageW / 2, y, { align: 'center' }); y += 20;
+      if (proposal.amount) { pdf.text(`Amount: $${Number(proposal.amount).toLocaleString()}`, pageW / 2, y, { align: 'center' }); y += 20; }
+      pdf.text(`Status: ${(proposal.status || 'draft').charAt(0).toUpperCase() + (proposal.status || 'draft').slice(1)}`, pageW / 2, y, { align: 'center' }); y += 20;
+      y += 24;
+      pdf.setFontSize(10); pdf.setTextColor(150, 150, 150);
+      pdf.text('Equity Center for Alternative Dispute Resolution & Negotiation', pageW / 2, y, { align: 'center' }); y += 16;
+      pdf.text(new Date().toLocaleDateString(), pageW / 2, y, { align: 'center' });
+
+      // Sections
+      const sections = Array.isArray(proposal.sections) ? proposal.sections : [];
+      for (const s of sections) {
+        const title = (s?.title || s?.sectionName || 'Section').trim();
+        const body = s?.content || s?.text || '';
+        if (!title && !body) continue;
+        pdf.addPage();
+        y = margin;
+        writeWrapped(title, 15, 'bold', [17, 24, 39], 10);
+        writeWrapped(body, 10.5, 'normal', [55, 65, 81], 4);
+      }
+
+      // Page footers
+      const total = pdf.getNumberOfPages();
+      for (let i = 1; i <= total; i++) {
+        pdf.setPage(i);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(150, 150, 150);
+        pdf.text(`Generated by ECADRN Grant Studio · ${new Date().toLocaleDateString()}`, margin, pageH - 30);
+        pdf.text(`Page ${i} of ${total}`, pageW - margin, pageH - 30, { align: 'right' });
+      }
+
+      pdf.save(`${(proposal.title || 'ECADRN_Proposal').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+      showToast('PDF downloaded', 'success');
+    } catch (err: any) {
+      console.error('PDF export error:', err);
+      showToast('Failed to export PDF: ' + (err.message || 'Unknown error'), 'error');
     }
   };
 
@@ -1722,7 +1811,7 @@ CORE PROGRAMS:
               transition={{ duration: 0.2 }}
             >
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
-            {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
+            {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onExportPdf={exportProposalAsPdf} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
             {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
@@ -1732,6 +1821,7 @@ CORE PROGRAMS:
             {activeTab === 'network' && <AdrNetworkView organization={organization} orgId={orgId} user={user} />}
             {activeTab === 'analytics' && <AnalyticsView organization={organization} proposals={proposals} grants={grants} funders={funders} orgId={orgId} />}
             {activeTab === 'crm' && <FunderCRMView funders={funders} proposals={proposals} orgId={orgId} organization={organization} />}
+            {activeTab === 'vault' && <VaultView orgId={orgId} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -2298,9 +2388,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, proposalsLoaded, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onPrintProposal, onWinLossAnalysis, winLossResults
+  proposals, proposalsLoaded, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onExportPdf, onPrintProposal, onWinLossAnalysis, winLossResults
 }: { 
-  proposals: any[], proposalsLoaded: boolean, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
+  proposals: any[], proposalsLoaded: boolean, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onExportPdf?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2330,7 +2420,10 @@ function ProposalsView({
     { title: "Version Diff Viewer", content: "In the Proposal Editor, save versions and click 'Diff' to see a visual side-by-side comparison. Emerald highlights show new text, rose shows deleted text, with per-section word counts. Switch to inline mode for a single-pane view, or click 'AI' for smart analysis of whether each change helps or hurts." },
     { title: "Real-Time Collaboration", content: "When multiple teammates open the same proposal, colored avatars appear in the header with an amber pulse on active editors. Section tabs show who's where. Click 'Feed' to open a live activity panel — see who's viewing, editing, or commenting in real time." },
     { title: "Funder Relationship Timeline", content: "Every funder card has a timeline at the bottom that auto-logs AI research events. You can manually log calls, meetings, emails, and notes with a quick input bar. Build a complete relationship history for every funder you track." },
-    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 13 steps are always available." }
+    { title: "Compliance Requirements Tab", content: "In the Proposal Editor, the 'Requirements' tab extracts a checkable compliance list from the grant's eligibility criteria — status, geography, budget caps, required documents. Red flags mark hard eligibility gates. Everything saves to the proposal so the team can check items off together." },
+    { title: "Learn from Wins", content: "When you generate a new draft, the AI now studies your past WINNING proposals (status 'Awarded' or 'Approved') and mirrors the patterns that actually got funded — structure, evidence density, specificity. Mark your wins in the status column to teach the system." },
+    { title: "PDF & DOCX Export", content: "Every proposal row has one-click export: DOCX for editing, a formatted PDF for submissions and sharing, and print for a quick paper copy. The PDF includes a title page, full sections, and page numbers." },
+    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 16 steps are always available." }
   ];
 
   const [newProposalData, setNewProposalData] = useState({
@@ -2381,6 +2474,21 @@ function ProposalsView({
         );
         const funderIntel = matchedFunder?.intelligence || null;
 
+        // Feed past WINNING proposals as few-shot examples so the AI mirrors funded patterns
+        const winningExamples = (proposals || [])
+          .filter(p => p?.status === 'awarded' || p?.status === 'approved')
+          .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+          .slice(0, 2)
+          .map(p => ({
+            title: p.title || 'Untitled',
+            funder: p.funder || 'Unknown funder',
+            status: p.status,
+            sections: (Array.isArray(p.sections) ? p.sections : [])
+              .filter((s: any) => s?.title && (s?.content || s?.text))
+              .slice(0, 5)
+              .map((s: any) => ({ title: s.title, content: s.content || s.text || '' })),
+          }));
+
         const data = await callAI('generate-draft', {
           orgProfile: organization,
           grantTitle: newProposalData.title,
@@ -2396,6 +2504,7 @@ function ProposalsView({
           keyPhrases: voiceSource.keyPhrases?.join(', '),
           voiceRules: voiceSource.voiceRules?.join('; '),
           writingSamples: voiceSource.writingSamples?.join(' | '),
+          winningExamples: winningExamples.length > 0 ? winningExamples : null,
           funderIntelligence: funderIntel ? {
             givingPriorities: funderIntel.givingPriorities,
             whatTheyFund: funderIntel.whatTheyFund || [],
@@ -2626,6 +2735,15 @@ function ProposalsView({
                         className="text-slate-400 hover:text-indigo-600 transition-colors"
                       >
                         <Download size={16} />
+                      </button>
+                    )}
+                    {onExportPdf && (
+                      <button 
+                        onClick={() => onExportPdf(p)}
+                        title="Download as PDF"
+                        className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      >
+                        <FileDown size={16} />
                       </button>
                     )}
                     {onPrintProposal && (
@@ -3288,9 +3406,14 @@ function ProposalEditor({
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [pendingAssignment, setPendingAssignment] = useState<{ sectionIdx: number, user: string } | null>(null);
   const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline' | 'attachments' | 'versions'>('editor');
+  const [activeSubTab, setActiveSubTab] = useState<'editor' | 'budget' | 'timeline' | 'attachments' | 'requirements' | 'versions'>('editor');
   const [budget, setBudget] = useState<any[]>(proposal.budget || []);
   const [attachments, setAttachments] = useState<any[]>(proposal.attachments || []);
+  const [requirements, setRequirements] = useState<any[]>(Array.isArray(proposal.requirements) ? proposal.requirements : []);
+  const [requirementsLoading, setRequirementsLoading] = useState(false);
+  const [requirementsMissingInfo, setRequirementsMissingInfo] = useState<string[]>(Array.isArray(proposal.requirementsMissingInfo) ? proposal.requirementsMissingInfo : []);
+  const [showVaultPicker, setShowVaultPicker] = useState(false);
+  const [vaultDocs, setVaultDocs] = useState<any[]>([]);
   const [milestones, setMilestones] = useState<any[]>(proposal.milestones || []);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -3814,6 +3937,12 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'attachments' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Attachments {attachments.length > 0 && `(${attachments.length})`}
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('requirements')}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'requirements' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Requirements {requirements.length > 0 && `(${requirements.filter((r: any) => r.done).length}/${requirements.length})`}
               </button>
               <button 
                 onClick={() => setActiveSubTab('versions')}
@@ -4580,7 +4709,85 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                     {isUploading ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
                     {isUploading ? 'Uploading...' : 'Select Files'}
                   </button>
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={async () => {
+                        setShowVaultPicker(true);
+                        try {
+                          const snap = await getDocs(collection(db, `organizations/${orgId}/vault`));
+                          setVaultDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        } catch (err: any) {
+                          showToast('Could not load vault: ' + (err?.message || 'Unknown error'), 'error');
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <FolderArchive size={16} /> Add from Document Vault
+                    </button>
+                  </div>
                 </div>
+
+                {showVaultPicker && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowVaultPicker(false)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                      <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">Document Vault</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">Attach org-standard documents to this proposal</p>
+                        </div>
+                        <button onClick={() => setShowVaultPicker(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={18} /></button>
+                      </div>
+                      <div className="p-4 overflow-y-auto space-y-2">
+                        {vaultDocs.length === 0 ? (
+                          <div className="text-center py-8">
+                            <FolderArchive className="mx-auto text-slate-300 mb-2" size={28} />
+                            <p className="text-sm text-slate-500">Vault is empty. Add your 501(c)(3), W-9, and board list under Doc Vault in the sidebar.</p>
+                          </div>
+                        ) : vaultDocs.map((vd: any) => {
+                          const alreadyAttached = attachments.some((a: any) => a.vaultId === vd.id);
+                          return (
+                            <button
+                              key={vd.id}
+                              disabled={alreadyAttached}
+                              onClick={async () => {
+                                try {
+                                  const updated = [...attachments, {
+                                    name: vd.name,
+                                    type: 'vault',
+                                    size: 0,
+                                    url: vd.url || null,
+                                    vaultId: vd.id,
+                                    vaultType: vd.type || 'other',
+                                    uploadedAt: new Date().toISOString(),
+                                    uploadedBy: auth.currentUser?.email || 'Unknown',
+                                  }];
+                                  setAttachments(updated);
+                                  const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                                  await setDoc(doc(db, path), { attachments: updated, lastEditedBy: auth.currentUser?.email || '' }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, path));
+                                  showToast(`✓ "${vd.name}" attached`, 'success');
+                                } catch (err: any) {
+                                  showToast('Failed to attach: ' + (err?.message || 'Unknown error'), 'error');
+                                }
+                              }}
+                              className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-left transition-all ${alreadyAttached ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/10 opacity-60 cursor-default' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20'}`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                                  <FolderArchive size={14} className="text-indigo-500" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{vd.name}</div>
+                                  <div className="text-[10px] text-slate-400 uppercase tracking-widest font-black">{vd.type || 'document'}</div>
+                                </div>
+                              </div>
+                              {alreadyAttached ? <Check size={15} className="text-emerald-500 shrink-0" /> : <Plus size={15} className="text-indigo-500 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {attachments.length > 0 && (
                   <div className="space-y-2">
                     {attachments.map((att, idx) => (
@@ -4590,10 +4797,20 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                             <PaperclipIcon size={16} className="text-indigo-500" />
                           </div>
                           <div>
-                            <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{att.name}</div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500">
-                              {(att.size / 1024).toFixed(0)}KB - Uploaded by {att.uploadedBy?.split('@')[0] || 'Unknown'} - {new Date(att.uploadedAt).toLocaleDateString()}
+                            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              {att.name}
+                              {att.vaultId && <span className="text-[8px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-slate-800 text-indigo-500 px-1 py-0.5 rounded">Vault</span>}
                             </div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500">
+                              {att.vaultId
+                                ? `From vault · Added by ${att.uploadedBy?.split('@')[0] || 'Unknown'} · ${new Date(att.uploadedAt).toLocaleDateString()}`
+                                : `${(att.size / 1024).toFixed(0)}KB - Uploaded by ${att.uploadedBy?.split('@')[0] || 'Unknown'} - ${new Date(att.uploadedAt).toLocaleDateString()}`}
+                            </div>
+                            {att.url && (
+                              <a href={att.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-700 mt-0.5 transition-colors">
+                                <Link2 size={10} /> Open document
+                              </a>
+                            )}
                           </div>
                         </div>
                         <button
@@ -4614,6 +4831,141 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            ) : activeSubTab === 'requirements' ? (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">Compliance Checklist</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Every eligibility requirement and required document for this application — checked off before you submit.</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setRequirementsLoading(true);
+                      try {
+                        const result = await callAI('extract-requirements', {
+                          grantTitle: proposal.title || '',
+                          funderName: proposal.funder || '',
+                          grantDescription: proposal.description || '',
+                          eligibility: proposal.eligibility || '',
+                          focusAreas: Array.isArray(proposal.focusAreas) ? proposal.focusAreas.join(', ') : (proposal.focusAreas || ''),
+                          geographicFocus: proposal.geographicFocus || '',
+                          amountMin: proposal.amountMin || proposal.amount || 0,
+                          amountMax: proposal.amountMax || proposal.amount || 0,
+                          deadline: proposal.deadline || '',
+                          orgProfile: {
+                            name: organization?.name || '',
+                            missionStatement: organization?.missionStatement || '',
+                            focusAreas: organization?.focusAreas || [],
+                            location: organization?.location || '',
+                            programs: organization?.programs || [],
+                            legalStatus: organization?.legalStatus || '501(c)(3)',
+                          }
+                        });
+                        if (!Array.isArray(result?.requirements)) throw new Error('AI returned no requirements — please retry.');
+                        const validated = result.requirements
+                          .filter((r: any) => r && typeof r.text === 'string' && r.text.trim())
+                          .map((r: any, i: number) => ({
+                            id: `req-${i}`,
+                            text: String(r.text).trim(),
+                            category: typeof r.category === 'string' ? r.category : 'Eligibility',
+                            isEligibilityGate: r.isEligibilityGate === true,
+                            orgStatus: ['met', 'unmet', 'unknown'].includes(r.orgStatus) ? r.orgStatus : 'unknown',
+                            note: typeof r.note === 'string' ? r.note : '',
+                            done: r.orgStatus === 'met',
+                          }));
+                        if (validated.length === 0) throw new Error('AI returned no valid requirements — please retry.');
+                        setRequirements(validated);
+                        setRequirementsMissingInfo(Array.isArray(result.missingInfo) ? result.missingInfo.filter((m: any) => typeof m === 'string') : []);
+                        const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                        await setDoc(doc(db, path), {
+                          requirements: validated,
+                          requirementsMissingInfo: Array.isArray(result.missingInfo) ? result.missingInfo.filter((m: any) => typeof m === 'string') : [],
+                          requirementsUpdatedAt: new Date().toISOString(),
+                          lastEditedBy: auth.currentUser?.email || '',
+                        }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, path));
+                        showToast(`✓ ${validated.length} requirements extracted`, 'success');
+                      } catch (err: any) {
+                        showToast('Requirement extraction failed: ' + (err?.message || 'Unknown error'), 'error');
+                      } finally {
+                        setRequirementsLoading(false);
+                      }
+                    }}
+                    disabled={requirementsLoading}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    {requirementsLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {requirementsLoading ? 'Analyzing...' : requirements.length > 0 ? 'Re-extract' : 'Extract Requirements'}
+                  </button>
+                </div>
+
+                {requirements.length > 0 ? (() => {
+                  const doneCount = requirements.filter((r: any) => r.done).length;
+                  const pct = Math.round((doneCount / requirements.length) * 100);
+                  const unmetGates = requirements.filter((r: any) => r.isEligibilityGate && !r.done);
+                  return (
+                    <>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{doneCount} of {requirements.length} complete</span>
+                          <span className={`text-xs font-black ${pct === 100 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{pct}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        {unmetGates.length > 0 && (
+                          <div className="flex items-start gap-2 text-[11px] text-rose-600 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900 rounded-lg p-2.5">
+                            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                            <span><strong>{unmetGates.length} eligibility gate{unmetGates.length > 1 ? 's' : ''} still unchecked</strong> — the application could be disqualified without {unmetGates.length > 1 ? 'these' : 'this'}.</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {requirements.map((r: any, idx: number) => {
+                          const statusColor = r.orgStatus === 'met' ? 'bg-emerald-400' : r.orgStatus === 'unmet' ? 'bg-rose-400' : 'bg-slate-300 dark:bg-slate-600';
+                          return (
+                            <div key={r.id || idx} className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${r.done ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/10' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'} ${!r.done && r.isEligibilityGate ? 'border-l-4 border-l-rose-400' : !r.done ? 'border-l-4 border-l-slate-300 dark:border-l-slate-600' : 'border-l-4 border-l-emerald-400'}`}>
+                              <button
+                                aria-label={`Mark "${r.text}" as ${r.done ? 'incomplete' : 'complete'}`}
+                                onClick={() => {
+                                  const updated = requirements.map((x: any, i: number) => i === idx ? { ...x, done: !x.done } : x);
+                                  setRequirements(updated);
+                                  const path = `organizations/${orgId}/proposals/${proposal.id}`;
+                                  setDoc(doc(db, path), { requirements: updated, lastEditedBy: auth.currentUser?.email || '' }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, path));
+                                }}
+                                className={`mt-0.5 w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-all ${r.done ? 'bg-emerald-500 text-white' : 'border-2 border-slate-300 dark:border-slate-600 hover:border-indigo-400'}`}
+                              >
+                                {r.done && <Check size={12} />}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-sm ${r.done ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-300 font-medium'}`}>{r.text}</div>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  <span className="text-[8px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded">{r.category || 'Requirement'}</span>
+                                  {r.isEligibilityGate && <span className="text-[8px] font-black uppercase tracking-widest bg-rose-50 dark:bg-rose-950/40 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-900">Eligibility Gate</span>}
+                                  <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />{r.orgStatus === 'met' ? 'org qualifies' : r.orgStatus === 'unmet' ? 'org does not qualify' : 'verify org status'}</span>
+                                  {r.note && <span className="text-[9px] text-slate-400" title={r.note}>· {r.note}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {requirementsMissingInfo.length > 0 && (
+                        <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/10 p-3 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-600"><AlertCircle size={11} /> Confirm on the funder's site</div>
+                          {requirementsMissingInfo.map((m: string, i: number) => <p key={i} className="text-[11px] text-amber-700 dark:text-amber-500">• {m}</p>)}
+                        </div>
+                      )}
+                    </>
+                  );
+                })() : (
+                  <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-10 text-center">
+                    <ListChecks className="mx-auto text-slate-300 mb-3" size={36} />
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">No requirements extracted yet</p>
+                    <p className="text-xs text-slate-400 mt-1 mb-4">The AI reads the grant description and eligibility criteria, then builds a checkable list — status, budget caps, geography, required documents, and formatting rules.</p>
+                    <button onClick={() => setActiveSubTab('requirements')} className="hidden" aria-hidden="true" />
                   </div>
                 )}
               </div>
@@ -7926,12 +8278,14 @@ Deadline: 2026-11-15`;
       
       const score = typeof data?.alignmentScore === 'number' ? data.alignmentScore : (typeof data?.ecadrnAlignmentScore === 'number' ? data.ecadrnAlignmentScore : 50);
       const rationale = data?.rationale || data?.ecadrnAlignmentRationale || 'Evaluated for ECADRN alignment.';
+      const matchExplanation = typeof data?.matchExplanation === 'string' && data.matchExplanation.trim() ? data.matchExplanation.trim() : '';
 
       const grantsPath = `organizations/${orgId}/grants`;
       const docRef = doc(db, grantsPath, grant.id);
       await setDoc(docRef, {
         ecadrnAlignmentScore: score,
         ecadrnAlignmentRationale: rationale,
+        matchExplanation,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
 
@@ -7940,7 +8294,8 @@ Deadline: 2026-11-15`;
           return {
             ...prev,
             ecadrnAlignmentScore: score,
-            ecadrnAlignmentRationale: rationale
+            ecadrnAlignmentRationale: rationale,
+            matchExplanation
           };
         }
         return prev;
@@ -8751,6 +9106,9 @@ Deadline: 2026-11-15`;
                     </button>
                   </div>
                 </div>
+                {g.matchExplanation && (
+                  <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-snug font-bold border-t border-emerald-100 dark:border-emerald-900/50 pt-1.5">↳ {g.matchExplanation}</p>
+                )}
                 <p className="text-[10px] text-emerald-600 leading-normal italic font-medium">"{g.ecadrnAlignmentRationale || 'Synergized with core conflict resolution priorities.'}"</p>
               </div>
             ) : (
@@ -12232,6 +12590,175 @@ function TimelineView({ versions, onRevert }: { versions: any[], onRevert: (v: a
           <div className="text-center py-20 text-slate-400 italic text-sm">No version history available for this proposal yet.</div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Document Vault ───────────────────────────────────────────────────────────
+const VAULT_DOC_TYPES = [
+  { id: '501c3', label: '501(c)(3) Letter', hint: 'IRS determination letter' },
+  { id: 'w9', label: 'W-9 Form', hint: 'Signed current-year W-9' },
+  { id: 'board', label: 'Board of Directors List', hint: 'Names, roles, affiliations' },
+  { id: 'financials', label: 'Audited Financials', hint: 'Most recent audit or 990' },
+  { id: 'annual', label: 'Annual Report', hint: 'Latest annual report' },
+  { id: 'loi', label: 'LOI / Cover Letter Template', hint: 'Reusable letterhead' },
+  { id: 'support', label: 'Letters of Support', hint: 'Partner / community letters' },
+  { id: 'other', label: 'Other Document', hint: 'Anything else' },
+];
+
+function VaultView({ orgId }: { orgId: string }) {
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newDoc, setNewDoc] = useState({ name: '', type: 'other', url: '', notes: '' });
+
+  const vaultPath = `organizations/${orgId}/vault`;
+
+  useEffect(() => {
+    const vaultRef = collection(db, vaultPath);
+    const unsub = onSnapshot(query(vaultRef), (snap) => {
+      setDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoaded(true);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, vaultPath);
+      setLoaded(true);
+    });
+    return () => unsub();
+  }, [orgId]);
+
+  const saveVaultDoc = async () => {
+    if (!newDoc.name.trim()) { showToast('Give the document a name first.', 'error'); return; }
+    setSaving(true);
+    try {
+      await addDoc(collection(db, vaultPath), {
+        name: newDoc.name.trim(),
+        type: newDoc.type,
+        url: newDoc.url.trim() || null,
+        notes: newDoc.notes.trim() || '',
+        uploadedBy: auth.currentUser?.email || 'Unknown',
+        uploadedAt: new Date().toISOString(),
+      });
+      setNewDoc({ name: '', type: 'other', url: '', notes: '' });
+      setShowAdd(false);
+      showToast('Added to vault', 'success');
+    } catch (err: any) {
+      showToast('Failed to add document: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeDoc = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, vaultPath, id));
+      showToast('Removed from vault', 'info');
+    } catch (err: any) {
+      showToast('Failed to remove: ' + (err?.message || 'Unknown error'), 'error');
+    }
+  };
+
+  const filtered = filter === 'all' ? docs : docs.filter(d => d.type === filter);
+  const typeLabel = (t: string) => VAULT_DOC_TYPES.find(x => x.id === t)?.label || t;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white">Document Vault</h2>
+          <p className="text-sm text-slate-500 mt-1">Your org's standard application documents — add once, reuse on every proposal.</p>
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+        >
+          <Plus size={16} /> Add Document
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-700'}`}>
+          All ({docs.length})
+        </button>
+        {VAULT_DOC_TYPES.filter(t => docs.some(d => d.type === t.id)).map(t => (
+          <button key={t.id} onClick={() => setFilter(t.id)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === t.id ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-700'}`}>
+            {t.label} ({docs.filter(d => d.type === t.id).length})
+          </button>
+        ))}
+      </div>
+
+      {!loaded ? (
+        <div className="flex justify-center py-16"><Loader2 className="animate-spin text-indigo-500" size={28} /></div>
+      ) : filtered.length === 0 ? (
+        <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-10 text-center">
+          <FolderArchive className="mx-auto text-slate-300 mb-3" size={36} />
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{docs.length === 0 ? 'Your vault is empty' : 'No documents in this category'}</p>
+          <p className="text-xs text-slate-400 mt-1">Add your 501(c)(3) letter, W-9, board list, and financials once — then attach them to any proposal in one click.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((d) => (
+            <div key={d.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <FolderArchive size={16} className="text-indigo-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate" title={d.name}>{d.name}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500">{typeLabel(d.type)}</div>
+                  </div>
+                </div>
+                <button onClick={() => removeDoc(d.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 shrink-0" title="Remove">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              {d.notes && <p className="text-xs text-slate-500 line-clamp-2">{d.notes}</p>}
+              <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] text-slate-400">Added by {d.uploadedBy?.split('@')[0] || 'Unknown'} · {d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString() : ''}</span>
+                {d.url && (
+                  <a href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-700 transition-colors">
+                    <Link2 size={11} /> Open
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowAdd(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">Add Document to Vault</h3>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Document Name *</label>
+              <input value={newDoc.name} onChange={(e) => setNewDoc(p => ({ ...p, name: e.target.value }))} placeholder="e.g. IRS 501(c)(3) Determination Letter" className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-sm outline-none focus:border-indigo-400" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Type</label>
+              <select value={newDoc.type} onChange={(e) => setNewDoc(p => ({ ...p, type: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm outline-none focus:border-indigo-400">
+                {VAULT_DOC_TYPES.map(t => <option key={t.id} value={t.id}>{t.label} — {t.hint}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Link (Google Drive, Dropbox, etc.)</label>
+              <input value={newDoc.url} onChange={(e) => setNewDoc(p => ({ ...p, url: e.target.value }))} placeholder="https://drive.google.com/..." className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-sm outline-none focus:border-indigo-400" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Notes</label>
+              <textarea value={newDoc.notes} onChange={(e) => setNewDoc(p => ({ ...p, notes: e.target.value }))} placeholder="e.g. Signed January 2026, expires never" rows={2} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent text-sm outline-none focus:border-indigo-400 resize-none" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
+              <button onClick={saveVaultDoc} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add to Vault
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

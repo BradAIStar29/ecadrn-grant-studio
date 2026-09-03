@@ -1,0 +1,49 @@
+name: Grant Deadline Alerts
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # Daily 11:00 UTC = 7:00 AM America/New_York
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: "deadline-alerts"
+  cancel-in-progress: false
+
+jobs:
+  scan-deadlines:
+    name: Scan Firestore for urgent grant deadlines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/457031665165/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'github-deployer@gen-lang-client-0456143672.iam.gserviceaccount.com'
+          token_format: 'access_token'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Scan grants for deadlines within 7 days
+        run: node scripts/deadline-scan.mjs
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          FIREBASE_PROJECT_ID: gen-lang-client-0456143672
+          FIREBASE_DB_ID: ai-studio-bad18069-1a94-4ead-b188-10dcbdd2eee2
+
+      - name: Publish alerts branch
+        run: |
+          git config user.name "ecadrn-bot"
+          git config user.email "actions@github.com"
+          git checkout -B alerts
+          git add alerts/deadlines.json
+          git commit -m "chore: refresh deadline alerts [skip ci]" || echo "No changes"
+          git push origin alerts
