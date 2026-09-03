@@ -230,6 +230,24 @@ const WALKTHROUGH_STEPS = [
     highlight: "chat-view"
   },
   {
+    title: "✦ NEW: Visual Version Diff",
+    tab: 'proposals',
+    content: "Every time you save a proposal version, a visual diff viewer lets you compare changes side-by-side or inline. Emerald highlights show additions, rose shows deletions, with per-section word counts. Click 'Diff' for the visual view or 'AI' for smart analysis of whether each change is an improvement or regression.",
+    highlight: "proposals-view"
+  },
+  {
+    title: "✦ NEW: Real-Time Collaboration",
+    tab: 'proposals',
+    content: "When teammates open the same proposal, you'll see their colored avatars in the header — with an amber pulse ring when they're actively editing. Section tabs show who's working where. Click 'Feed' to open the live activity panel showing viewing, editing, and commenting actions in real time.",
+    highlight: "proposals-view"
+  },
+  {
+    title: "✦ NEW: Funder Relationship Timeline",
+    tab: 'funders',
+    content: "Every funder card now has a relationship timeline at the bottom. AI research events are auto-logged, and you can manually log calls, meetings, emails, and notes. Each interaction type has its own colored icon — building a complete history of your relationship with every funder over time.",
+    highlight: "funders-view"
+  },
+  {
     title: "⌨️ Keyboard Shortcuts — Power User Mode",
     tab: 'dashboard',
     content: "Speed through the entire app without touching your mouse. Press ⌘/Ctrl + / anytime to see all shortcuts. Navigation: ⌘K = Search, ⌘G = Grants, ⌘P = Proposals, ⌘F = Funders, ⌘C = Calendar, ⌘A = ADR Network, ⌘Y = Analytics, ⌘O = Outreach, ⌘V = Voice, ⌘T = AI Chat. Actions: ⌘N = New Proposal, ⌘E = Export CSV. UI: ⌘D = Dark mode, ⌘B = Toggle sidebar, Esc = Close overlays.",
@@ -2295,7 +2313,10 @@ function ProposalsView({
     { title: "Autopilot-Generated Proposals", content: "Proposals created by Grant Autopilot appear here automatically with 'autopilot' tags. In Assisted Mode they land in 'Review' status for your approval. In Full Agent Mode they are marked 'Submitted' with a notification confirmation." },
     { title: "Open the Editor", content: "Click any proposal row to open the full Proposal Editor — a multi-section rich-text workspace with AI section rewriting, funder alignment, voice matching, focus mode, and version history." },
     { title: "Proposal Lifecycle", content: "Move proposals through statuses manually: Draft → In Review → Submitted → Approved. Each status change is saved and visible to the whole team in the shared workspace." },
-    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 10 steps are always available." }
+    { title: "Version Diff Viewer", content: "In the Proposal Editor, save versions and click 'Diff' to see a visual side-by-side comparison. Emerald highlights show new text, rose shows deleted text, with per-section word counts. Switch to inline mode for a single-pane view, or click 'AI' for smart analysis of whether each change helps or hurts." },
+    { title: "Real-Time Collaboration", content: "When multiple teammates open the same proposal, colored avatars appear in the header with an amber pulse on active editors. Section tabs show who's where. Click 'Feed' to open a live activity panel — see who's viewing, editing, or commenting in real time." },
+    { title: "Funder Relationship Timeline", content: "Every funder card has a timeline at the bottom that auto-logs AI research events. You can manually log calls, meetings, emails, and notes with a quick input bar. Build a complete relationship history for every funder you track." },
+    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 13 steps are always available." }
   ];
 
   const [newProposalData, setNewProposalData] = useState({
