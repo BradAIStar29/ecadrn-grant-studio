@@ -135,7 +135,7 @@ import {
   limit,
   getDoc
 } from 'firebase/firestore';
-import { callAI } from './services/api';
+import { callAI, subscribeToAIModelStatus, checkAIHealth, type AIModelInfo } from './services/api';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import { useFocusTrap } from './hooks/useFocusTrap';
@@ -355,6 +355,7 @@ export default function App() {
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
   const [showSettings, setShowSettings] = useState(false);
+  const [aiModelStatus, setAIModelStatus] = useState<AIModelInfo | null>(null);
   // Modal refs for focus trapping
   const settingsModalRef = useRef<HTMLDivElement>(null);
   const shortcutsModalRef = useRef<HTMLDivElement>(null);
@@ -934,6 +935,33 @@ CORE PROGRAMS:
 
     return results.slice(0, 12);
   };
+
+  // ── AI Model Status Subscription ────────────────────────────────────────
+  // Subscribes to AI model status updates from the API service.
+  // When the system enters fallback mode, shows a toast notification.
+  // Also does an initial health check on mount to set the badge immediately.
+  useEffect(() => {
+    const unsubscribeStatus = subscribeToAIModelStatus((info) => {
+      setAIModelStatus(info);
+      if (info?.isFallback) {
+        showToast('AI switched to fallback model due to rate limits. Quality is maintained.', 'info');
+      } else if (info && !info.isFallback && aiModelStatus?.isFallback) {
+        showToast('AI primary model restored. Back to optimal performance.', 'success');
+      }
+    });
+
+    // Initial health check on mount
+    checkAIHealth().then((health) => {
+      setAIModelStatus({ model: health.activeModel, isFallback: health.isFallback, tier: health.activeTier });
+    }).catch(() => {
+      // Silent fail — health check is best-effort
+    });
+
+    return () => {
+      unsubscribeStatus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
@@ -1536,6 +1564,21 @@ CORE PROGRAMS:
             }`}>
               {activeWorkspace === 'shared' ? '🤝 Team' : '👤 Personal'}
             </span>
+            {aiModelStatus && (
+              <span
+                title={aiModelStatus.isFallback
+                  ? `AI Fallback Mode: ${aiModelStatus.model} (primary model at capacity, will auto-revert)`
+                  : `AI Model: ${aiModelStatus.model}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                  aiModelStatus.isFallback
+                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${aiModelStatus.isFallback ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                {aiModelStatus.isFallback ? 'AI Fallback' : 'AI Active'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <div className="relative">

@@ -3,9 +3,11 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export interface Env {
   GEMINI_API_KEY: string;
+  GEMINI_API_KEY_FALLBACK?: string;
   ALLOWED_ORIGIN: string;
   FIREBASE_PROJECT_ID: string;
   GOOGLE_DRIVE_TOKEN?: string;
+  AI_CONFIG?: KVNamespace;
 }
 
 // Firebase public keys for JWT signature verification (cached by jose)
@@ -56,6 +58,89 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
 };
 
 const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
+
+// ── AI Model Fallback System ──────────────────────────────────────────────────
+// When the primary model hits rate limits, seamlessly falls back to secondary
+// models. Uses Cloudflare KV for cross-request state with progressive backoff:
+//   1st quota hit → 15 min cooldown, try primary again
+//   2nd hit       → 60 min cooldown
+//   3rd+ hit      → 24h cooldown (daily revert as requested)
+// When primary recovers, state is cleared and everything reverts to normal.
+
+const MODEL_TIERS = [
+  { model: 'gemini-2.5-flash',     label: 'Gemini 2.5 Flash' },
+  { model: 'gemini-2.0-flash',     label: 'Gemini 2.0 Flash' },
+  { model: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
+];
+
+function isQuotaError(err: any): boolean {
+  const msg = (err?.message || '').toLowerCase();
+  const status = err?.status || err?.code;
+  return (
+    status === 429 || status === '429' ||
+    msg.includes('429') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
+    msg.includes('quota') ||
+    msg.includes('too many requests') ||
+    msg.includes('resource has been exhausted')
+  );
+}
+
+async function getActiveModelTier(env: Env): Promise<number> {
+  if (!env.AI_CONFIG) return 0;
+  try {
+    const raw = await env.AI_CONFIG.get('ai_model_state');
+    if (!raw) return 0;
+    const state = JSON.parse(raw);
+    const minutesSince = Math.floor((Date.now() - new Date(state.lastQuotaHit).getTime()) / (1000 * 60));
+    if (minutesSince >= state.cooldownMinutes) {
+      console.log('⏰ AI Fallback: Cooldown expired, trying primary model again');
+      return 0;
+    }
+    const tier = Math.min(state.tier, MODEL_TIERS.length - 1);
+    return tier;
+  } catch { return 0; }
+}
+
+async function recordModelFallback(env: Env, failedTier: number): Promise<void> {
+  if (!env.AI_CONFIG) return;
+  try {
+    const nextTier = Math.min(failedTier + 1, MODEL_TIERS.length - 1);
+
+    let consecutiveFailures = 0;
+    const existing = await env.AI_CONFIG.get('ai_model_state');
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      consecutiveFailures = (parsed.consecutiveFailures || 0) + 1;
+    }
+
+    const cooldownMinutes = consecutiveFailures >= 3 ? 24 * 60 :
+                           consecutiveFailures >= 2 ? 60 :
+                           consecutiveFailures >= 1 ? 15 : 1;
+
+    await env.AI_CONFIG.put('ai_model_state', JSON.stringify({
+      tier: nextTier,
+      lastQuotaHit: new Date().toISOString(),
+      consecutiveFailures,
+      cooldownMinutes,
+      failedModel: MODEL_TIERS[failedTier].model,
+      fallbackModel: MODEL_TIERS[nextTier].model,
+    }));
+    console.log(`🔄 AI Fallback: ${MODEL_TIERS[failedTier].model} → ${MODEL_TIERS[nextTier].model} (cooldown: ${cooldownMinutes}min, failures: ${consecutiveFailures})`);
+  } catch (e) {
+    console.error('AI Fallback: KV write error:', e);
+  }
+}
+
+async function clearModelFallback(env: Env): Promise<void> {
+  if (!env.AI_CONFIG) return;
+  try {
+    await env.AI_CONFIG.delete('ai_model_state');
+    console.log('✅ AI Fallback: Primary model working — fallback state cleared');
+  } catch {}
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1249,10 +1334,10 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    const json = (data: any, status = 200) =>
+    const json = (data: any, status = 200, extraHeaders: Record<string, string> = {}) =>
       new Response(JSON.stringify(data), {
         status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
       });
 
     try {
@@ -1282,6 +1367,31 @@ export default {
     // ── AI Routes ──────────────────────────────────────────────────────────
     if (path.startsWith('/ai/')) {
       const action = path.replace('/ai/', '');
+
+      // Health check endpoint — reports current model tier status
+      if (action === 'health') {
+        const activeTier = await getActiveModelTier(env);
+        let kvState: any = null;
+        if (env.AI_CONFIG) {
+          const raw = await env.AI_CONFIG.get('ai_model_state');
+          if (raw) kvState = JSON.parse(raw);
+        }
+        return json({
+          status: 'ok',
+          activeModel: MODEL_TIERS[activeTier].model,
+          activeTier,
+          isFallback: activeTier > 0,
+          availableModels: MODEL_TIERS.map(m => ({ model: m.model, label: m.label })),
+          fallbackState: kvState ? {
+            activatedAt: kvState.lastQuotaHit,
+            cooldownMinutes: kvState.cooldownMinutes,
+            consecutiveFailures: kvState.consecutiveFailures,
+            failedModel: kvState.failedModel,
+            fallbackModel: kvState.fallbackModel,
+          } : null,
+        });
+      }
+
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
       let body: any;
@@ -1298,36 +1408,78 @@ export default {
 
       const config = ACTION_CONFIG[action] || DEFAULT_CONFIG;
       const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+      const fallbackAi = env.GEMINI_API_KEY_FALLBACK
+        ? new GoogleGenAI({ apiKey: env.GEMINI_API_KEY_FALLBACK })
+        : null;
 
-      // Attempt 1: Native JSON mode (for non-search actions) or standard mode with search
+      // ── Model Fallback Loop ──────────────────────────────────────────────
+      // Try models in order: primary → secondary → lite
+      // Per model: attempt 1 = JSON mode, attempt 2 = non-JSON with explicit instruction
+      // On quota error: switch to next model tier and record in KV
+      const startTier = await getActiveModelTier(env);
+
       let resultText = '';
-      let attempt1Error = false;
+      let lastError = '';
+      let lastErrorIsQuota = false;
+      let activeTier = startTier;
+      let usedFallback = false;
 
-      try {
-        resultText = await runGeneration(ai, prompt, config, true);
-      } catch (err: any) {
-        if (err.message === 'TIMEOUT') {
-          return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
-        }
-        attempt1Error = true;
-        console.error(`AI generation attempt 1 failed for action "${action}":`, err.message || err);
-      }
+      for (let tier = startTier; tier < MODEL_TIERS.length; tier++) {
+        const tierConfig = { ...config, model: MODEL_TIERS[tier].model };
+        const tierAi = (tier >= 1 && fallbackAi) ? fallbackAi : ai;
+        let tierSucceeded = false;
 
-      // Attempt 2: Retry with explicit JSON instruction appended to prompt
-      if (attempt1Error || !resultText) {
-        try {
-          const retryPrompt = `${prompt}\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no preamble. Start with { or [ and end with } or ].`;
-          resultText = await runGeneration(ai, retryPrompt, config, false);
-        } catch (err: any) {
-          if (err.message === 'TIMEOUT') {
-            return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+        // Two attempts per tier: JSON mode, then explicit-instruction mode
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const useJsonMode = attempt === 0;
+          let attemptPrompt = prompt;
+          if (attempt === 1) {
+            attemptPrompt = `${prompt}\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no preamble. Start with { or [ and end with } or ].`;
           }
-          return json({ error: `AI generation failed after retry: ${err.message || err}` }, 500);
+
+          try {
+            resultText = await runGeneration(tierAi, attemptPrompt, tierConfig, useJsonMode);
+            if (resultText) {
+              tierSucceeded = true;
+              activeTier = tier;
+              usedFallback = tier > 0;
+              break;
+            }
+          } catch (err: any) {
+            if (err.message === 'TIMEOUT') {
+              return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+            }
+            if (isQuotaError(err)) {
+              // Rate-limited — record fallback and try next model tier
+              console.error(`AI quota hit on ${MODEL_TIERS[tier].model} for "${action}": ${err.message}`);
+              await recordModelFallback(env, tier);
+              lastError = `${MODEL_TIERS[tier].model}: rate limited`;
+              lastErrorIsQuota = true;
+              break; // Break inner loop → outer loop tries next tier
+            }
+            // Non-quota error — try second attempt mode, or give up
+            lastError = err.message || String(err);
+            lastErrorIsQuota = false;
+            console.error(`AI attempt ${attempt + 1} failed on ${MODEL_TIERS[tier].model} for "${action}": ${lastError}`);
+          }
         }
+
+        if (tierSucceeded) break;
+
+        // For non-quota errors, don't bother trying next model — it won't help
+        if (!lastErrorIsQuota) break;
       }
 
       if (!resultText) {
-        return json({ error: 'AI returned an empty response. Please try again.' }, 500);
+        if (lastErrorIsQuota) {
+          return json({ error: 'All AI models are currently at capacity. The system will automatically retry with the primary model later. Please try again in a few minutes.' }, 503);
+        }
+        return json({ error: lastError || 'AI generation failed. Please try again.' }, 500);
+      }
+
+      // If primary model worked, clear any stale fallback state
+      if (activeTier === 0) {
+        await clearModelFallback(env);
       }
 
       const cleaned = cleanJsonResponse(resultText);
@@ -1347,7 +1499,14 @@ export default {
         return json({ error: `AI response schema invalid: ${validation.error}`, parsed }, 422);
       }
 
-      return json(parsed);
+      // Include which model was used in response headers for frontend status display
+      const aiHeaders: Record<string, string> = {
+        'X-AI-Model': MODEL_TIERS[activeTier].model,
+        'X-AI-Fallback': usedFallback ? 'true' : 'false',
+        'X-AI-Tier': String(activeTier),
+        'Access-Control-Expose-Headers': 'X-AI-Model, X-AI-Fallback, X-AI-Tier',
+      };
+      return json(parsed, 200, aiHeaders);
     }
 
     // ── Google Drive Routes ────────────────────────────────────────────────
