@@ -3085,6 +3085,68 @@ function ProposalEditor({
   const [showVersions, setShowVersions] = useState(false);
   const [diffExplanation, setDiffExplanation] = useState<any>(null);
   const [diffLoading, setDiffLoading] = useState<number | null>(null);
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [diffVersion, setDiffVersion] = useState<any>(null);
+  const [diffMode, setDiffMode] = useState<'side-by-side' | 'inline' | 'ai'>('side-by-side');
+
+  // Word-level diff using LCS algorithm
+  const computeWordDiff = (oldText: string, newText: string) => {
+    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+    const oldWords = stripHtml(oldText).split(/(\s+)/).filter(w => w.length > 0);
+    const newWords = stripHtml(newText).split(/(\s+)/).filter(w => w.length > 0);
+
+    const m = oldWords.length, n = newWords.length;
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    for (let i = m - 1; i >= 0; i--) {
+      for (let j = n - 1; j >= 0; j--) {
+        if (oldWords[i] === newWords[j]) dp[i][j] = dp[i + 1][j + 1] + 1;
+        else dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+
+    const result: Array<{ type: 'equal' | 'add' | 'remove'; text: string }> = [];
+    let i = 0, j = 0;
+    while (i < m && j < n) {
+      if (oldWords[i] === newWords[j]) {
+        result.push({ type: 'equal', text: oldWords[i] });
+        i++; j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        result.push({ type: 'remove', text: oldWords[i] });
+        i++;
+      } else {
+        result.push({ type: 'add', text: newWords[j] });
+        j++;
+      }
+    }
+    while (i < m) { result.push({ type: 'remove', text: oldWords[i++] }); }
+    while (j < n) { result.push({ type: 'add', text: newWords[j++] }); }
+    return result;
+  };
+
+  const getDiffStats = (version: any) => {
+    const oldSections = version.content || [];
+    const newSections = sections || [];
+    let additions = 0, deletions = 0;
+    const sectionDiffs: any[] = [];
+
+    const maxLen = Math.max(oldSections.length, newSections.length);
+    for (let si = 0; si < maxLen; si++) {
+      const oldSec = oldSections[si];
+      const newSec = newSections[si];
+      const oldTitle = oldSec?.title || oldSec?.sectionName || '';
+      const newTitle = newSec?.title || newSec?.sectionName || '';
+      const oldContent = oldSec?.content || '';
+      const newContent = newSec?.content || '';
+      if (oldContent === newContent) continue;
+      const diff = computeWordDiff(oldContent, newContent);
+      const adds = diff.filter(d => d.type === 'add').length;
+      const dels = diff.filter(d => d.type === 'remove').length;
+      additions += adds;
+      deletions += dels;
+      sectionDiffs.push({ title: newTitle || oldTitle || 'Section ' + (si + 1), diff, additions: adds, deletions: dels });
+    }
+    return { additions, deletions, sectionDiffs };
+  };
 
   const explainVersionDiff = async (versionId: number, v: any) => {
     setDiffLoading(versionId);
@@ -4551,7 +4613,7 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 initial={{ x: 300 }}
                 animate={{ x: 0 }}
                 exit={{ x: 300 }}
-                className="absolute inset-y-0 right-0 w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl z-20 overflow-y-auto"
+                className="absolute inset-y-0 right-0 w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-2xl z-20 overflow-y-auto"
               >
                 <div className="p-6">
                   <div className="flex justify-between items-center mb-6">
@@ -4559,17 +4621,30 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                     <button onClick={() => setShowVersions(false)} aria-label="Close versions"><X size={16} /></button>
                   </div>
                   <div className="space-y-4">
-                    {versions.map((v) => (
+                    {versions.length === 0 && (
+                      <p className="text-[11px] text-slate-400 text-center py-4">No versions saved yet. Click "Save Version" to create a snapshot.</p>
+                    )}
+                    {versions.map((v) => {
+                      const stats = getDiffStats(v);
+                      return (
                       <div key={v.id} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-all cursor-pointer group">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-bold text-slate-900 dark:text-white">{new Date(v.timestamp).toLocaleString()}</span>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1.5">
                             <button
-                              onClick={() => explainVersionDiff(v.id, v)}
-                              disabled={diffLoading === v.id}
-                              className="text-violet-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                              onClick={() => { setDiffVersion(v); setShowDiffModal(true); }}
+                              className="text-blue-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5"
+                              title="Visual side-by-side diff"
                             >
-                              {diffLoading === v.id ? 'Analyzing...' : 'Diff'}
+                              <GitCompare size={9} /> Diff
+                            </button>
+                            <button
+                              onClick={() => { setDiffVersion(v); explainVersionDiff(v.id, v); }}
+                              disabled={diffLoading === v.id}
+                              className="text-violet-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 flex items-center gap-0.5"
+                              title="AI diff analysis"
+                            >
+                              <Sparkles size={9} /> {diffLoading === v.id ? '...' : 'AI'}
                             </button>
                             <button
                               onClick={() => { if(confirm('Revert proposal to this version?')) setSections(v.content); }}
@@ -4580,7 +4655,14 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           </div>
                         </div>
                         <p className="text-[10px] text-slate-400 font-medium truncate">By: {v.author}</p>
-                        {diffExplanation && diffLoading === null && (
+                        {(stats.additions > 0 || stats.deletions > 0) && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">+{stats.additions}</span>
+                            <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">−{stats.deletions}</span>
+                            <span className="text-[8px] text-slate-400">{stats.sectionDiffs.length} sections changed</span>
+                          </div>
+                        )}
+                        {diffExplanation && diffLoading === null && diffVersion?.id === v.id && (
                           <div className="mt-3 p-3 bg-violet-50 dark:bg-slate-800 rounded-lg border border-violet-100 text-[10px] space-y-2">
                             {diffExplanation.overallAssessment && <p className="text-slate-600 italic">{diffExplanation.overallAssessment}</p>}
                             {diffExplanation.changes && diffExplanation.changes.length > 0 && (
@@ -4602,7 +4684,8 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </motion.div>
