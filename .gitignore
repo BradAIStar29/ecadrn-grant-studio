@@ -4,3 +4,10 @@ node_modules/
 __pycache__/
 .cache/
 base44/
+.venv/
+venv/
+.gradle/
+.dart_tool/
+.pub-cache/
+Pods/
+DerivedData/
