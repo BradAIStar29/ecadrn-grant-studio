@@ -284,6 +284,70 @@ async function fetchGrantsGov(keywords: string[], perKeyword = 15): Promise<Gran
   return [...seen.values()];
 }
 
+// ── ProPublica Nonprofit Explorer (free, no key) — real 990 data ─────────────
+
+async function fetchProPublica(funderName: string): Promise<any | null> {
+  if (!funderName || funderName.length < 3) return null;
+  try {
+    const searchRes = await fetch(
+      `https://projects.propublica.org/nonprofits/api/v2/search.json?q=${encodeURIComponent(funderName)}`,
+      { signal: AbortSignal.timeout(12000) }
+    );
+    if (!searchRes.ok) { console.warn(`ProPublica search ${searchRes.status}`); return null; }
+    const sd: any = await searchRes.json();
+    const orgs: any[] = sd?.organizations || [];
+    if (orgs.length === 0) return null;
+
+    // Pick the best match: prefer 501(c)(3), exact-ish name match
+    const lower = funderName.toLowerCase();
+    const scored = orgs
+      .map((o: any) => ({
+        o,
+        score: (o.subseccd === '3' ? 2 : 0)
+          + (String(o.name || '').toLowerCase().includes(lower) ? 2 : 0)
+          + (String(o.name || '').toLowerCase().startsWith(lower.slice(0, 6)) ? 1 : 0)
+      }))
+      .sort((a: any, b: any) => b.score - a.score);
+    if (!scored.length || scored[0].score < 2) return null;
+    const best = scored[0].o;
+
+    const detailRes = await fetch(
+      `https://projects.propublica.org/nonprofits/api/v2/organizations/${best.ein}.json`,
+      { signal: AbortSignal.timeout(12000) }
+    );
+    if (!detailRes.ok) return null;
+    const dd: any = await detailRes.json();
+    const org = dd?.organization || {};
+    const filings = (dd?.filings_with_data || [])
+      .slice(0, 3)
+      .map((f: any) => ({
+        year: String(f?.tax_prd_yr || ''),
+        totalRevenue: Number(f?.totrevenue || 0),
+        totalExpenses: Number(f?.totfuncexpns || 0),
+        totalAssets: Number(f?.totassetsend || 0),
+        totalLiabilities: Number(f?.totliabend || 0),
+        pdfUrl: String(f?.pdf_url || ''),
+      }));
+
+    return {
+      source: 'ProPublica Nonprofit Explorer (IRS 990 data)',
+      ein: String(org.ein || best.ein || ''),
+      name: String(org.name || best.name || ''),
+      city: String(org.city || ''),
+      state: String(org.state || ''),
+      nteeCode: String(org.ntee_code || ''),
+      subsection: org.subsection_code ? `501(c)(${org.subsection_code})` : '',
+      rulingYear: String(org.ruling_date || '').slice(-4),
+      latestRevenue: Number(org.revenue_amount || 0),
+      latestAssets: Number(org.asset_amount || 0),
+      filings,
+    };
+  } catch (err: any) {
+    console.warn(`ProPublica fetch failed for "${funderName}": ${err?.message || err}`);
+    return null;
+  }
+}
+
 function getPrompt(action: string, data: any): string {
   const actionPrompt = buildActionPrompt(action, data);
   if (actionPrompt === 'INVALID') return actionPrompt;
@@ -515,6 +579,10 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
 
     case 'research-funder':
       return `You are a nonprofit fundraising strategist specializing in foundation research and ADR/conflict resolution sector funding. You have access to web search — USE IT EXTENSIVELY.
+${data.nonprofitData ? `
+
+VERIFIED IRS 990 DATA (from ProPublica Nonprofit Explorer — treat as ground truth, cite these figures EXACTLY, and use them in your financial analysis; do NOT estimate different numbers for revenue/assets/expenses):
+${JSON.stringify(data.nonprofitData)}` : ''}
 
 TASK: Conduct a DEEP WEB-RESEARCHED intelligence report on the funder below. Search the web for real, current information — do NOT rely on training data alone.
 
@@ -1623,6 +1691,14 @@ export default {
       if (!body || typeof body !== 'object') {
         return json({ error: 'Request body must be a JSON object' }, 400);
       }
+      // Real 990 data for funder research — fetched BEFORE the prompt so the
+      // AI researches around verified IRS figures, and merged back after.
+      let proPublicaData: any = null;
+      if (action === 'research-funder' && typeof body.funderName === 'string' && body.funderName.trim()) {
+        proPublicaData = await fetchProPublica(body.funderName.trim());
+        body.nonprofitData = proPublicaData; // prompt context (may be null)
+      }
+
       // Live federal grants: fetch REAL Grants.gov data before building the prompt.
       // The AI only scores/annotates what's here — it can never invent a grant.
       let grantsGovData: GrantsGovOpp[] = [];
@@ -1786,6 +1862,12 @@ export default {
       } catch {
         console.error(`JSON parse failed for action "${action}". Raw length: ${cleaned.length}`);
         return json({ raw: cleaned, error: 'AI response was not valid JSON' }, 422);
+      }
+
+      // Attach real ProPublica 990 data to the funder report (API-sourced facts)
+      if (action === 'research-funder' && proPublicaData && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsed.nonprofitData = proPublicaData;
+        if (parsed.researchConfidence === 'low') parsed.researchConfidence = 'medium'; // real data anchors at least the financials
       }
 
       // Merge AI scores onto the REAL Grants.gov records (facts stay API-sourced)

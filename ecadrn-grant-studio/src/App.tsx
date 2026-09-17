@@ -2754,7 +2754,8 @@ function ProposalsView({
             typicalGrantees: funderIntel.typicalGrantees || [],
             recentGrants: funderIntel.recentGrants || [],
             deadlineInfo: funderIntel.deadlineInfo || '',
-            researchConfidence: funderIntel.researchConfidence || 'medium'
+            researchConfidence: funderIntel.researchConfidence || 'medium',
+            nonprofitData: funderIntel.nonprofitData || null
           } : null
         });
         sections = data;
@@ -7452,6 +7453,25 @@ function FunderCard({
                   </div>
                 )}
                 
+                {f.intelligence?.nonprofitData && f.intelligence.nonprofitData.ein && (
+                  <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-left">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1 font-mono">IRS 990 DATA (ProPublica — Verified)</span>
+                    <p className="text-[10.5px] text-slate-600 leading-relaxed font-sans font-semibold">
+                      EIN {f.intelligence.nonprofitData.ein} · {f.intelligence.nonprofitData.city}, {f.intelligence.nonprofitData.state}
+                      {f.intelligence.nonprofitData.rulingYear ? ` · Ruled tax-exempt ${f.intelligence.nonprofitData.rulingYear}` : ''}
+                    </p>
+                    {Array.isArray(f.intelligence.nonprofitData.filings) && f.intelligence.nonprofitData.filings.length > 0 && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {f.intelligence.nonprofitData.filings.slice(0, 2).map((fil: any, fi: number) => (
+                          <p key={fi} className="text-[10px] text-slate-500 font-mono">
+                            FY{fil.year}: rev ${(Number(fil.totalRevenue) / 1e6).toFixed(1)}M · assets ${(Number(fil.totalAssets) / 1e6).toFixed(1)}M · expenses ${(Number(fil.totalExpenses) / 1e6).toFixed(1)}M
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {f.intelligence?.deadlineInfo && f.intelligence.deadlineInfo !== "N/A" && f.intelligence.deadlineInfo !== "Rolling/No fixed deadline" && (
                   <div className="bg-amber-50 dark:bg-slate-800 border border-amber-200 rounded-xl p-3 text-left">
                     <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest block mb-1 font-mono">⏰ Upcoming Deadlines</span>
@@ -8728,7 +8748,8 @@ Deadline: 2026-11-15`;
               typicalGrantees: funderIntel.typicalGrantees || [],
               recentGrants: funderIntel.recentGrants || [],
               deadlineInfo: funderIntel.deadlineInfo || '',
-              researchConfidence: funderIntel.researchConfidence || 'medium'
+              researchConfidence: funderIntel.researchConfidence || 'medium',
+              nonprofitData: funderIntel.nonprofitData || null
             } : null
           });
 
