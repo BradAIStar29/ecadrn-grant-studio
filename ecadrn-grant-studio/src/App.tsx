@@ -678,16 +678,16 @@ export default function App() {
   // Proposal attachments
 
   useEffect(() => {
-    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v3');
+    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v4');
     if (!hasSeen && user) {
-      safeLocalStorage.removeItem('tourResumeStep_v3');
+      safeLocalStorage.removeItem('tourResumeStep_v4');
       setWalkthroughStep(0);
     }
   }, [user]);
 
   // Start the tour fresh, or resume where the user left off
   const startOrResumeTour = () => {
-    const saved = safeLocalStorage.getItem('tourResumeStep_v3');
+    const saved = safeLocalStorage.getItem('tourResumeStep_v4');
     const step = Number(saved);
     setWalkthroughStep(saved !== null && Number.isInteger(step) && step >= 0 && step < WALKTHROUGH_STEPS.length - 1 ? step : 0);
   };
@@ -695,17 +695,17 @@ export default function App() {
   // Close the tour: mark seen, and remember the step so Help resumes there
   const dismissTour = () => {
     if (walkthroughStep !== null && walkthroughStep < WALKTHROUGH_STEPS.length - 1) {
-      safeLocalStorage.setItem('tourResumeStep_v3', String(walkthroughStep));
+      safeLocalStorage.setItem('tourResumeStep_v4', String(walkthroughStep));
     }
     setWalkthroughStep(null);
-    safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
+    safeLocalStorage.setItem('hasSeenWalkthrough_v4', 'true');
   };
 
   // Finish the tour (Launch OS): clear the resume point
   const completeTour = () => {
-    safeLocalStorage.removeItem('tourResumeStep_v3');
+    safeLocalStorage.removeItem('tourResumeStep_v4');
     setWalkthroughStep(null);
-    safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
+    safeLocalStorage.setItem('hasSeenWalkthrough_v4', 'true');
   };
 
   // Auto-close mobile sidebar on resize to desktop
@@ -13324,17 +13324,11 @@ function Walkthrough({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4 md:p-8"
-      onClick={onClose}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[min(56rem,calc(100vw-2rem))] bg-slate-900 border border-slate-800 shadow-[0_30px_80px_rgba(0,0,0,0.6)] rounded-3xl p-6 md:p-8 text-left text-white flex flex-col max-h-[70vh] overflow-y-auto"
       role="dialog"
-      aria-modal="true"
       aria-label="App tour"
     >
-      <div
-        className="bg-slate-900 border border-slate-800 shadow-[0_30px_80px_rgba(0,0,0,0.6)] rounded-3xl max-w-2xl w-full p-8 md:p-10 text-left text-white flex flex-col max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
@@ -13352,12 +13346,12 @@ function Walkthrough({
           </button>
         </div>
 
-        <h4 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">{steps[currentStep].title}</h4>
-        <p className="text-base md:text-lg text-slate-200 leading-relaxed">
+        <h4 className="text-xl md:text-2xl font-black text-white tracking-tight mb-3">{steps[currentStep].title}</h4>
+        <p className="text-sm md:text-base text-slate-200 leading-relaxed">
           {steps[currentStep].content}
         </p>
 
-        <div className="flex items-center gap-1.5 flex-wrap mt-8">
+        <div className="flex items-center gap-1.5 flex-wrap mt-6">
           {steps.map((_, i) => (
             <div 
               key={i} 
@@ -13368,11 +13362,11 @@ function Walkthrough({
           ))}
         </div>
 
-        <div className="flex gap-3 pt-6 mt-6 border-t border-slate-800/60">
+        <div className="flex gap-3 pt-5 mt-5 border-t border-slate-800/60">
           {currentStep > 0 && (
             <button 
               onClick={() => onStepChange(currentStep - 1)}
-              className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800 transition-all"
+              className="flex-1 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800 transition-all"
             >
               Back
             </button>
@@ -13382,13 +13376,12 @@ function Walkthrough({
               if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
               else onComplete();
             }}
-            className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950"
+            className="flex-[2] py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950"
           >
             <span>{currentStep < steps.length - 1 ? 'Next Step' : 'Launch OS'}</span>
             <ChevronRight size={16} />
           </button>
         </div>
-      </div>
     </div>
   );
 }
