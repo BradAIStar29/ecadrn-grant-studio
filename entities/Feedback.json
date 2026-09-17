@@ -1,0 +1,45 @@
+{
+  "properties": {
+    "appName": {
+      "description": "App the feedback came from",
+      "type": "string"
+    },
+    "message": {
+      "description": "Full feedback message",
+      "type": "string"
+    },
+    "page": {
+      "description": "App view the user was on",
+      "type": "string"
+    },
+    "status": {
+      "description": "new / triaged / resolved",
+      "enum": [
+        "new",
+        "triaged",
+        "resolved"
+      ],
+      "type": "string"
+    },
+    "subject": {
+      "description": "Short subject line",
+      "type": "string"
+    },
+    "type": {
+      "description": "issue / recommendation / question",
+      "enum": [
+        "issue",
+        "recommendation",
+        "question"
+      ],
+      "type": "string"
+    },
+    "userEmail": {
+      "description": "ECADRN member who sent it",
+      "type": "string"
+    }
+  },
+  "type": "object",
+  "required": [],
+  "name": "Feedback"
+}
