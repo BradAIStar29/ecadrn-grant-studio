@@ -297,6 +297,83 @@ const WALKTHROUGH_STEPS = [
 
 const SHARED_ORG_ID = 'ecadrn-shared';
 
+const SHORTCUT_CATEGORIES = [
+  {
+    name: 'General',
+    items: [
+      { keys: '\u2318 /', label: 'Show the shortcuts panel' },
+      { keys: '\u2318 K', label: 'Global Search' },
+      { keys: 'Esc', label: 'Close any overlay / modal' },
+    ]
+  },
+  {
+    name: 'Navigation',
+    items: [
+      { keys: '\u2318 G', label: 'Go to Grant Matcher' },
+      { keys: '\u2318 P', label: 'Go to Proposals' },
+      { keys: '\u2318 F', label: 'Go to Funder Intelligence' },
+      { keys: '\u2318 C', label: 'Go to Calendar' },
+      { keys: '\u2318 A', label: 'Go to ADR Network' },
+      { keys: '\u2318 Y', label: 'Go to Analytics' },
+      { keys: '\u2318 O', label: 'Go to Outreach' },
+      { keys: '\u2318 V', label: 'Go to Voice Lab' },
+      { keys: '\u2318 T', label: 'Go to AI Chat' },
+    ]
+  },
+  {
+    name: 'Actions',
+    items: [
+      { keys: '\u2318 N', label: 'New Proposal draft' },
+      { keys: '\u2318 E', label: 'Export pipeline as CSV (Analytics)' },
+    ]
+  },
+  {
+    name: 'Interface',
+    items: [
+      { keys: '\u2318 D', label: 'Toggle dark mode' },
+      { keys: '\u2318 B', label: 'Toggle sidebar open/closed' },
+    ]
+  },
+];
+
+function printShortcutsCheatSheet() {
+  const w = window.open('', '_blank', 'width=850,height=1100');
+  if (!w) return;
+  const categoryRows = SHORTCUT_CATEGORIES.map(cat => `
+    <tr><td class="cat" colspan="2">${cat.name}</td></tr>
+    ${cat.items.map(({ keys, label }) => `<tr><td class="label">${label}</td><td class="keys"><kbd>${keys}</kbd></td></tr>`).join('')}
+  `).join('');
+  w.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ECADRN Grant Studio \u2014 Keyboard Shortcut Cheat Sheet</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Georgia, 'Times New Roman', serif; padding: 40px; color: #1e293b; }
+    h1 { font-size: 22px; letter-spacing: -0.02em; }
+    .sub { color: #64748b; font-size: 12px; margin: 4px 0 20px; font-family: Arial, sans-serif; }
+    .hint { font-size: 11px; color: #94a3b8; margin-top: 24px; font-family: Arial, sans-serif; text-align: center; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    td.cat { background: #f1f5f9; font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #4338ca; padding-top: 12px; }
+    td.label { font-family: Arial, sans-serif; }
+    td.keys { text-align: right; white-space: nowrap; }
+    kbd { font-family: 'Courier New', monospace; font-weight: bold; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 7px; font-size: 12px; }
+    @media print { body { padding: 30px; } }
+  </style>
+</head>
+<body>
+  <h1>ECADRN Grant Studio</h1>
+  <div class="sub">Keyboard Shortcut Cheat Sheet \u2014 \u2318 = Cmd (Mac) or Ctrl (Windows/Linux)</div>
+  <table>${categoryRows}</table>
+  <div class="hint">Press \u2318 / or click the keyboard icon in the app header to reopen the interactive shortcuts panel.</div>
+  <script>window.onload = () => { window.print(); };</script>
+</body>
+</html>`);
+  w.document.close();
+}
+
 // ── Toast notification system ────────────────────────────────────────────────
 let _toastId = 0;
 let _toastSetter: ((toasts: any[] | ((prev: any[]) => any[])) => void) | null = null;
@@ -372,6 +449,9 @@ const safeLocalStorage = {
   },
   setItem: (key: string, value: string): void => {
     try { localStorage.setItem(key, value); } catch {}
+  },
+  removeItem: (key: string): void => {
+    try { localStorage.removeItem(key); } catch {}
   }
 };
 
@@ -600,9 +680,33 @@ export default function App() {
   useEffect(() => {
     const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v3');
     if (!hasSeen && user) {
+      safeLocalStorage.removeItem('tourResumeStep_v3');
       setWalkthroughStep(0);
     }
   }, [user]);
+
+  // Start the tour fresh, or resume where the user left off
+  const startOrResumeTour = () => {
+    const saved = safeLocalStorage.getItem('tourResumeStep_v3');
+    const step = Number(saved);
+    setWalkthroughStep(saved !== null && Number.isInteger(step) && step >= 0 && step < WALKTHROUGH_STEPS.length - 1 ? step : 0);
+  };
+
+  // Close the tour: mark seen, and remember the step so Help resumes there
+  const dismissTour = () => {
+    if (walkthroughStep !== null && walkthroughStep < WALKTHROUGH_STEPS.length - 1) {
+      safeLocalStorage.setItem('tourResumeStep_v3', String(walkthroughStep));
+    }
+    setWalkthroughStep(null);
+    safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
+  };
+
+  // Finish the tour (Launch OS): clear the resume point
+  const completeTour = () => {
+    safeLocalStorage.removeItem('tourResumeStep_v3');
+    setWalkthroughStep(null);
+    safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
+  };
 
   // Auto-close mobile sidebar on resize to desktop
   useEffect(() => {
@@ -1246,14 +1350,13 @@ CORE PROGRAMS:
       } else if (e.key === 'Escape') {
         setShowShortcuts(false);
         setShortcutsMinimized(false);
-        setWalkthroughStep(null);
-        safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
+        if (walkthroughStep !== null) dismissTour();
       }
     };
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [showShortcuts, shortcutsMinimized]);
+  }, [showShortcuts, shortcutsMinimized, walkthroughStep]);
 
   const saveSettings = async () => {
     if (!settingsDraft.name?.trim()) {
@@ -2167,7 +2270,7 @@ CORE PROGRAMS:
               <FolderOpen size={20} />
             </button>
             <button
-              onClick={() => setWalkthroughStep(0)}
+              onClick={startOrResumeTour}
               title="Help — replay the app tour"
               aria-label="Help — replay the app tour"
               className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
@@ -2235,7 +2338,7 @@ CORE PROGRAMS:
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={() => setWalkthroughStep(0)} onExportMaster={exportMasterMarkdown} />}
+            {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={startOrResumeTour} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onExportPdf={exportProposalAsPdf} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
             {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} />}
@@ -2278,10 +2381,8 @@ CORE PROGRAMS:
           currentStep={walkthroughStep ?? 0}
           onStepChange={setWalkthroughStep}
           onSetActiveTab={setActiveTab}
-          onClose={() => {
-            setWalkthroughStep(null);
-            safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
-          }} 
+          onClose={dismissTour}
+          onComplete={completeTour} 
         />
       </main>
 
@@ -2321,58 +2422,24 @@ CORE PROGRAMS:
               </div>
             </div>
             <div className="space-y-3">
-              {(() => {
-                const categories = [
-                  {
-                    name: 'General',
-                    items: [
-                      { keys: '⌘ /', label: 'Show this shortcuts panel' },
-                      { keys: '⌘ K', label: 'Global Search' },
-                      { keys: 'Esc', label: 'Close any overlay / modal' },
-                    ]
-                  },
-                  {
-                    name: 'Navigation',
-                    items: [
-                      { keys: '⌘ G', label: 'Go to Grant Matcher' },
-                      { keys: '⌘ P', label: 'Go to Proposals' },
-                      { keys: '⌘ F', label: 'Go to Funder Intelligence' },
-                      { keys: '⌘ C', label: 'Go to Calendar' },
-                      { keys: '⌘ A', label: 'Go to ADR Network' },
-                      { keys: '⌘ Y', label: 'Go to Analytics' },
-                      { keys: '⌘ O', label: 'Go to Outreach' },
-                      { keys: '⌘ V', label: 'Go to Voice Lab' },
-                      { keys: '⌘ T', label: 'Go to AI Chat' },
-                    ]
-                  },
-                  {
-                    name: 'Actions',
-                    items: [
-                      { keys: '⌘ N', label: 'New Proposal draft' },
-                      { keys: '⌘ E', label: 'Export pipeline as CSV (Analytics)' },
-                    ]
-                  },
-                  {
-                    name: 'Interface',
-                    items: [
-                      { keys: '⌘ D', label: 'Toggle dark mode' },
-                      { keys: '⌘ B', label: 'Toggle sidebar open/closed' },
-                    ]
-                  },
-                ];
-                return categories.map(cat => (
-                  <div key={cat.name}>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-1 mt-4 first:mt-0 px-3">{cat.name}</div>
-                    {cat.items.map(({ keys, label }) => (
-                      <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors">
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
-                        <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm">{keys}</kbd>
-                      </div>
-                    ))}
-                  </div>
-                ));
-              })()}
+              {SHORTCUT_CATEGORIES.map(cat => (
+                <div key={cat.name}>
+                  <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-1 mt-4 first:mt-0 px-3">{cat.name}</div>
+                  {cat.items.map(({ keys, label }) => (
+                    <div key={keys} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 transition-colors">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+                      <kbd className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm">{keys}</kbd>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
+            <button
+              onClick={printShortcutsCheatSheet}
+              className="mt-6 w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-indigo-600 border border-indigo-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Print cheat sheet
+            </button>
           </div>
         </div>
       )}
@@ -13235,13 +13302,15 @@ function Walkthrough({
   currentStep,
   onStepChange,
   onSetActiveTab, 
-  onClose 
+  onClose,
+  onComplete
 }: { 
   isOpen: boolean, 
   currentStep: number,
   onStepChange: (step: number) => void,
   onSetActiveTab: (tab: Tab) => void, 
-  onClose: () => void 
+  onClose: () => void,
+  onComplete: () => void
 }) {
   const steps = WALKTHROUGH_STEPS;
 
@@ -13311,7 +13380,7 @@ function Walkthrough({
           <button 
             onClick={() => {
               if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
-              else onClose();
+              else onComplete();
             }}
             className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950"
           >
