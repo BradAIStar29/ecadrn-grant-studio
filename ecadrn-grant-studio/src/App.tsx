@@ -8330,17 +8330,31 @@ function GrantsView({
       setIsDiscovering(true);
       try {
         const rawFocus = search.focusAreas || ['ADR', 'Conflict Resolution', 'Access to Justice', 'Restorative Justice'];
-        const results = await callAI('discover-grants', {
-          orgProfile: organization,
-          focusAreas: Array.isArray(rawFocus) ? rawFocus.join(', ') : String(rawFocus),
-          geographicFocus: search.geographicFocus || 'National',
-          amountMin: search.amountMin || 10000,
-          amountMax: search.amountMax || 100000,
-          searchQuery: search.filterText || search.searchQuery || ''
-        });
-        if (Array.isArray(results) && results.length > 0) {
-          const grantsPath = `organizations/${orgId}/grants`;
-          const grantsRef = collection(db, grantsPath);
+        // Run AI discovery AND live Grants.gov search in parallel — real federal
+        // opportunities alongside AI-surfaced ones.
+        const fedKeywords: string[] = (Array.isArray(rawFocus) ? rawFocus : [String(rawFocus)])
+          .flatMap((fa: any) => String(fa || '').split(',').map((s: string) => s.trim()).filter(Boolean))
+          .slice(0, 5);
+        const [aiRes, fedRes] = await Promise.allSettled([
+          callAI('discover-grants', {
+            orgProfile: organization,
+            focusAreas: Array.isArray(rawFocus) ? rawFocus.join(', ') : String(rawFocus),
+            geographicFocus: search.geographicFocus || 'National',
+            amountMin: search.amountMin || 10000,
+            amountMax: search.amountMax || 100000,
+            searchQuery: search.filterText || search.searchQuery || ''
+          }),
+          callAI('search-grants-gov', { orgProfile: organization, keywords: fedKeywords, count: 10 })
+        ]);
+        const results = aiRes.status === 'fulfilled' && Array.isArray(aiRes.value) ? aiRes.value : [];
+        const fedGrants = fedRes.status === 'fulfilled' && Array.isArray(fedRes.value?.grants) ? fedRes.value.grants : [];
+
+        const grantsPath = `organizations/${orgId}/grants`;
+        const grantsRef = collection(db, grantsPath);
+        const existingNumbers = new Set(grants.map((g: any) => g?.number).filter(Boolean));
+
+        let aiSaved = 0;
+        if (results.length > 0) {
           const verifiedResults = results
             .map((g: any) => ({ ...g, title: g?.title || g?.grantTitle || '', funderName: g?.funderName || g?.funder || '' }))
             .filter((g: any) => Boolean(g.title && g.funderName));
@@ -8353,7 +8367,45 @@ function GrantsView({
               searchName: search.name
             });
           }
-          showToast(`✓ Found ${verifiedResults.length} new grants from "${search.name}"`, 'success');
+          aiSaved = verifiedResults.length;
+        }
+
+        let fedSaved = 0;
+        for (const g of fedGrants) {
+          if (!g?.number || !g?.title || existingNumbers.has(g.number)) continue;
+          const alignment = Number(g.alignmentScore);
+          await addDoc(grantsRef, {
+            orgId,
+            title: String(g.title || ''),
+            funderName: String(g.funderName || g.agency || 'Federal Agency'),
+            number: String(g.number || ''),
+            agency: String(g.agency || ''),
+            deadline: g.deadline || g.closeDate || '',
+            openDate: g.openDate || '',
+            fundingType: g.fundingType || 'Federal',
+            url: g.url || '',
+            description: g.rationale || '',
+            suggestedApproach: g.suggestedApproach || '',
+            focusAreas: Array.isArray(g.fitTags) ? g.fitTags : [],
+            tags: Array.isArray(g.fitTags) ? g.fitTags : [],
+            cfda: g.cfda || '',
+            status: 'discovery', pipelineStage: 'Discovered',
+            ecadrnAlignmentScore: Number.isFinite(alignment) ? Math.max(0, Math.min(100, Math.round(alignment))) : 50,
+            alignmentRationale: g.rationale || '',
+            verified: true,
+            verificationNote: g.verificationNote || 'Live from Grants.gov federal database',
+            source: 'grants.gov',
+            updatedAt: new Date().toISOString(),
+            discoveredBy: user?.email || 'saved-search',
+            searchName: search.name
+          }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+          fedSaved++;
+          existingNumbers.add(g.number);
+        }
+
+        const total = aiSaved + fedSaved;
+        if (total > 0) {
+          showToast(`✓ Found ${total} new grants from "${search.name}"${fedSaved > 0 ? ` (incl. ${fedSaved} live federal)` : ''}`, 'success');
         } else {
           showToast('No new grants found for this saved search.', 'info');
         }
