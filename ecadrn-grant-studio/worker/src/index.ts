@@ -27,6 +27,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'search-grants-gov':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
   'discover-grants':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'autopilot-search':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'find-adr-partners':       { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
@@ -224,6 +225,64 @@ const ECADRN_PREAMBLE = `You are the AI grant engine built exclusively for ECADR
 You serve ONLY ECADRN. Ground everything in the organization data provided; never invent facts; never write on behalf of any other organization. If the request appears to be for a different organization, refuse and state that you serve ECADRN only.
 
 `;
+
+// ── Grants.gov Live Federal Grants (free API, no key required) ────────────────
+
+interface GrantsGovOpp {
+  id: string; number: string; title: string; agency: string; agencyCode: string;
+  openDate: string; closeDate: string; oppStatus: string; cfda: string; url: string;
+}
+
+async function fetchGrantsGov(keywords: string[], perKeyword = 15): Promise<GrantsGovOpp[]> {
+  const seen = new Map<string, GrantsGovOpp>();
+  const today = new Date();
+  for (const kw of keywords) {
+    if (!kw || seen.size > 60) continue;
+    try {
+      const res = await fetch('https://api.grants.gov/v1/api/search2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: kw,
+          oppStatuses: 'posted',
+          eligibilities: '07', // 501(c)(3) nonprofits only
+          rows: perKeyword,
+          startRecordNum: 0,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) { console.warn(`Grants.gov API ${res.status} for keyword "${kw}"`); continue; }
+      const d: any = await res.json();
+      const hits: any[] = d?.data?.oppHits || [];
+      for (const h of hits) {
+        if (!h?.number || !h?.title) continue;
+        // Drop expired opportunities (closeDate is MM/DD/YYYY)
+        let expired = false;
+        if (h.closeDate) {
+          const [mm, dd, yy] = String(h.closeDate).split('/');
+          const close = new Date(Number(yy), Number(mm) - 1, Number(dd));
+          if (close < today) expired = true;
+        }
+        if (expired) continue;
+        seen.set(String(h.number), {
+          id: String(h.id || ''),
+          number: String(h.number),
+          title: String(h.title),
+          agency: String(h.agency || h.agencyCode || 'Federal Agency'),
+          agencyCode: String(h.agencyCode || ''),
+          openDate: String(h.openDate || ''),
+          closeDate: String(h.closeDate || ''),
+          oppStatus: String(h.oppStatus || 'posted'),
+          cfda: Array.isArray(h.cfdaList) && h.cfdaList.length ? String(h.cfdaList[0]) : '',
+          url: h.id ? `https://www.grants.gov/search-results-detail/${h.id}` : `https://www.grants.gov/search-results-detail?oppNum=${h.number}`,
+        });
+      }
+    } catch (err: any) {
+      console.warn(`Grants.gov fetch failed for keyword "${kw}": ${err?.message || err}`);
+    }
+  }
+  return [...seen.values()];
+}
 
 function getPrompt(action: string, data: any): string {
   const actionPrompt = buildActionPrompt(action, data);
@@ -508,6 +567,31 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "deadlineInfo": "string — upcoming deadlines or application windows, or 'Rolling/No fixed deadline'",
   "researchConfidence": "high | medium | low — based on how much verifiable info was found via web search"
 }`;
+
+    case 'search-grants-gov':
+      return `You are a federal grants analyst for a nonprofit grant studio. Below is a list of REAL, CURRENTLY OPEN federal grant opportunities pulled live from Grants.gov (already verified — you do NOT need to search the web).
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile)}
+
+TASK: For EACH grant below, evaluate its fit with the organization's mission and programs. Score it from 0-100 for mission alignment.
+
+STRICT RULES:
+1. Do NOT add any grant that is not in the list below. Do NOT remove or rename grants — you may only SKIP grants that are clearly irrelevant (score below ~25).
+2. Do NOT change, invent, or "correct" any facts (title, agency, number, dates, URL). Echo them EXACTLY as provided.
+3. Your ONLY creative contribution is the alignmentScore, a one-sentence rationale, and a short suggestedApproach.
+
+OUTPUT (JSON array, one object per relevant grant):
+[{
+  "number": "echo exactly from the grant",
+  "alignmentScore": 0-100,
+  "rationale": "one sentence — why this fits or doesn't fit the org",
+  "suggestedApproach": "2-3 sentences — how the org should position itself if it applies",
+  "fitTags": ["2-4 short tags, e.g. 'access to justice', 'youth programs', 'research'"]
+}]
+
+GRANTS.GOV OPPORTUNITIES (real, live data):
+${JSON.stringify(data.realGrants)}`;
 
     case 'discover-grants':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
@@ -1285,6 +1369,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
   }
 
   const requiredKeys: Record<string, string[]> = {
+    'search-grants-gov': ['grants'],
     'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
@@ -1538,6 +1623,20 @@ export default {
       if (!body || typeof body !== 'object') {
         return json({ error: 'Request body must be a JSON object' }, 400);
       }
+      // Live federal grants: fetch REAL Grants.gov data before building the prompt.
+      // The AI only scores/annotates what's here — it can never invent a grant.
+      let grantsGovData: GrantsGovOpp[] = [];
+      if (action === 'search-grants-gov') {
+        const kws: string[] = Array.isArray(body.keywords)
+          ? body.keywords.map((k: any) => String(k || '').trim()).filter(Boolean)
+          : ['mediation', 'dispute resolution', 'conflict resolution', 'access to justice'];
+        grantsGovData = await fetchGrantsGov(kws.slice(0, 5));
+        if (grantsGovData.length === 0) {
+          return json({ grants: [], message: 'No currently-open federal grants matched those keywords. Try broader terms.' }, 200);
+        }
+        body.realGrants = grantsGovData;
+      }
+
       const prompt = getPrompt(action, body);
       if (prompt === 'INVALID') return json({ error: `Unknown action: ${action}` }, 400);
 
@@ -1687,6 +1786,35 @@ export default {
       } catch {
         console.error(`JSON parse failed for action "${action}". Raw length: ${cleaned.length}`);
         return json({ raw: cleaned, error: 'AI response was not valid JSON' }, 422);
+      }
+
+      // Merge AI scores onto the REAL Grants.gov records (facts stay API-sourced)
+      if (action === 'search-grants-gov' && Array.isArray(parsed)) {
+        const byNumber = new Map<string, any>();
+        for (const item of parsed) {
+          if (item && typeof item.number === 'string') byNumber.set(item.number, item);
+        }
+        const merged = grantsGovData
+          .filter(g => byNumber.has(g.number))
+          .map(g => {
+            const ai = byNumber.get(g.number);
+            const score = Number(ai?.alignmentScore);
+            return {
+              ...g,
+              deadline: g.closeDate,
+              funderName: g.agency,
+              fundingType: 'Federal',
+              source: 'grants.gov',
+              verified: true,
+              verificationNote: 'Live from Grants.gov federal database',
+              alignmentScore: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 50,
+              rationale: String(ai?.rationale || ''),
+              suggestedApproach: String(ai?.suggestedApproach || ''),
+              fitTags: Array.isArray(ai?.fitTags) ? ai.fitTags.map((t: any) => String(t)) : [],
+            };
+          })
+          .sort((a, b) => b.alignmentScore - a.alignmentScore);
+        parsed = { grants: merged };
       }
 
       // Validate the response structure

@@ -4,93 +4,94 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  BarChart2,
-  BarChart3, 
-  FileText, 
-  Search, 
-  MessageSquare, 
-  Settings, 
-  Mail, 
-  Layout, 
-  CheckCircle, 
-  Menu,
-  X,
-  Plus,
-  PlusCircle,
-  Mic,
+import {
+  Landmark,
+  AlertCircle,
+  AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
-  TrendingUp,
-  AlertTriangle,
-  RefreshCw,
-  Globe,
-  Calendar,
-  History,
-  Users,
-  Copy,
-  Check,
-  ChevronRight,
-  ChevronLeft,
-  Network,
-  HelpCircle,
-  Maximize,
-  Minimize,
-  Bell,
-  Trash2,
-  AlertCircle,
-  Scissors,
   ArrowUp,
-  ArrowDown,
-  Sparkles,
-  Loader2,
-  UserPlus,
-  BookOpen,
-  ChevronDown,
-  ChevronUp,
-  Scroll,
   Award,
-  PenTool,
-  Eye,
-  Upload,
-  Paperclip,
-  HardDrive,
-  FolderOpen,
-  Bot,
-  Download,
-  Printer,
-  Send,
-  Link,
-  Wand2,
-  GitCompare,
+  BarChart2,
+  BarChart3,
+  Bell,
   Bookmark,
-  Save,
-  ShieldCheck,
-  FileSearch,
-  Moon,
-  Sun,
-  Command,
-  KanbanSquare,
-  Paperclip as PaperclipIcon,
-  Trophy,
-  RefreshCcwDot,
-  TrendingDown,
-  CalendarDays,
-  Flag,
-  Keyboard,
+  BookOpen,
+  Bot,
   Building2,
-  Target,
+  Calendar,
+  CalendarDays,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Clock,
-  MessageSquare as MessageSquareIcon,
-  FileEdit,
-  Mail as MailIcon,
-  Plus as PlusIcon,
-  GitBranch,
-  Phone,
-  ListChecks,
-  FolderArchive,
+  Command,
+  Copy,
+  Download,
+  Eye,
   FileDown,
+  FileEdit,
+  FileSearch,
+  FileText,
+  Flag,
+  FolderArchive,
+  FolderOpen,
+  GitBranch,
+  GitCompare,
+  Globe,
+  HardDrive,
+  HelpCircle,
+  History,
+  KanbanSquare,
+  Keyboard,
+  Layout,
+  Link,
   Link2,
+  ListChecks,
+  Loader2,
+  Mail,
+  Mail as MailIcon,
+  Maximize,
+  Menu,
+  MessageSquare,
+  MessageSquare as MessageSquareIcon,
+  Mic,
+  Minimize,
+  Moon,
+  Network,
+  Paperclip,
+  Paperclip as PaperclipIcon,
+  PenTool,
+  Phone,
+  Plus,
+  Plus as PlusIcon,
+  PlusCircle,
+  Printer,
+  RefreshCcwDot,
+  RefreshCw,
+  Save,
+  Scissors,
+  Scroll,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Target,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+  Upload,
+  UserPlus,
+  Users,
+  Wand2,
+  X
 } from 'lucide-react';
 
 // ── Debounce hook for search inputs ─────────────────────────────────────────
@@ -190,7 +191,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Grant Matcher + Autopilot",
     tab: 'grants',
-    content: "Run Discovery to surface real, verified grant opportunities matched to ECADRN's mission. Every result is checked against known real funders — unverified results are clearly flagged. Autopilot can discover, draft, and submit proposals automatically.",
+    content: "Run Discovery to surface grant opportunities matched to ECADRN's mission, or use Federal (Grants.gov) to pull real, currently-open federal grants straight from the live Grants.gov database. Unverified results are clearly flagged. Autopilot can discover, draft, and submit proposals automatically.",
     highlight: "grants-view"
   },
   {
@@ -8596,7 +8597,7 @@ Deadline: 2026-11-15`;
   };
 
   const guideSteps = [
-    { title: "Run Grant Discovery", content: "Click 'Run Discovery' to have the AI surface grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and equity. Results are verified against known funder databases — unverified entries are flagged." },
+    { title: "Run Grant Discovery", content: "Click 'Run Discovery' to have the AI surface grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and equity. Or click 'Federal (Grants.gov)' to pull REAL, currently-open federal grant opportunities live from the Grants.gov database — every result is a verified, real listing. Unverified AI results are always flagged." },
     { title: "Verified vs. Unverified Grants", content: "Grants marked with a green ✓ badge are from confirmed sources. Orange '⚠ Unverified' badges mean the AI found a likely match but couldn't confirm the active listing. Always verify unverified grants before submitting." },
     { title: "Hide Unverified Toggle", content: "Use the 'Hide Unverified' toggle (top-right of the grants list) to filter your view to confirmed opportunities only. This is on by default to keep your focus clean." },
     { title: "Deadline Urgency Badges", content: "Each grant card shows a color-coded deadline badge: 🔴 pulsing = 7 days or less, 🟡 = 8–21 days, 🟢 = more than 21 days, and CLOSED = past deadline. Sort by urgency to prioritize your pipeline." },
@@ -8777,6 +8778,74 @@ Deadline: 2026-11-15`;
       log(`❌ Autopilot error: ${err.message}`);
     } finally {
       setAutopilotRunning(false);
+    }
+  };
+
+  // Live federal grants from the Grants.gov API — real data, zero hallucination risk.
+  // The worker fetches open opportunities, the AI only scores alignment.
+  const [isSearchingFederal, setIsSearchingFederal] = useState(false);
+  const runFederalGrantsSearch = async () => {
+    setIsSearchingFederal(true);
+    try {
+      const orgKeywords: string[] = Array.isArray(organization?.discoveryKeywords)
+        ? organization.discoveryKeywords
+        : String(organization?.discoveryKeywords || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+      const keywords = (orgKeywords.length > 0 ? orgKeywords : ['mediation', 'dispute resolution', 'conflict resolution', 'access to justice']).slice(0, 5);
+
+      const result: any = await callAI('search-grants-gov', {
+        orgProfile: organization,
+        keywords,
+        count: 12
+      });
+
+      const grantsArr = Array.isArray(result?.grants) ? result.grants : [];
+      const grantsPath = `organizations/${orgId}/grants`;
+      const grantsRef = collection(db, grantsPath);
+
+      // Existing grant numbers — avoid duplicates
+      const existingNumbers = new Set(grants.map((g: any) => g?.number).filter(Boolean));
+      const newGrants = grantsArr.filter((g: any) => g?.number && g?.title && !existingNumbers.has(g.number));
+
+      if (newGrants.length === 0) {
+        showToast(grantsArr.length === 0 ? 'No open federal grants matched your keywords. Try broader terms.' : 'All matching federal grants are already in your tracker.', 'info');
+        return;
+      }
+
+      for (const g of newGrants) {
+        const alignment = Number(g.alignmentScore);
+        const ecadrnAlignmentScore = Number.isFinite(alignment) ? Math.max(0, Math.min(100, Math.round(alignment))) : 50;
+        await addDoc(grantsRef, {
+          orgId,
+          title: String(g.title || ''),
+          funderName: String(g.funderName || g.agency || 'Federal Agency'),
+          number: String(g.number || ''),
+          agency: String(g.agency || ''),
+          deadline: g.deadline || g.closeDate || '',
+          openDate: g.openDate || '',
+          amount: g.estimatedFunding || null,
+          fundingType: g.fundingType || 'Federal',
+          url: g.url || '',
+          description: g.rationale || '',
+          suggestedApproach: g.suggestedApproach || '',
+          focusAreas: Array.isArray(g.fitTags) ? g.fitTags : [],
+          tags: Array.isArray(g.fitTags) ? g.fitTags : [],
+          cfda: g.cfda || '',
+          status: 'discovery',
+          pipelineStage: 'Discovered',
+          ecadrnAlignmentScore,
+          alignmentRationale: g.rationale || '',
+          verified: true,
+          verificationNote: g.verificationNote || 'Live from Grants.gov federal database',
+          source: 'grants.gov',
+          updatedAt: new Date().toISOString(),
+          discoveredBy: user?.email || auth.currentUser?.email || ''
+        }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+      }
+      showToast(`Found ${newGrants.length} live federal grant${newGrants.length === 1 ? '' : 's'} from Grants.gov (all verified).`, 'success');
+    } catch (err: any) {
+      showToast('Federal grants search failed: ' + (err?.message || 'unknown error'), 'error');
+    } finally {
+      setIsSearchingFederal(false);
     }
   };
 
@@ -8994,6 +9063,15 @@ Deadline: 2026-11-15`;
           >
             {isDiscovering ? <RefreshCw className="animate-spin" size={16} /> : <TrendingUp size={16} />}
             {isDiscovering ? 'Searching...' : 'Run Discovery'}
+          </button>
+          <button
+            onClick={runFederalGrantsSearch}
+            disabled={isSearchingFederal}
+            title="Searches live Grants.gov federal database — real, verified opportunities only"
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-emerald-100"
+          >
+            {isSearchingFederal ? <RefreshCw className="animate-spin" size={16} /> : <Landmark size={16} />}
+            {isSearchingFederal ? 'Searching...' : 'Federal (Grants.gov)'}
           </button>
           <button
             onClick={() => setAutopilotOpen(o => !o)}
