@@ -293,3 +293,28 @@ export async function fetchGmailMessage(messageId: string): Promise<GmailMessage
   if (!response.ok) throw new Error(data.error || data.details || 'Message fetch failed');
   return data;
 }
+
+
+/**
+ * Send feedback (issue / recommendation / question) to Ellis, the team's AI
+ * assistant. The worker authenticates the request with the same Firebase
+ * token as callAI and forwards the message to Ellis's inbox.
+ */
+export async function sendFeedbackToEllis(payload: {
+  type: 'issue' | 'recommendation' | 'question';
+  subject: string;
+  message: string;
+  page: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/feedback`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({ error: 'Request failed' }));
+  if (!response.ok) {
+    throw new Error(data.error || 'Feedback delivery failed');
+  }
+  return data;
+}

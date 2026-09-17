@@ -2155,6 +2155,54 @@ export default {
       return json(parsed, 200, aiHeaders);
     }
 
+    // ── Feedback Routes (Message Ellis) ────────────────────────────────────
+    // Receives feedback from ECADRN team members (issues, recommendations,
+    // troubleshooting questions) and forwards it to Ellis (the AI assistant)
+    // via his Base44 endpoint. Auth is the same Firebase/@ecadrn.org gate as
+    // every other route; a shared token protects the receiving endpoint.
+    if (path === '/feedback' && request.method === 'POST') {
+      let body: any = {};
+      try { body = await request.json(); } catch {
+        return json({ error: 'Invalid request body' }, 400);
+      }
+      const type = String(body?.type || '').toLowerCase();
+      const subject = String(body?.subject || '').slice(0, 200).trim();
+      const message = String(body?.message || '').slice(0, 5000).trim();
+      const page = String(body?.page || '').slice(0, 100).trim();
+      if (!['issue', 'recommendation', 'question'].includes(type)) {
+        return json({ error: 'Please pick a feedback type.' }, 400);
+      }
+      if (!message) {
+        return json({ error: 'Please write a message first.' }, 400);
+      }
+      try {
+        const forward = await fetch('https://ellis-b7e18430.base44.app/functions/receiveEcadrnFeedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ***ROTATED-DEAD-TOKEN***',
+          },
+          body: JSON.stringify({
+            type,
+            subject,
+            message,
+            userEmail: user.email || '',
+            page,
+            appName: 'ecadrn-grant-studio',
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!forward.ok) {
+          console.error(`Feedback forward failed (${forward.status}) for ${user.email}`);
+          return json({ error: 'Delivery to Ellis failed — please try again in a moment.' }, 502);
+        }
+        return json({ ok: true, message: 'Feedback delivered to Ellis — he\'ll get back to you via Bradley or in-app updates.' });
+      } catch (err: any) {
+        console.error('Feedback forward error:', err?.message || err);
+        return json({ error: 'Could not reach Ellis — please try again shortly.' }, 502);
+      }
+    }
+
     // ── Google Drive Routes ────────────────────────────────────────────────
     const driveToken = request.headers.get('X-Drive-Token') || request.headers.get('X-Google-Token');
 
