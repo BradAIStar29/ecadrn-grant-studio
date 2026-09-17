@@ -263,12 +263,6 @@ const WALKTHROUGH_STEPS = [
     highlight: "funders-view"
   },
   {
-    title: "⌨️ Keyboard Shortcuts — Power User Mode",
-    tab: 'dashboard',
-    content: "Speed through the entire app without touching your mouse. Press ⌘/Ctrl + / anytime to see all shortcuts. Navigation: ⌘K = Search, ⌘G = Grants, ⌘P = Proposals, ⌘F = Funders, ⌘C = Calendar, ⌘A = ADR Network, ⌘Y = Analytics, ⌘O = Outreach, ⌘V = Voice, ⌘T = AI Chat. Actions: ⌘N = New Proposal, ⌘E = Export CSV. UI: ⌘D = Dark mode, ⌘B = Toggle sidebar, Esc = Close overlays.",
-    highlight: "dashboard-overview"
-  },
-  {
     title: "Document Vault",
     tab: 'vault',
     content: "New: The Doc Vault holds your org's standard application documents — 501(c)(3) letter, W-9, board list, audited financials, letters of support. Add them once, then attach them to any proposal in one click from the Attachments tab. No more hunting for the same files every application.",
@@ -287,9 +281,15 @@ const WALKTHROUGH_STEPS = [
     highlight: "dashboard-overview"
   },
   {
+    title: "⌨️ Keyboard Shortcuts",
+    tab: 'dashboard',
+    content: "Work faster without your mouse. The essentials: ⌘K opens Global Search, ⌘N starts a new proposal draft, and ⌘D toggles dark mode. Press ⌘ / (Ctrl + /) anytime to open the full shortcuts panel — it is always one keypress away.",
+    highlight: "dashboard-overview"
+  },
+  {
     title: "You're ready — launch the OS",
     tab: 'dashboard',
-    content: "Start by setting up your Organization Profile, then train your Voice Lab. Run a Grant Discovery, research funders with web search, or explore the ADR Network for partnership opportunities. Let the system work for you.",
+    content: "Start by setting up your Organization Profile, then train your Voice Lab. Run a Grant Discovery, research funders with web search, or explore the ADR Network for partnership opportunities. Let the system work for you. And if you ever want to go through this tour again, just click the \"Help\" button on the Dashboard.",
     highlight: "dashboard-overview"
   }
 ];
@@ -597,22 +597,9 @@ export default function App() {
   // Proposal attachments
 
   useEffect(() => {
-    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v2');
+    const hasSeen = safeLocalStorage.getItem('hasSeenWalkthrough_v3');
     if (!hasSeen && user) {
       setWalkthroughStep(0);
-    }
-  }, [user]);
-
-  // Auto-open shortcuts modal on first visit
-  useEffect(() => {
-    if (!user) return;
-    const hasSeenShortcuts = safeLocalStorage.getItem('hasSeenShortcuts_v1');
-    if (!hasSeenShortcuts) {
-      const timer = setTimeout(() => {
-        setShowShortcuts(true);
-        safeLocalStorage.setItem('hasSeenShortcuts_v1', 'true');
-      }, 1500);
-      return () => clearTimeout(timer);
     }
   }, [user]);
 
@@ -1252,6 +1239,8 @@ CORE PROGRAMS:
         setIsSidebarOpen(s => !s);
       } else if (e.key === 'Escape') {
         setShowShortcuts(false);
+        setWalkthroughStep(null);
+        safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
       }
     };
 
@@ -2260,7 +2249,7 @@ CORE PROGRAMS:
           onSetActiveTab={setActiveTab}
           onClose={() => {
             setWalkthroughStep(null);
-            safeLocalStorage.setItem('hasSeenWalkthrough_v2', 'true');
+            safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
           }} 
         />
       </main>
@@ -2561,7 +2550,7 @@ function DashboardView({
       exit={{ opacity: 0, scale: 0.98 }}
       className="space-y-8"
     >
-      <div className="flex justify-between items-end">
+      <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Portfolio Overview</h1>
           <p className="text-slate-500 mt-2">Intelligence report for {organization?.name || 'ECADRN'}.</p>
@@ -2571,7 +2560,7 @@ function DashboardView({
             onClick={onStartTour}
             className="flex items-center gap-2 text-indigo-600 bg-indigo-50 dark:bg-slate-800 px-4 py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100"
           >
-            <HelpCircle size={14} /> Get Help
+            <HelpCircle size={14} /> Help
           </button>
           <button 
             onClick={onExportMaster}
@@ -2582,7 +2571,7 @@ function DashboardView({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Active Proposals" value={activeProposals.toString()} icon={<FileText className="text-indigo-600" />} trend={`${(proposals || []).length} total drafts`} />
         <StatCard title="Verified Matches" value={(grants?.filter((g: any) => g.verified !== false)?.length || 0).toString()} icon={<TrendingUp className="text-emerald-600" />} trend="Verified Only" />
         <StatCard title="Success Rate" value={totalDecided > 0 ? `${successRate}%` : '—'} icon={<CheckCircle className="text-emerald-600" />} trend={`${grantPipeline.awarded} won / ${totalDecided} decided`} />
@@ -13210,61 +13199,71 @@ function Walkthrough({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] max-w-sm w-[385px] bg-slate-900 border border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.4)] rounded-3xl p-5 text-left text-white flex flex-col space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
-            <Sparkles size={16} className="text-white" />
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-8"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="App tour"
+    >
+      <div
+        className="bg-slate-900 border border-slate-800 shadow-[0_30px_80px_rgba(0,0,0,0.6)] rounded-3xl max-w-2xl w-full p-8 md:p-10 text-left text-white flex flex-col max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
+              <Sparkles size={20} className="text-white" />
+            </div>
+            <span className="text-xs font-black text-indigo-400 bg-indigo-950 border border-indigo-900 px-3 py-1 rounded-full uppercase tracking-wider">
+              App Tour: Step {currentStep + 1} of {steps.length}
+            </span>
           </div>
-          <span className="text-[10px] font-black text-indigo-400 bg-indigo-950 border border-indigo-900 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-            Onboarding: {currentStep + 1} / {steps.length}
-          </span>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            aria-label="Close tour"
+          >
+            <X size={20} />
+          </button>
         </div>
-        <button 
-          onClick={onClose} 
-          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-        >
-          <X size={16} />
-        </button>
-      </div>
 
-      <div>
-        <h4 className="text-base font-bold text-white tracking-tight">{steps[currentStep].title}</h4>
-        <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+        <h4 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-4">{steps[currentStep].title}</h4>
+        <p className="text-base md:text-lg text-slate-200 leading-relaxed">
           {steps[currentStep].content}
         </p>
-      </div>
 
-      <div className="flex items-center gap-1.5">
-        {steps.map((_, i) => (
-          <div 
-            key={i} 
-            className={`h-1.5 rounded-full transition-all ${
-              i === currentStep ? 'w-6 bg-indigo-50 dark:bg-slate-800' : 'w-1.5 bg-slate-800'
-            }`}
-          ></div>
-        ))}
-      </div>
+        <div className="flex items-center gap-1.5 flex-wrap mt-8">
+          {steps.map((_, i) => (
+            <div 
+              key={i} 
+              className={`h-1.5 rounded-full transition-all ${
+                i === currentStep ? 'w-6 bg-indigo-400' : 'w-1.5 bg-slate-800'
+              }`}
+            ></div>
+          ))}
+        </div>
 
-      <div className="flex gap-2.5 pt-2 border-t border-slate-800/60">
-        {currentStep > 0 && (
+        <div className="flex gap-3 pt-6 mt-6 border-t border-slate-800/60">
+          {currentStep > 0 && (
+            <button 
+              onClick={() => onStepChange(currentStep - 1)}
+              className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800 transition-all"
+            >
+              Back
+            </button>
+          )}
           <button 
-            onClick={() => onStepChange(currentStep - 1)}
-            className="flex-1 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800 transition-all"
+            onClick={() => {
+              if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
+              else onClose();
+            }}
+            className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-950"
           >
-            Back
+            <span>{currentStep < steps.length - 1 ? 'Next Step' : 'Launch OS'}</span>
+            <ChevronRight size={16} />
           </button>
-        )}
-        <button 
-          onClick={() => {
-            if (currentStep < steps.length - 1) onStepChange(currentStep + 1);
-            else onClose();
-          }}
-          className="flex-[2] py-2 bg-indigo-600 hover:bg-indigo-50 dark:bg-slate-800 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-lg shadow-indigo-950"
-        >
-          <span>{currentStep < steps.length - 1 ? 'Next Step' : 'Launch OS'}</span>
-          <ChevronRight size={14} />
-        </button>
+        </div>
       </div>
     </div>
   );
