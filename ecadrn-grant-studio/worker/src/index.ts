@@ -16,48 +16,49 @@ const FIREBASE_JWKS = createRemoteJWKSet(
 );
 
 // ── Model & Temperature Configuration ────────────────────────────────────────
-// Gemini 2.5-flash for all actions — native reasoning, better instruction
-// following, and superior JSON output vs 2.0-flash.
+// Gemini 3.x chain (3.8 Flash → 3.6 Flash → 3.5 Flash-Lite) — native
+// reasoning, strong instruction following, and reliable JSON output.
+// NOTE: Google retired the 2.5/2.0 families for API keys in Sept 2026.
 
 type ActionCategory = 'research' | 'writing' | 'analysis' | 'chat' | 'utility';
 
 const ACTION_CONFIG: Record<string, { model: string; temperature: number; category: ActionCategory; maxTokens: number; useSearch: boolean }> = {
-  'generate-draft':          { model: 'gemini-2.5-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
-  'agent-write-proposal':    { model: 'gemini-2.5-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
-  'research-funder':         { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'research-grant-url':      { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'discover-grants':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'autopilot-search':        { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'find-adr-partners':       { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'align-proposal':          { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'align-grant-ecadrn':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'align-to-funder':         { model: 'gemini-2.5-flash', temperature: 0.5,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'compare-proposals':       { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'review-proposal':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'humanize-proposal':       { model: 'gemini-2.5-flash', temperature: 0.6,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'score-alignment':         { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'analyze-voice':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'analyze-uploaded-grant':  { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'utility',  maxTokens: 8192,  useSearch: false },
-  'generate-budget':         { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'writing',  maxTokens: 16384, useSearch: false },
-  'generate-justification':  { model: 'gemini-2.5-flash', temperature: 0.4,  category: 'writing',  maxTokens: 4096,  useSearch: false },
-  'generate-timeline':        { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'writing',  maxTokens: 8192,  useSearch: false },
-  'generate-outreach-email': { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
-  'chat':                    { model: 'gemini-2.5-flash', temperature: 0.8,  category: 'chat',     maxTokens: 4096,  useSearch: false },
-  'rewrite-voice':           { model: 'gemini-2.5-flash', temperature: 0.7,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'identify-missing':        { model: 'gemini-2.5-flash', temperature: 0.5,  category: 'utility',  maxTokens: 8192,  useSearch: false },
-  'verify-facts':            { model: 'gemini-2.5-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
-  'search-grants':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'refine-section':         { model: 'gemini-2.5-flash', temperature: 0.6,  category: 'writing',  maxTokens: 16384, useSearch: false },
-  'pre-submit-check':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'analyze-competitors':    { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'prioritize-grants':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'explain-diff':           { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'recommend-funders':      { model: 'gemini-2.5-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
-  'analyze-win-loss':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'detect-recurring':       { model: 'gemini-2.5-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: true  },
+  'generate-draft':          { model: 'gemini-3.8-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
+  'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
+  'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'discover-grants':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'autopilot-search':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'find-adr-partners':       { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'align-proposal':          { model: 'gemini-3.8-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'align-grant-ecadrn':      { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'align-to-funder':         { model: 'gemini-3.8-flash', temperature: 0.5,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'compare-proposals':       { model: 'gemini-3.8-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'review-proposal':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'humanize-proposal':       { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'score-alignment':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-voice':           { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-uploaded-grant':  { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'utility',  maxTokens: 8192,  useSearch: false },
+  'generate-budget':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'writing',  maxTokens: 16384, useSearch: false },
+  'generate-justification':  { model: 'gemini-3.8-flash', temperature: 0.4,  category: 'writing',  maxTokens: 4096,  useSearch: false },
+  'generate-timeline':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'writing',  maxTokens: 8192,  useSearch: false },
+  'generate-outreach-email': { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
+  'chat':                    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'chat',     maxTokens: 4096,  useSearch: false },
+  'rewrite-voice':           { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'identify-missing':        { model: 'gemini-3.8-flash', temperature: 0.5,  category: 'utility',  maxTokens: 8192,  useSearch: false },
+  'verify-facts':            { model: 'gemini-3.8-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
+  'search-grants':           { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'refine-section':         { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'writing',  maxTokens: 16384, useSearch: false },
+  'pre-submit-check':       { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'analyze-competitors':    { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
+  'prioritize-grants':      { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'explain-diff':           { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'recommend-funders':      { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
+  'analyze-win-loss':       { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
+  'detect-recurring':       { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: true  },
 };
 
-const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
+const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 'utility' as ActionCategory, maxTokens: 8192, useSearch: false };
 
 // ── AI Model Fallback System ──────────────────────────────────────────────────
 // When the primary model hits rate limits, seamlessly falls back to secondary
@@ -68,10 +69,16 @@ const DEFAULT_CONFIG = { model: 'gemini-2.5-flash', temperature: 0.4, category: 
 // When primary recovers, state is cleared and everything reverts to normal.
 
 const MODEL_TIERS = [
-  { model: 'gemini-2.5-flash',     label: 'Gemini 2.5 Flash' },
-  { model: 'gemini-2.0-flash',     label: 'Gemini 2.0 Flash' },
-  { model: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
+  { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
+  { model: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash' },
+  { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
 ];
+
+function isModelUnavailableError(err: any): boolean {
+  // Google retires old models — the chain must fall through to the next tier
+  const msg = (err?.message || '').toLowerCase();
+  return msg.includes('no longer available') || msg.includes('not found') && msg.includes('model');
+}
 
 function isQuotaError(err: any): boolean {
   const msg = (err?.message || '').toLowerCase();
@@ -132,33 +139,6 @@ async function recordModelFallback(env: Env, failedTier: number): Promise<void> 
   } catch (e) {
     console.error('AI Fallback: KV write error:', e);
   }
-}
-
-// Actions where max quality matters most — in 'auto' mode these get a
-// quality-first attempt on 2.5 Pro before the standard chain.
-const PRO_ACTIONS = new Set(['generate-draft', 'agent-write-proposal']);
-const PRO_COOLDOWN_KEY = 'ai_pro_cooldown';
-const PRO_COOLDOWN_MINUTES = 60;
-
-async function isProCoolingDown(env: Env): Promise<boolean> {
-  if (!env.AI_CONFIG) return false;
-  try {
-    const raw = await env.AI_CONFIG.get(PRO_COOLDOWN_KEY);
-    if (!raw) return false;
-    const until = new Date(JSON.parse(raw).until).getTime();
-    if (Date.now() >= until) return false;
-    return true;
-  } catch { return false; }
-}
-
-async function recordProCooldown(env: Env): Promise<void> {
-  if (!env.AI_CONFIG) return;
-  try {
-    await env.AI_CONFIG.put(PRO_COOLDOWN_KEY, JSON.stringify({
-      until: new Date(Date.now() + PRO_COOLDOWN_MINUTES * 60 * 1000).toISOString(),
-    }));
-    console.log(`⏸️ Pro cooldown set: ${PRO_COOLDOWN_MINUTES}min`);
-  } catch {}
 }
 
 async function getFallbackWaitMinutes(env: Env): Promise<number | null> {
@@ -1512,8 +1492,8 @@ export default {
           activeModel: MODEL_TIERS[activeTier].model,
           activeTier,
           isFallback: activeTier > 0,
-          availableModels: [...MODEL_TIERS.map(m => ({ model: m.model, label: m.label })), { model: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (opt-in max quality)' }],
-          userSelectable: ['auto', ...MODEL_TIERS.map(m => m.model), 'gemini-2.5-pro'],
+          availableModels: MODEL_TIERS.map(m => ({ model: m.model, label: m.label })),
+          userSelectable: ['auto', ...MODEL_TIERS.map(m => m.model)],
           fallbackState: kvState ? {
             activatedAt: kvState.lastQuotaHit,
             cooldownMinutes: kvState.cooldownMinutes,
@@ -1549,9 +1529,10 @@ export default {
       // Per model: attempt 1 = JSON mode, attempt 2 = non-JSON with explicit instruction
       // On quota error: switch to next model tier and record in KV
       // User preference (body.model): 'auto' = smart chain; a specific model id
-      // starts at that tier; 'gemini-2.5-pro' gets one quality-first attempt
-      // before falling back to the normal chain.
-      const QUALITY_MODEL = 'gemini-2.5-pro';
+      // starts at that tier. Retired/unknown ids fall back to 'auto' behavior.
+      // (Gemini 2.5 Pro is retired by Google; 3.x Pro previews are paid-only,
+      // so the chain is now all-Flash 3.x — 3.8 Flash IS Google's
+      // "Pro-level intelligence at Flash speed" model.)
       const prefModel = typeof body.model === 'string' ? body.model.trim() : '';
       let startTier = await getActiveModelTier(env);
       if (prefModel && prefModel !== 'auto' && MODEL_TIERS.some(t => t.model === prefModel)) {
@@ -1560,42 +1541,7 @@ export default {
 
       let resultText = '';
       let servedModel = ''; // actual model that produced the result (for X-AI-Model)
-      // Quality-first on Pro when: user picked Pro, or auto mode on a
-      // quality-critical action. Skipped entirely while Pro is cooling down
-      // from a recent quota hit (so its tight free limits aren't re-burned).
-      const tryProFirst = (prefModel === QUALITY_MODEL || (prefModel === 'auto' && PRO_ACTIONS.has(action)))
-        && !(await isProCoolingDown(env));
-      if (tryProFirst) {
-        // Quality-first: try 2.5 Pro before the standard chain
-        for (let attempt = 0; attempt < 2 && !resultText; attempt++) {
-          const attemptPrompt = attempt === 0
-            ? prompt
-            : `${prompt}\n\nCRITICAL: Respond with ONLY valid JSON. No markdown, no code fences, no preamble. Start with { or [ and end with } or ].`;
-          try {
-            const proText = await runGeneration(ai, attemptPrompt, { ...config, model: QUALITY_MODEL }, attempt === 0);
-            if (proText) {
-              resultText = proText;
-              servedModel = QUALITY_MODEL;
-              // Only clear cooldown if the primary tier wasn't cooling down —
-              // Pro succeeding doesn't mean 2.5-flash recovered from its quota.
-              if (startTier === 0) await clearModelFallback(env);
-            }
-          } catch (err: any) {
-            if (err.message === 'TIMEOUT') {
-              return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
-            }
-            console.error(`Quality model (${QUALITY_MODEL}) attempt ${attempt + 1} failed for "${action}": ${err.message}`);
-            if (isQuotaError(err)) {
-              await recordProCooldown(env);
-              break; // quota: skip retry, fall straight to the standard chain
-            }
-            // non-quota: loop continues to attempt 1 (explicit JSON instruction)
-          }
-        }
-        if (!resultText) {
-          console.log(`⤵️ Pro failed — falling back to standard chain for "${action}"`);
-        }
-      }
+      let searchDegraded = false; // true if search-grounding quota forced a knowledge-only pass
 
       let lastError = '';
       let lastErrorIsQuota = false;
@@ -1629,12 +1575,48 @@ export default {
               return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
             }
             if (isQuotaError(err)) {
+              // Search-grounding quota is separate from generation quota:
+              // if this action uses web search, retry the same tier WITHOUT the
+              // search tool (knowledge-only, flagged) before giving up.
+              if (config.useSearch && !searchDegraded) {
+                console.warn(`Search grounding quota hit for "${action}" — retrying without web search (results flagged as unverified)`);
+                try {
+                  const degradedPrompt = `${prompt}\n\nNOTE: Web search grounding is temporarily unavailable (quota). Base your answer ONLY on your existing knowledge. For anything you cannot verify, say so explicitly and mark researchConfidence (or equivalent confidence field) as "low". Do NOT invent specific statistics, URLs, or dates.`;
+                  resultText = await runGeneration(tierAi, degradedPrompt, { ...tierConfig, useSearch: false }, false);
+                  if (resultText) {
+                    searchDegraded = true;
+                    tierSucceeded = true;
+                    activeTier = tier;
+                    servedModel = MODEL_TIERS[tier].model;
+                    usedFallback = tier > 0;
+                    break;
+                  }
+                } catch (err2: any) {
+                  if (err2.message === 'TIMEOUT') {
+                    return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+                  }
+                  if (!isQuotaError(err2)) {
+                    lastError = err2.message || String(err2);
+                    lastErrorIsQuota = false;
+                    break;
+                  }
+                  // generation quota too — fall through to next tier below
+                }
+              }
               // Rate-limited — record fallback and try next model tier
               console.error(`AI quota hit on ${MODEL_TIERS[tier].model} for "${action}": ${err.message}`);
               await recordModelFallback(env, tier);
               lastError = `${MODEL_TIERS[tier].model}: rate limited`;
               lastErrorIsQuota = true;
               break; // Break inner loop → outer loop tries next tier
+            }
+            if (isModelUnavailableError(err)) {
+              // Google retired this model — fall through to the next tier (no KV record:
+              // it's permanent for this key, not a cooldown)
+              console.error(`Model ${MODEL_TIERS[tier].model} unavailable for "${action}" — trying next tier: ${err.message}`);
+              lastError = `${MODEL_TIERS[tier].model}: no longer available`;
+              lastErrorIsQuota = true; // chain-continues semantics without recording KV
+              break;
             }
             // Non-quota error — try second attempt mode, or give up
             lastError = err.message || String(err);
@@ -1686,9 +1668,10 @@ export default {
       // Include which model was used in response headers for frontend status display
       const aiHeaders: Record<string, string> = {
         'X-AI-Model': servedModel || MODEL_TIERS[activeTier].model,
+        'X-AI-Search': searchDegraded ? 'degraded' : 'grounded',
         'X-AI-Fallback': usedFallback ? 'true' : 'false',
         'X-AI-Tier': String(activeTier),
-        'Access-Control-Expose-Headers': 'X-AI-Model, X-AI-Fallback, X-AI-Tier',
+        'Access-Control-Expose-Headers': 'X-AI-Model, X-AI-Fallback, X-AI-Tier, X-AI-Search',
       };
       return json(parsed, 200, aiHeaders);
     }
