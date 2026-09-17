@@ -574,6 +574,8 @@ Before writing, internally analyze:
 - What 3 sustainability strategies are most realistic for an early-career ADR network?
 Then write the proposal incorporating these decisions.
 
+FINAL SELF-CHECK (mandatory): Before responding, scan your complete draft for every banned word in rule 12 ('delve', 'robust', etc.) and replace any instance with plain, specific language.
+
 ${sectionWordGuide(data)}
 
 If the funder's application guidelines specify different length limits, those override these defaults — state the override in your reasoning if so.
