@@ -74,6 +74,16 @@ const MODEL_TIERS = [
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
 ];
 
+function isTransientOverloadError(err: any): boolean {
+  // Brand-new Gemini models (e.g. 3.8 Flash right after launch) intermittently
+  // return 503 "high demand" — transient, so the chain should try the next
+  // tier without recording a KV cooldown.
+  const msg = (err?.message || '').toLowerCase();
+  const status = err?.status || err?.code;
+  return status === 503 || status === '503' || msg.includes('high demand')
+    || msg.includes('overloaded') || msg.includes('temporarily unavailable');
+}
+
 function isModelUnavailableError(err: any): boolean {
   // Google retires old models — the chain must fall through to the next tier
   const msg = (err?.message || '').toLowerCase();
@@ -1392,7 +1402,7 @@ async function verifyFirebaseToken(token: string, projectId: string): Promise<an
 async function runGeneration(
   ai: GoogleGenAI,
   prompt: string,
-  config: { model: string; temperature: number; maxTokens: number; useSearch: boolean },
+  config: { model: string; temperature: number; maxTokens: number; useSearch: boolean; category?: ActionCategory },
   useJsonMode: boolean
 ): Promise<string> {
   const generationConfig: any = {
@@ -1410,6 +1420,15 @@ async function runGeneration(
     generationConfig.config.responseMimeType = 'application/json';
   }
 
+  // Gemini 3.x thinking budget — drafting keeps the default (high) for max
+  // quality; faster actions drop to low/medium to stay well inside timeouts.
+  const cat = (config as any).category as ActionCategory | undefined;
+  if (cat === 'research' || cat === 'chat' || cat === 'utility') {
+    generationConfig.config.thinkingConfig = { thinkingLevel: 'low' };
+  } else if (cat === 'analysis') {
+    generationConfig.config.thinkingConfig = { thinkingLevel: 'medium' };
+  } // 'writing' → default (high) thinking = best reasoning for proposals
+
   // Add Google Search tool for research actions
   if (config.useSearch) {
     generationConfig.config.tools = [{ googleSearch: {} }];
@@ -1418,7 +1437,11 @@ async function runGeneration(
   const generationPromise = ai.models.generateContent(generationConfig);
   generationPromise.catch((err: any) => console.warn('Background generation completed/failed after timeout:', err?.message || err));
 
-  const timeoutMs = config.useSearch ? 45000 : 30000;
+  // Scaled timeouts: full proposals (16k+ output tokens) take 40s+ on 3.x —
+  // give them 2 minutes; search-grounded calls 60s; everything else 30s.
+  let timeoutMs = 30000;
+  if (config.useSearch) timeoutMs = 60000;
+  else if (config.maxTokens >= 16384) timeoutMs = 120000;
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error('TIMEOUT')), timeoutMs);
   });
@@ -1609,6 +1632,14 @@ export default {
               lastError = `${MODEL_TIERS[tier].model}: rate limited`;
               lastErrorIsQuota = true;
               break; // Break inner loop → outer loop tries next tier
+            }
+            if (isTransientOverloadError(err)) {
+              // Model is briefly overloaded (common on freshly launched models)
+              // — try the next tier immediately, no KV cooldown
+              console.error(`Model ${MODEL_TIERS[tier].model} overloaded for "${action}" — trying next tier`);
+              lastError = `${MODEL_TIERS[tier].model}: temporarily overloaded`;
+              lastErrorIsQuota = true; // chain-continues semantics without recording KV
+              break;
             }
             if (isModelUnavailableError(err)) {
               // Google retired this model — fall through to the next tier (no KV record:
