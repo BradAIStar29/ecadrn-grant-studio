@@ -28,6 +28,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'search-grants-gov':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
+  'discover-foundations':   { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
   'discover-grants':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'autopilot-search':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'find-adr-partners':       { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
@@ -348,6 +349,77 @@ async function fetchProPublica(funderName: string): Promise<any | null> {
   }
 }
 
+// ── IRS foundation discovery (ProPublica search, free, no key) ───────────────
+
+interface IRSFoundation {
+  ein: string; name: string; city: string; state: string;
+  nteeCode: string; rulingYear: string; latestAssets: number; latestRevenue: number;
+  foundationCode: string; isPrivateFoundation: boolean;
+}
+
+async function fetchIRSFoundations(keywords: string[]): Promise<IRSFoundation[]> {
+  const seen = new Map<string, any>();
+  const STOP = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'or']);
+  for (const kw of keywords.slice(0, 6)) {
+    // Order-independent word matching ("peace and justice" matches
+    // "Foundation For Justice And Peace")
+    const words = kw.toLowerCase().split(/\s+/).filter(w => w && !STOP.has(w));
+    const queries = [...new Set([`${kw} foundation`, `${kw} fund`, `${kw} trust`])];
+    for (const q of queries) {
+      try {
+        const res = await fetch(
+          `https://projects.propublica.org/nonprofits/api/v2/search.json?q=${encodeURIComponent(q)}`,
+          { signal: AbortSignal.timeout(12000) }
+        );
+        if (!res.ok) continue;
+        const d: any = await res.json();
+        for (const o of (d?.organizations || [])) {
+          const name = String(o?.name || '');
+          if (!o?.ein || !name) continue;
+          if (o.subseccd && String(o.subseccd) !== '3') continue; // 501(c)(3) only
+          const lname = name.toLowerCase();
+          if (!words.every(w => lname.includes(w))) continue;
+          if (!(lname.includes('foundation') || lname.includes('fund') || lname.includes('trust'))) continue;
+          seen.set(String(o.ein), o);
+        }
+      } catch { /* skip query on failure */ }
+    }
+  }
+
+  // Fetch details for top candidates in parallel (cap: 10)
+  const cands = [...seen.values()].slice(0, 10);
+  const details = await Promise.allSettled(cands.map(async (c: any) => {
+    const r = await fetch(
+      `https://projects.propublica.org/nonprofits/api/v2/organizations/${c.ein}.json`,
+      { signal: AbortSignal.timeout(12000) }
+    );
+    if (!r.ok) throw new Error(`detail ${r.status}`);
+    const d: any = await r.json();
+    const org = d?.organization || {};
+    const fcode = String(org.foundation_code || '');
+    return {
+      ein: String(org.ein || c.ein || ''),
+      name: String(org.name || c.name || ''),
+      city: String(org.city || ''),
+      state: String(org.state || ''),
+      nteeCode: String(org.ntee_code || ''),
+      rulingYear: String(org.ruling_date || '').slice(-4),
+      latestAssets: Number(org.asset_amount || 0),
+      latestRevenue: Number(org.revenue_amount || 0),
+      foundationCode: fcode,
+      isPrivateFoundation: fcode === '03' || fcode === '04',
+    } as IRSFoundation;
+  }));
+
+  const out: IRSFoundation[] = details
+    .filter((d): d is PromiseFulfilledResult<any> => d.status === "fulfilled" && !!d.value)
+    .map(d => d.value);
+  // Private foundations first (real grantmaker signal from IRS codes), then by assets
+  return out.sort((a, b) =>
+    (Number(b.isPrivateFoundation) - Number(a.isPrivateFoundation)) || (b.latestAssets - a.latestAssets)
+  );
+}
+
 function getPrompt(action: string, data: any): string {
   const actionPrompt = buildActionPrompt(action, data);
   if (actionPrompt === 'INVALID') return actionPrompt;
@@ -660,6 +732,33 @@ OUTPUT (JSON array, one object per relevant grant):
 
 GRANTS.GOV OPPORTUNITIES (real, live data):
 ${JSON.stringify(data.realGrants)}`;
+
+    case 'discover-foundations':
+      return `You are a nonprofit fundraising strategist for a small 501(c)(3). Below is a list of REAL, IRS-REGISTERED organizations pulled live from ProPublica Nonprofit Explorer (already verified — you do NOT need to search the web, and you have no search tool).
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile)}
+
+TASK: For EACH organization below, evaluate its potential as a grant funder for the organization's mission (ADR / mediation / conflict resolution / access to justice / early-career professional development). Many of these will be grantmaking foundations (private foundations have IRS foundation code 03/04); some may be peer nonprofits — flag which is which.
+
+STRICT RULES:
+1. Do NOT add any organization that is not in the list. Do NOT change, invent, or "correct" any facts (name, EIN, city, financials). Echo the EIN EXACTLY as provided.
+2. You may SKIP clearly irrelevant ones (fit below ~25).
+3. Your ONLY contribution: fitScore (0-100), isLikelyGrantmaker (true/false — judge from the name and IRS data only), a one-sentence rationale, and a concrete suggestedNextStep (e.g. "Look up their website for guidelines", "Request their 990-PF to see past grants").
+4. Do NOT invent programs, deadlines, giving priorities, contacts, or websites. You do not know them.
+
+OUTPUT (JSON array, one object per relevant org):
+[{
+  "ein": "echo exactly",
+  "fitScore": 0-100,
+  "isLikelyGrantmaker": true,
+  "rationale": "one sentence — why this is (or isn't) a fit",
+  "suggestedNextStep": "2-3 sentences — the concrete next move",
+  "fitTags": ["2-4 short tags"]
+}]
+
+IRS-REGISTERED ORGANIZATIONS (real, live data):
+${JSON.stringify(data.realFoundations)}`;
 
     case 'discover-grants':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
@@ -1438,6 +1537,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
 
   const requiredKeys: Record<string, string[]> = {
     'search-grants-gov': ['grants'],
+    'discover-foundations': ['foundations'],
     'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
@@ -1699,6 +1799,20 @@ export default {
         body.nonprofitData = proPublicaData; // prompt context (may be null)
       }
 
+      // IRS foundation discovery: real registered orgs BEFORE the prompt.
+      // The AI only annotates fit — names/EINs/financials can't be invented.
+      let irsFoundations: IRSFoundation[] = [];
+      if (action === 'discover-foundations') {
+        const fkws: string[] = Array.isArray(body.keywords)
+          ? body.keywords.map((k: any) => String(k || '').trim()).filter(Boolean)
+          : ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice'];
+        irsFoundations = await fetchIRSFoundations(fkws.slice(0, 6));
+        if (irsFoundations.length === 0) {
+          return json({ foundations: [], message: 'No IRS-registered foundations matched those keywords. Try broader terms.' }, 200);
+        }
+        body.realFoundations = irsFoundations;
+      }
+
       // Live federal grants: fetch REAL Grants.gov data before building the prompt.
       // The AI only scores/annotates what's here — it can never invent a grant.
       let grantsGovData: GrantsGovOpp[] = [];
@@ -1897,6 +2011,29 @@ export default {
           })
           .sort((a, b) => b.alignmentScore - a.alignmentScore);
         parsed = { grants: merged };
+      }
+
+      // Merge AI annotations onto the REAL IRS foundation records (by EIN)
+      if (action === 'discover-foundations' && Array.isArray(parsed)) {
+        const byEIN = new Map<string, any>();
+        for (const item of parsed) {
+          if (item && typeof item.ein === 'string') byEIN.set(item.ein, item);
+        }
+        const merged = irsFoundations
+          .filter(f => byEIN.has(f.ein))
+          .map(f => {
+            const ai = byEIN.get(f.ein);
+            const score = Number(ai?.fitScore);
+            return {
+              ...f,
+              fitScore: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 50,
+              rationale: String(ai?.rationale || ''),
+              suggestedNextStep: String(ai?.suggestedNextStep || ''),
+              fitTags: Array.isArray(ai?.fitTags) ? ai.fitTags.map((t: any) => String(t)) : [],
+            };
+          })
+          .sort((a, b) => b.fitScore - a.fitScore);
+        parsed = { foundations: merged };
       }
 
       // Validate the response structure
