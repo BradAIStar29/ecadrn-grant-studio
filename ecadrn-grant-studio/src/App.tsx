@@ -91,6 +91,7 @@ import {
   Upload,
   UserPlus,
   Users,
+  MessageCircle,
   Wand2,
   X
 } from 'lucide-react';
@@ -149,7 +150,7 @@ import {
   getDoc,
   getDocs
 } from 'firebase/firestore';
-import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, type AIModelInfo, AI_MODEL_OPTIONS, getPreferredAIModel, setPreferredAIModel } from './services/api';
+import { callAI, subscribeToAIModelStatus, checkAIHealth, sendGmailMessage, fetchGmailInbox, fetchGmailMessage, sendFeedbackToEllis, type AIModelInfo, AI_MODEL_OPTIONS, getPreferredAIModel, setPreferredAIModel } from './services/api';
 import { connectGoogle, disconnect, isConnected, getConnectedEmail, GOOGLE_SCOPES, isDeadlineAlertsEnabled, setDeadlineAlertsEnabled, getAlertLastSentDate, markAlertSentToday, collectUrgentGrants } from './services/googleAuth';
 import ReactQuill from 'react-quill';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
@@ -176,6 +177,12 @@ const WALKTHROUGH_STEPS = [
     tab: 'dashboard',
     content: "Your command center. See high-alignment grants (verified only — no hallucinated data), active proposals by stage, pipeline value, and upcoming deadlines at a glance. Deadline reminders fire automatically for grants due within 7 days.",
     highlight: "dashboard-overview"
+  },
+  {
+    title: "✦ Message Ellis",
+    tab: 'dashboard',
+    content: "Spot the 💬 Message Ellis icon in the header (next to Settings). Found a bug, have an idea for the app, or stuck on something? Send it straight to Ellis — the AI assistant who builds and maintains this app. Your message goes to his inbox with your email and the page you're on, and recent messages show in the dialog so the whole team has a record.",
+    highlight: "feedback-button"
   },
   {
     title: "Proposal Studio + AI Comparison",
@@ -406,6 +413,10 @@ export default function App() {
   });
   const [drivePanel, setDrivePanel] = useState<{ open: boolean; mode: 'import' | 'export' | 'sync'; proposal?: any }>({ open: false, mode: 'import' });
   const [showSettings, setShowSettings] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState<{ type: 'issue' | 'recommendation' | 'question'; subject: string; message: string }>({ type: 'issue', subject: '', message: '' });
+  const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
   const [googleConnTick, setGoogleConnTick] = useState(0); // re-render trigger for Google connection status
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
@@ -413,6 +424,7 @@ export default function App() {
   const [aiModelStatus, setAIModelStatus] = useState<AIModelInfo | null>(null);
   // Modal refs for focus trapping
   const settingsModalRef = useRef<HTMLDivElement>(null);
+  const feedbackModalRef = useRef<HTMLDivElement>(null);
   const shortcutsModalRef = useRef<HTMLDivElement>(null);
   const globalSearchRef = useRef<HTMLDivElement>(null);
 
@@ -505,6 +517,53 @@ export default function App() {
 
   // Focus trapping for App-scoped modals
   useFocusTrap(settingsModalRef, showSettings, () => setShowSettings(false));
+  useFocusTrap(feedbackModalRef, showFeedback, () => setShowFeedback(false));
+
+  // ── Message Ellis: feedback history (workspace-scoped, last 10) ───────────
+  useEffect(() => {
+    if (!showFeedback || !orgId) return;
+    const q = query(collection(db, 'organizations', orgId, 'feedback'), orderBy('createdAt', 'desc'), limit(10));
+    const unsub = onSnapshot(q,
+      (snap) => setFeedbackHistory(snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))),
+      (err: any) => { console.warn('Feedback history subscription failed:', err?.message || err); setFeedbackHistory([]); }
+    );
+    return () => unsub();
+  }, [showFeedback, orgId]);
+
+  // ── Message Ellis: submit (save to Firestore + deliver to Ellis) ────────────
+  const submitFeedback = async () => {
+    if (!feedbackForm.message.trim()) { showToast('Please write a message first.', 'error'); return; }
+    setSendingFeedback(true);
+    const entry = {
+      type: feedbackForm.type,
+      subject: feedbackForm.subject.trim().slice(0, 200),
+      message: feedbackForm.message.trim().slice(0, 5000),
+      userEmail: auth.currentUser?.email || '',
+      page: activeTab,
+      createdAt: new Date().toISOString(),
+      status: 'sent',
+    };
+    let saved = false, delivered = false;
+    try {
+      await addDoc(collection(db, 'organizations', orgId, 'feedback'), entry);
+      saved = true;
+    } catch (e: any) { handleFirestoreError(e, OperationType.WRITE, `organizations/${orgId}/feedback`); }
+    try {
+      await sendFeedbackToEllis({ type: entry.type, subject: entry.subject, message: entry.message, page: String(entry.page) });
+      delivered = true;
+    } catch (e: any) { console.warn('Feedback delivery to Ellis failed:', e?.message || e); }
+    setSendingFeedback(false);
+    if (delivered) {
+      showToast('Message delivered to Ellis — he\'ll review it shortly. ✓', 'success');
+      setFeedbackForm({ type: 'issue', subject: '', message: '' });
+      setShowFeedback(false);
+    } else if (saved) {
+      showToast('Saved to the team workspace, but Ellis could not be reached right now — Bradley will follow up.', 'info');
+      setShowFeedback(false);
+    } else {
+      showToast('Could not send your message — please try again in a moment.', 'error');
+    }
+  };
 
   // ── Deadline alerts → connected Gmail ──────────────────────────────────────
   // Once per session, after grants load: if the user opted in and their Google
@@ -1269,6 +1328,122 @@ CORE PROGRAMS:
 
   return (
     <ErrorBoundary>
+      {/* Message Ellis (Feedback) Modal */}
+      {showFeedback && (
+        <div
+          ref={feedbackModalRef}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowFeedback(false)}
+          role="dialog" aria-modal="true"
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6 p-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <MessageCircle size={20} className="text-blue-600" />
+                Message Ellis
+              </h2>
+              <button
+                onClick={() => setShowFeedback(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                aria-label="Close feedback dialog"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 pt-4 space-y-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Found a bug, have an idea, or need troubleshooting help? This goes straight to Ellis — the AI
+                assistant who builds and maintains this app. He'll triage it, fix what he can, and report back via
+                Bradley or app updates.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">What is this about?</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { id: 'issue', label: '🐞 Issue', hint: 'Something broken' },
+                    { id: 'recommendation', label: '💡 Idea', hint: 'Make it better' },
+                    { id: 'question', label: '❓ Help', hint: 'How do I…' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setFeedbackForm(f => ({ ...f, type: opt.id }))}
+                      className={`p-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        feedbackForm.type === opt.id
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300'
+                      }`}
+                      aria-pressed={feedbackForm.type === opt.id}
+                    >
+                      <span>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="feedback-subject" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Subject (optional)</label>
+                <input
+                  id="feedback-subject"
+                  type="text"
+                  value={feedbackForm.subject}
+                  onChange={(e) => setFeedbackForm(f => ({ ...f, subject: e.target.value.slice(0, 200) }))}
+                  placeholder="Short summary"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="feedback-message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Message <span className="text-red-500">*</span></label>
+                <textarea
+                  id="feedback-message"
+                  value={feedbackForm.message}
+                  onChange={(e) => setFeedbackForm(f => ({ ...f, message: e.target.value.slice(0, 5000) }))}
+                  placeholder="Describe the issue, your idea, or your question — include what you clicked and what happened."
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                />
+                <div className="flex justify-between mt-1 text-xs text-slate-400">
+                  <span>From: {auth.currentUser?.email || user?.email || 'you'} · Page: {activeTab}</span>
+                  <span>{feedbackForm.message.length}/5000</span>
+                </div>
+              </div>
+
+              <button
+                onClick={submitFeedback}
+                disabled={sendingFeedback}
+                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {sendingFeedback ? <><RefreshCw size={16} className="animate-spin" /> Sending…</> : <><Send size={16} /> Send to Ellis</>}
+              </button>
+
+              {(feedbackHistory || []).length > 0 && (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Recent messages</p>
+                  <div className="space-y-2">
+                    {(feedbackHistory || []).map((fb: any) => (
+                      <div key={fb?.id} className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-slate-700 dark:text-slate-300 truncate">
+                            {fb?.type === 'issue' ? '🐞' : fb?.type === 'recommendation' ? '💡' : '❓'} {fb?.subject || 'No subject'}
+                          </span>
+                          <span className="text-slate-400 shrink-0">{fb?.createdAt ? new Date(fb.createdAt).toLocaleDateString() : ''}</span>
+                        </div>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{fb?.message || ''}</p>
+                        <p className="text-emerald-600 dark:text-emerald-400 mt-1 font-medium">Delivered to Ellis ✓</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettings && (
         <div
@@ -1994,6 +2169,14 @@ CORE PROGRAMS:
               className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
             >
               <FolderOpen size={20} />
+            </button>
+            <button
+              onClick={() => setShowFeedback(true)}
+              title="Message Ellis — report an issue, suggest an improvement, or get help"
+              aria-label="Message Ellis"
+              className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <MessageCircle size={20} />
             </button>
             <button 
               onClick={() => {
