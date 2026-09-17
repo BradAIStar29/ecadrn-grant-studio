@@ -191,6 +191,44 @@ function safeTruncateContext(obj: any, maxLen = 4000): string {
 
 // ── Prompt builder ──────────────────────────────────────────────────────────
 
+// ── Section length control ─────────────────────────────────────────────────
+// Base per-section word ranges (standard). 'concise' ≈ 60%, 'detailed' ≈ 150%.
+// 'custom' uses per-section target word counts supplied by the user.
+const SECTION_BASE_WORDS: Record<string, [number, number, string]> = {
+  executiveSummary:      [300, 400, 'compelling hook, mission alignment, ask amount, key outcomes'],
+  needStatement:         [300, 400, 'data-backed, community voice, urgency'],
+  projectDescription:    [400, 500, 'specific activities, timeline, populations served'],
+  goalsObjectives:       [300, 400, '3-4 SMART goals with measurable targets'],
+  methodology:           [400, 500, 'evidence-based approach, step-by-step activities'],
+  evaluationPlan:        [300, 400, 'metrics, data collection, reporting cadence'],
+  sustainability:       [250, 350, 'diversified revenue, partnerships, long-term vision'],
+  organizationalCapacity:[300, 400, 'track record, team, programs, governance'],
+  budgetNarrative:       [300, 400, 'itemized rationale, cost-effectiveness, match if any'],
+};
+
+function sectionWordGuide(data: any): string {
+  const pref = data?.lengthPreference || 'standard';
+  const targets = (data?.sectionWordTargets && typeof data.sectionWordTargets === 'object')
+    ? data.sectionWordTargets : null;
+  const lines: string[] = [];
+  for (const [section, [lo, hi, desc]] of Object.entries(SECTION_BASE_WORDS)) {
+    let range: string;
+    if (pref === 'custom' && targets && targets[section] && Number(targets[section]) > 0) {
+      const t = Math.max(50, Math.round(Number(targets[section])));
+      range = `${Math.round(t * 0.85)}-${Math.round(t * 1.15)} words`;
+    } else if (pref === 'concise') {
+      range = `${Math.round(lo * 0.6)}-${Math.round(hi * 0.6)} words`;
+    } else if (pref === 'detailed') {
+      range = `${Math.round(lo * 1.5)}-${Math.round(hi * 1.5)} words`;
+    } else {
+      range = `${lo}-${hi} words`;
+    }
+    lines.push(`- ${section}: ${range} — ${desc}`);
+  }
+  const label = pref === 'concise' ? 'CONCISE LENGTH' : pref === 'detailed' ? 'DETAILED LENGTH' : pref === 'custom' ? 'CUSTOM TARGETS' : 'STANDARD LENGTH';
+  return `WORD COUNT GUIDANCE (${label} — aim for these ranges):\n${lines.join('\n')}`;
+}
+
 // ECADRN-exclusive preamble injected into EVERY prompt — the AI serves only ECADRN.
 const ECADRN_PREAMBLE = `You are the AI grant engine built exclusively for ECADRN (ecadrn.org) — a nonprofit advancing Appropriate Dispute Resolution (ADR): conflict resolution, access to justice, restorative justice, and civic equity.
 You serve ONLY ECADRN. Ground everything in the organization data provided; never invent facts; never write on behalf of any other organization. If the request appears to be for a different organization, refuse and state that you serve ECADRN only.
@@ -298,16 +336,9 @@ Before writing, internally analyze:
 - What 3 sustainability strategies are most realistic for an early-career ADR network?
 Then write the proposal incorporating these decisions.
 
-WORD COUNT GUIDANCE (aim for these ranges):
-- executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
-- needStatement: 300-400 words — data-backed, community voice, urgency
-- projectDescription: 400-500 words — specific activities, timeline, populations served
-- goalsObjectives: 300-400 words — 3-4 SMART goals with measurable targets
-- methodology: 400-500 words — evidence-based approach, step-by-step activities
-- evaluationPlan: 300-400 words — metrics, data collection, reporting cadence
-- sustainability: 250-350 words — diversified revenue, partnerships, long-term vision
-- organizationalCapacity: 300-400 words — track record, team, programs, governance
-- budgetNarrative: 300-400 words — itemized rationale, cost-effectiveness, match if any
+${sectionWordGuide(data)}
+
+If the funder's application guidelines specify different length limits, those override these defaults — state the override in your reasoning if so.
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
 {
@@ -418,16 +449,7 @@ Before writing, internally analyze:
 - How should the budget narrative align with the methodology activities?
 Then write the proposal incorporating these decisions.
 
-WORD COUNT GUIDANCE:
-- executiveSummary: 300-400 words — compelling hook, mission alignment, ask amount, key outcomes
-- needStatement: 300-400 words — data-backed, community voice, urgency
-- projectDescription: 400-500 words — specific activities, timeline, populations served
-- goalsObjectives: 300-400 words — 3-4 SMART goals with measurable targets
-- methodology: 400-500 words — evidence-based approach, step-by-step activities
-- evaluationPlan: 300-400 words — metrics, data collection, reporting cadence
-- sustainability: 250-350 words — diversified revenue, partnerships, long-term vision
-- organizationalCapacity: 300-400 words — track record, team, programs, governance
-- budgetNarrative: 300-400 words — itemized rationale, cost-effectiveness, match if any
+${sectionWordGuide(data)}
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fences.
 {

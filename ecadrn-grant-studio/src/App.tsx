@@ -178,7 +178,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Proposal Studio + AI Comparison",
     tab: 'proposals',
-    content: "Click 'New Draft' to generate a complete 9-section proposal in seconds. Use the Compare button to select two proposals side-by-side, then click 'Run AI Comparison' for section-by-section analysis — the AI identifies which version is stronger and suggests how to merge the best of both.",
+    content: "Click 'New Draft' to generate a complete 9-section proposal in seconds — and now choose your Draft Length first: Standard, Concise, Detailed, or Custom per-section word counts to match each funder's application limits. Use the Compare button to select two proposals side-by-side, then click 'Run AI Comparison' for section-by-section analysis — the AI identifies which version is stronger and suggests how to merge the best of both.",
     highlight: "proposals-view"
   },
   {
@@ -2643,6 +2643,21 @@ function ProposalsView({
     funder: '',
     description: ''
   });
+  const [draftLength, setDraftLength] = useState<'standard' | 'concise' | 'detailed' | 'custom'>('standard');
+  const [showSectionTargets, setShowSectionTargets] = useState(false);
+  const [sectionWordTargets, setSectionWordTargets] = useState<Record<string, number>>({});
+
+  const SECTION_FIELD_LABELS: Record<string, string> = {
+    executiveSummary: 'Executive Summary',
+    needStatement: 'Need Statement',
+    projectDescription: 'Project Description',
+    goalsObjectives: 'Goals & Objectives',
+    methodology: 'Methodology',
+    evaluationPlan: 'Evaluation Plan',
+    sustainability: 'Sustainability',
+    organizationalCapacity: 'Organizational Capacity',
+    budgetNarrative: 'Budget Narrative',
+  };
 
   useEffect(() => {
     if (winLossResults) setShowWinLossModal(true);
@@ -2704,6 +2719,8 @@ function ProposalsView({
         const data = await callAI('generate-draft', {
           orgProfile: organization,
           grantTitle: newProposalData.title,
+          lengthPreference: draftLength,
+          sectionWordTargets: draftLength === 'custom' ? sectionWordTargets : null,
           funderName: newProposalData.funder,
           funderType: newProposalData.funderType || matchedFunder?.funderType || "Foundation",
           grantDescription: newProposalData.description || "General operating support for ADR programs serving early-career professionals.",
@@ -2854,6 +2871,52 @@ function ProposalsView({
                 placeholder="What is this grant for? (Programs, populations, etc.)"
                 className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none h-32 resize-none leading-relaxed transition-all"
               />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="draft-length" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Draft Length</label>
+                <button
+                  type="button"
+                  onClick={() => setShowSectionTargets(s => !s)}
+                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 uppercase tracking-widest"
+                >
+                  {showSectionTargets ? 'Hide' : 'Set'} per-section word counts
+                </button>
+              </div>
+              <select
+                id="draft-length"
+                value={draftLength}
+                onChange={(e) => setDraftLength(e.target.value as any)}
+                className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              >
+                <option value="standard">Standard — full proposal (~3,000 words total)</option>
+                <option value="concise">Concise — for tight applications (~60% length)</option>
+                <option value="detailed">Detailed — for major asks (~150% length)</option>
+                <option value="custom">Custom — my own per-section word counts</option>
+              </select>
+              {showSectionTargets && (
+                <div className="mt-3 p-4 bg-indigo-50/50 dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700">
+                  <p className="text-[10px] text-slate-400 mb-3 leading-relaxed">
+                    Target word counts per section (leave blank to use the length preset). Used when Draft Length is "Custom".
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.entries(SECTION_FIELD_LABELS).map(([key, label]) => (
+                      <div key={key}>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 truncate" title={label}>{label}</label>
+                        <input
+                          type="number"
+                          min={50}
+                          step={50}
+                          placeholder="auto"
+                          value={sectionWordTargets[key] ?? ''}
+                          onChange={(e) => setSectionWordTargets(t => ({ ...t, [key]: e.target.value ? parseInt(e.target.value) : undefined }))}
+                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <button 
               onClick={() => startNewProposal()}
