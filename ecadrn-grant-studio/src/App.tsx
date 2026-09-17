@@ -283,13 +283,13 @@ const WALKTHROUGH_STEPS = [
   {
     title: "⌨️ Keyboard Shortcuts",
     tab: 'dashboard',
-    content: "Work faster without your mouse. The essentials: ⌘K opens Global Search, ⌘N starts a new proposal draft, and ⌘D toggles dark mode. Press ⌘ / (Ctrl + /) anytime to open the full shortcuts panel — it is always one keypress away.",
+    content: "Work faster without your mouse. The essentials: ⌘K opens Global Search, ⌘N starts a new proposal draft, and ⌘D toggles dark mode. Press ⌘ / (Ctrl + /) or click the keyboard icon in the header to open the full shortcuts panel — and use the shrink button to collapse it into a small button you can bring back anytime.",
     highlight: "dashboard-overview"
   },
   {
     title: "You're ready — launch the OS",
     tab: 'dashboard',
-    content: "Start by setting up your Organization Profile, then train your Voice Lab. Run a Grant Discovery, research funders with web search, or explore the ADR Network for partnership opportunities. Let the system work for you. And if you ever want to go through this tour again, just click the \"Help\" button on the Dashboard.",
+    content: "Start by setting up your Organization Profile, then train your Voice Lab. Run a Grant Discovery, research funders with web search, or explore the ADR Network for partnership opportunities. Let the system work for you. And if you ever want to go through this tour again, just click the \"Help\" button in the header (or on the Dashboard).",
     highlight: "dashboard-overview"
   }
 ];
@@ -398,6 +398,7 @@ export default function App() {
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [shortcutsMinimized, setShortcutsMinimized] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
   const [proposals, setProposals] = useState<any[]>([]);
   const [proposalsLoaded, setProposalsLoaded] = useState(false);
@@ -586,7 +587,7 @@ export default function App() {
       }
     })();
   }, [grants, user]);
-  useFocusTrap(shortcutsModalRef, showShortcuts, () => setShowShortcuts(false));
+  useFocusTrap(shortcutsModalRef, showShortcuts && !shortcutsMinimized, () => { setShowShortcuts(false); setShortcutsMinimized(false); });
   useFocusTrap(globalSearchRef, showGlobalSearch, () => setShowGlobalSearch(false));
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -1197,7 +1198,12 @@ CORE PROGRAMS:
 
       if (mod && e.key === '/') {
         e.preventDefault();
-        setShowShortcuts(s => !s);
+        if (showShortcuts && !shortcutsMinimized) {
+          setShowShortcuts(false);
+        } else {
+          setShowShortcuts(true);
+          setShortcutsMinimized(false);
+        }
       } else if (mod && e.key === 'd') {
         e.preventDefault();
         setDarkMode(d => !d);
@@ -1239,6 +1245,7 @@ CORE PROGRAMS:
         setIsSidebarOpen(s => !s);
       } else if (e.key === 'Escape') {
         setShowShortcuts(false);
+        setShortcutsMinimized(false);
         setWalkthroughStep(null);
         safeLocalStorage.setItem('hasSeenWalkthrough_v3', 'true');
       }
@@ -1246,7 +1253,7 @@ CORE PROGRAMS:
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [showShortcuts, shortcutsMinimized]);
 
   const saveSettings = async () => {
     if (!settingsDraft.name?.trim()) {
@@ -2034,7 +2041,7 @@ CORE PROGRAMS:
             )}
             {isSidebarOpen && (
               <button
-                onClick={() => setShowShortcuts(true)}
+                onClick={() => { setShowShortcuts(true); setShortcutsMinimized(false); }}
                 title="Keyboard shortcuts (⌘/)"
                 className="p-2 text-slate-500 hover:text-white rounded-lg transition-colors hover:bg-slate-800 shrink-0"
               >
@@ -2052,7 +2059,7 @@ CORE PROGRAMS:
             </button>
             {!isSidebarOpen && (
               <button
-                onClick={() => setShowShortcuts(true)}
+                onClick={() => { setShowShortcuts(true); setShortcutsMinimized(false); }}
                 title="Keyboard shortcuts (⌘/)"
                 className="flex items-center justify-center p-2 text-slate-500 hover:text-white rounded-lg transition-colors bg-slate-800/50"
               >
@@ -2094,7 +2101,7 @@ CORE PROGRAMS:
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 md:gap-4">
             <div className="relative">
                <button 
                  id="notif-bell"
@@ -2155,9 +2162,33 @@ CORE PROGRAMS:
             <button 
               onClick={() => setDrivePanel({ open: true, mode: 'import' })}
               title="Import from Drive"
-              className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
+              className="hidden sm:block p-2 text-slate-400 hover:text-blue-600 transition-colors"
             >
               <FolderOpen size={20} />
+            </button>
+            <button
+              onClick={() => setWalkthroughStep(0)}
+              title="Help — replay the app tour"
+              aria-label="Help — replay the app tour"
+              className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+            >
+              <HelpCircle size={20} />
+            </button>
+            <button
+              onClick={() => {
+                if (showShortcuts && !shortcutsMinimized) {
+                  setShowShortcuts(false);
+                  setShortcutsMinimized(false);
+                } else {
+                  setShowShortcuts(true);
+                  setShortcutsMinimized(false);
+                }
+              }}
+              title="Keyboard shortcuts (⌘/)"
+              aria-label="Keyboard shortcuts"
+              className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+            >
+              <Keyboard size={20} />
             </button>
             <button
               onClick={() => setShowFeedback(true)}
@@ -2255,7 +2286,7 @@ CORE PROGRAMS:
       </main>
 
       {/* Keyboard Shortcuts Overlay */}
-      {showShortcuts && (
+      {showShortcuts && !shortcutsMinimized && (
         <div
           ref={shortcutsModalRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
@@ -2271,12 +2302,23 @@ CORE PROGRAMS:
                 <kbd className="px-2 py-1 bg-slate-100 rounded text-xs font-mono">⌘/</kbd>
                 Keyboard Shortcuts
               </h2>
-              <button
-                onClick={() => setShowShortcuts(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShortcutsMinimized(true)}
+                  title="Shrink — collapse to a small button"
+                  aria-label="Shrink shortcuts panel"
+                  className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                >
+                  <Minimize size={16} />
+                </button>
+                <button
+                  onClick={() => setShowShortcuts(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label="Close shortcuts panel"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="space-y-3">
               {(() => {
@@ -2335,6 +2377,19 @@ CORE PROGRAMS:
         </div>
       )}
     </div>
+      {/* Minimized shortcuts pill */}
+      {showShortcuts && shortcutsMinimized && (
+        <button
+          onClick={() => setShortcutsMinimized(false)}
+          title="Expand shortcuts panel"
+          aria-label="Expand shortcuts panel"
+          className="fixed bottom-6 right-6 z-[100] flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl shadow-lg hover:bg-indigo-600 transition-colors font-bold text-xs"
+        >
+          <Maximize size={14} />
+          Shortcuts
+        </button>
+      )}
+
       {/* Toast notifications */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 items-center pointer-events-none" role="status" aria-live="polite" aria-atomic="false">
         <AnimatePresence>
