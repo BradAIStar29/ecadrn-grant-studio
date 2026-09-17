@@ -68,7 +68,9 @@ const AI_MODEL_PREF_KEY = 'ecadrn_ai_model_pref';
 export const AI_MODEL_OPTIONS = [
   { id: 'auto',                  label: 'Smart (auto — recommended)' },
   { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash — newest & sharpest' },
+  { id: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash' },
   { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash — reliable backup' },
+  { id: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — lightest' },
 ] as const;
 
