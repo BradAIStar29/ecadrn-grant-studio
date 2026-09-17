@@ -246,7 +246,7 @@ function sectionWordGuide(data: any): string {
     lines.push(`- ${section}: ${range} — ${desc}`);
   }
   const label = pref === 'concise' ? 'CONCISE LENGTH' : pref === 'detailed' ? 'DETAILED LENGTH' : pref === 'custom' ? 'CUSTOM TARGETS' : 'STANDARD LENGTH';
-  return `WORD COUNT GUIDANCE (${label} — aim for these ranges):\n${lines.join('\n')}`;
+  return `WORD COUNT REQUIREMENTS (${label} — HARD REQUIREMENTS, not suggestions):\n${lines.join('\n')}\nEvery section MUST reach at least the MINIMUM of its range. Before responding, count each section's words; any section below its minimum is an invalid response — expand it with program specifics, data, timelines, or examples (never filler).`;
 }
 
 // ECADRN-exclusive preamble injected into EVERY prompt — the AI serves only ECADRN.
@@ -472,7 +472,7 @@ async function fetchIRSFoundations(keywords: string[], institutionType: 'foundat
   );
 }
 
-function getPrompt(action: string, data: any): string {
+export function getPrompt(action: string, data: any): string {
   const actionPrompt = buildActionPrompt(action, data);
   if (actionPrompt === 'INVALID') return actionPrompt;
   return ECADRN_PREAMBLE + actionPrompt;
@@ -564,6 +564,7 @@ STRICT REQUIREMENTS:
 13. DO NOT use generic nonprofit filler — every sentence should be specific to ECADRN's actual work in ADR, conflict resolution, and civic equity.
 14. Use active voice, not passive. "We will train 50 mediators" not "50 mediators will be trained."
 15. Include community voice — reference constituent perspectives, partner organizations, or direct quotes where appropriate.
+16. MEET THE WORD COUNTS: every section must reach at least the MINIMUM of its word range in the guide below — verify each section's length before responding; expand with specific program detail, data, or examples, never filler.
 
 REASONING BEFORE WRITING:
 Before writing, internally analyze:
