@@ -197,7 +197,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Funder Intelligence + Web Search",
     tab: 'funders',
-    content: "Add any funder by website URL and the AI performs deep web research — searching their official site, IRS 990 filings, past grantee records, recent strategic shifts, and upcoming deadlines. Each report includes real recent grants with amounts, deadline windows, and a research confidence rating. This intelligence feeds directly into Autopilot proposals.",
+    content: "Add any funder by website URL and the AI performs deep web research — searching their official site, IRS 990 filings, past grantee records, recent strategic shifts, and upcoming deadlines. Reports now include VERIFIED IRS 990 financials pulled live from ProPublica. Or click 'Find Foundations (IRS)' to discover real, IRS-registered foundations in the ADR/justice space — with verified names, EINs, and financials. This intelligence feeds directly into Autopilot proposals.",
     highlight: "funders-view"
   },
   {
@@ -5968,6 +5968,71 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   const [showGuide, setShowGuide] = useState(false);
   const [funderRecs, setFunderRecs] = useState<any>(null);
   const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const [isFindingFoundations, setIsFindingFoundations] = useState(false);
+
+  // IRS foundation discovery — real registered orgs from ProPublica Nonprofit
+  // Explorer (free, no key). The AI only annotates fit; facts are API-sourced.
+  const findIRSFoundations = async () => {
+    setIsFindingFoundations(true);
+    try {
+      const orgKw: string[] = Array.isArray(organization?.discoveryKeywords)
+        ? organization.discoveryKeywords
+        : String(organization?.discoveryKeywords || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+      const keywords = (orgKw.length > 0 ? orgKw : ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice']).slice(0, 6);
+
+      const result: any = await callAI('discover-foundations', { orgProfile: organization, keywords });
+      const foundations = Array.isArray(result?.foundations) ? result.foundations : [];
+      if (foundations.length === 0) {
+        showToast('No IRS-registered foundations matched. Try different keywords.', 'info');
+        return;
+      }
+
+      const fundersPath = `organizations/${orgId}/funders`;
+      const fundersRef = collection(db, fundersPath);
+      const existingNames = new Set(funders.map((f: any) => String(f?.funderName || '').toLowerCase()));
+      let saved = 0;
+      for (const fnd of foundations) {
+        if (!fnd?.ein || !fnd?.name) continue;
+        if (existingNames.has(String(fnd.name).toLowerCase())) continue;
+        await addDoc(fundersRef, {
+          funderName: String(fnd.name),
+          website: '',
+          contactName: '',
+          relationshipStage: 'Prospect',
+          tags: ['IRS-Verified', ...(Array.isArray(fnd.fitTags) ? fnd.fitTags.slice(0, 2) : [])],
+          notes: `${fnd.rationale || ''}${fnd.suggestedNextStep ? '\n\nNext step: ' + fnd.suggestedNextStep : ''}`,
+          fitScore: Number(fnd.fitScore) || 50,
+          source: 'irs-registry',
+          verified: true,
+          verificationNote: 'Real IRS-registered org — name, EIN, and financials from ProPublica Nonprofit Explorer',
+          intelligence: {
+            funderOverview: fnd.isPrivateFoundation
+              ? 'IRS-registered private foundation (foundation code 03/04). Financials verified from IRS registry data.'
+              : 'IRS-registered 501(c)(3). Financials verified from IRS registry data; grantmaking status unconfirmed.',
+            suggestedNextStep: fnd.suggestedNextStep || '',
+            researchConfidence: 'low',
+            nonprofitData: {
+              source: 'ProPublica Nonprofit Explorer (IRS registry)',
+              ein: fnd.ein, name: fnd.name, city: fnd.city, state: fnd.state,
+              nteeCode: fnd.nteeCode, rulingYear: fnd.rulingYear,
+              latestRevenue: fnd.latestRevenue, latestAssets: fnd.latestAssets,
+              filings: [],
+            },
+          },
+          createdAt: new Date().toISOString(),
+        }).catch(e => handleFirestoreError(e, OperationType.WRITE, fundersPath));
+        saved++;
+        existingNames.add(String(fnd.name).toLowerCase());
+      }
+      showToast(saved > 0
+        ? `✓ Added ${saved} IRS-verified foundation${saved === 1 ? '' : 's'} as prospects — run AI Research on any of them for full intelligence.`
+        : 'All matching foundations are already in your funder list.', saved > 0 ? 'success' : 'info');
+    } catch (err: any) {
+      showToast('Foundation search failed: ' + (err?.message || 'unknown error'), 'error');
+    } finally {
+      setIsFindingFoundations(false);
+    }
+  };
 
   // Manual Creation States
   const [showAddManualForm, setShowAddManualForm] = useState(false);
@@ -6345,6 +6410,15 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 </button>
               </div>
 
+              <button
+                onClick={findIRSFoundations}
+                disabled={isFindingFoundations || isLoadingRecs}
+                className="px-3 py-2 rounded-lg text-sm font-medium border bg-emerald-50 dark:bg-slate-800 border-emerald-200 dark:border-slate-700 text-emerald-700 hover:bg-emerald-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer disabled:opacity-50"
+                title="Searches the live IRS registry for real, registered foundations — verified names, EINs, and financials"
+              >
+                {isFindingFoundations ? <RefreshCw className="animate-spin" size={14} /> : <Landmark size={14} />}
+                <span>{isFindingFoundations ? 'Searching IRS...' : 'Find Foundations (IRS)'}</span>
+              </button>
               <button
                 onClick={loadFunderRecommendations}
                 disabled={isLoadingRecs}
