@@ -354,18 +354,24 @@ async function fetchProPublica(funderName: string): Promise<any | null> {
 interface IRSFoundation {
   ein: string; name: string; city: string; state: string;
   nteeCode: string; rulingYear: string; latestAssets: number; latestRevenue: number;
-  foundationCode: string; isPrivateFoundation: boolean;
+  foundationCode: string; isPrivateFoundation: boolean; nteeIsEducation: boolean;
 }
 
-async function fetchIRSFoundations(keywords: string[]): Promise<IRSFoundation[]> {
+async function fetchIRSFoundations(keywords: string[], institutionType: 'foundation' | 'education' = 'foundation'): Promise<IRSFoundation[]> {
   const seen = new Map<string, any>();
   const STOP = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'or']);
+  const isEdu = institutionType === 'education';
+  const queriesFor = (kw: string) => isEdu
+    ? [...new Set([`${kw} university`, `${kw} college`, `${kw} law school`, `${kw} institute`])]
+    : [...new Set([`${kw} foundation`, `${kw} fund`, `${kw} trust`])];
+  const typeMarkers = isEdu
+    ? ['university', 'college', 'school', 'institute', 'center', 'clinic', 'program', 'academy']
+    : ['foundation', 'fund', 'trust'];
   for (const kw of keywords.slice(0, 6)) {
     // Order-independent word matching ("peace and justice" matches
     // "Foundation For Justice And Peace")
     const words = kw.toLowerCase().split(/\s+/).filter(w => w && !STOP.has(w));
-    const queries = [...new Set([`${kw} foundation`, `${kw} fund`, `${kw} trust`])];
-    for (const q of queries) {
+    for (const q of queriesFor(kw)) {
       try {
         const res = await fetch(
           `https://projects.propublica.org/nonprofits/api/v2/search.json?q=${encodeURIComponent(q)}`,
@@ -379,15 +385,28 @@ async function fetchIRSFoundations(keywords: string[]): Promise<IRSFoundation[]>
           if (o.subseccd && String(o.subseccd) !== '3') continue; // 501(c)(3) only
           const lname = name.toLowerCase();
           if (!words.every(w => lname.includes(w))) continue;
-          if (!(lname.includes('foundation') || lname.includes('fund') || lname.includes('trust'))) continue;
+          if (!typeMarkers.some(m => lname.includes(m))) continue;
           seen.set(String(o.ein), o);
         }
       } catch { /* skip query on failure */ }
     }
   }
 
-  // Fetch details for top candidates in parallel (cap: 10)
-  const cands = [...seen.values()].slice(0, 10);
+  // Fetch details for top candidates in parallel (cap: 10).
+  // For education mode, rank candidate NAMES first so actual universities and
+  // law schools surface before generic institutes (details confirm via NTEE).
+  let cands: any[] = [...seen.values()];
+  if (isEdu) {
+    const rank = (n: string) => {
+      const l = n.toLowerCase();
+      if (l.includes('university') || l.includes('college')) return 0;
+      if (l.includes('law school')) return 1;
+      if (l.includes('institute')) return 2;
+      return 3;
+    };
+    cands.sort((a, b) => rank(String(a.name || '')) - rank(String(b.name || '')));
+  }
+  cands = cands.slice(0, 10);
   const details = await Promise.allSettled(cands.map(async (c: any) => {
     const r = await fetch(
       `https://projects.propublica.org/nonprofits/api/v2/organizations/${c.ein}.json`,
@@ -408,12 +427,17 @@ async function fetchIRSFoundations(keywords: string[]): Promise<IRSFoundation[]>
       latestRevenue: Number(org.revenue_amount || 0),
       foundationCode: fcode,
       isPrivateFoundation: fcode === '03' || fcode === '04',
+      nteeIsEducation: String(org.ntee_code || '').toUpperCase().startsWith('B'),
     } as IRSFoundation;
   }));
 
   const out: IRSFoundation[] = details
     .filter((d): d is PromiseFulfilledResult<any> => d.status === "fulfilled" && !!d.value)
     .map(d => d.value);
+  if (isEdu) {
+    // Confirmed educational institutions first (NTEE B-codes are real IRS data)
+    return out.sort((a, b) => (Number(b.nteeIsEducation) - Number(a.nteeIsEducation)) || (b.latestAssets - a.latestAssets));
+  }
   // Private foundations first (real grantmaker signal from IRS codes), then by assets
   return out.sort((a, b) =>
     (Number(b.isPrivateFoundation) - Number(a.isPrivateFoundation)) || (b.latestAssets - a.latestAssets)
@@ -734,7 +758,33 @@ GRANTS.GOV OPPORTUNITIES (real, live data):
 ${JSON.stringify(data.realGrants)}`;
 
     case 'discover-foundations':
-      return `You are a nonprofit fundraising strategist for a small 501(c)(3). Below is a list of REAL, IRS-REGISTERED organizations pulled live from ProPublica Nonprofit Explorer (already verified — you do NOT need to search the web, and you have no search tool).
+      return data.institutionType === 'education'
+      ? `You are a nonprofit partnerships strategist for a small 501(c)(3). Below is a list of REAL, IRS-REGISTERED organizations pulled live from ProPublica Nonprofit Explorer (already verified — you do NOT need to search the web, and you have no search tool).
+
+ORGANIZATION PROFILE:
+${JSON.stringify(data.orgProfile)}
+
+TASK: For EACH organization below, evaluate its potential as an academic partner or funder for the organization's mission (ADR / mediation / conflict resolution / access to justice / early-career professional development). These are educational institutions (universities, colleges, law schools, institutes — NTEE B-codes confirm education). They typically fund through: research grants, clinical program partnerships, fellowships, community engagement grants, speaker/program sponsorships, and joint initiatives — flag which are LIKELY routes based ONLY on the real data provided (name, NTEE code, financials).
+
+STRICT RULES (education):
+1. Do NOT add any organization that is not in the list. Do NOT change, invent, or "correct" any facts (name, EIN, city, financials). Echo the EIN EXACTLY as provided.
+2. You may SKIP clearly irrelevant ones (fit below ~25).
+3. Your ONLY contribution: fitScore (0-100), isLikelyGrantmaker (true/false — judge from the name and IRS data only), a one-sentence rationale, and a concrete suggestedNextStep (e.g. "Contact their dispute resolution clinic about program partnerships", "Check their community engagement office for grant programs").
+4. Do NOT invent programs, fellowships, deadlines, contacts, or websites. You do not know them.
+
+OUTPUT (JSON array, one object per relevant org):
+[{
+  "ein": "echo exactly",
+  "fitScore": 0-100,
+  "isLikelyGrantmaker": true,
+  "rationale": "one sentence — why this is (or isn't) a fit",
+  "suggestedNextStep": "2-3 sentences — the concrete next move",
+  "fitTags": ["2-4 short tags"]
+}]
+
+IRS-REGISTERED ORGANIZATIONS (real, live data):
+${JSON.stringify(data.realFoundations)}`
+      : `You are a nonprofit fundraising strategist for a small 501(c)(3). Below is a list of REAL, IRS-REGISTERED organizations pulled live from ProPublica Nonprofit Explorer (already verified — you do NOT need to search the web, and you have no search tool).
 
 ORGANIZATION PROFILE:
 ${JSON.stringify(data.orgProfile)}
@@ -994,6 +1044,20 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
 
     case 'chat':
       return `You are ECADRN's AI grant writing assistant. You help with grant strategy, proposal writing, funder research, and nonprofit fundraising questions. Be specific, actionable, and reference ECADRN's actual programs when relevant.
+
+APPLICATION FEATURE GUIDE — you know this app inside out. When the user asks what something is or does, explain it concisely and point them to the right module:
+- Dashboard: pipeline stats, active proposals, verified matches, success rate, urgent deadlines.
+- Proposals: 9-section AI drafts (choose length per section), templates, visual version diff, side-by-side AI comparison, pre-submit check, AI review scores.
+- Funders (Funder Intelligence): add a funder by URL for deep AI research (mission, giving priorities, recent grants, deadlines); every report includes VERIFIED IRS 990 financials pulled live from ProPublica (revenue, expenses, assets, EIN). 'Find Funders (IRS)' discovers REAL, IRS-registered grantmaking foundations AND universities/educational institutions in the ADR/justice space — names, EINs, and financials are verified live; the AI only adds fit scores and next steps, never invented programs or deadlines.
+- Grant Matcher: AI discovery + a 'Federal (Grants.gov)' button pulling REAL, currently-open federal grants live from Grants.gov (deadlines and agencies are real; AI only scores alignment). Saved searches can be re-run with ↻ to refresh both AI and live federal results. Unverified results carry a warning badge; 'Hide Unverified' filters them.
+- Grant Autopilot: end-to-end workflow (discover → draft → submit) in Assisted (human review) or Full Agent mode.
+- ADR Network: web search for ADR orgs, university programs, mediation centers, foundations that support the field — with funding type and partnership potential.
+- Voice Lab: train the AI on ECADRN's writing voice; all generations use it.
+- Outreach: personalized emails/LOIs/follow-ups; optional Send via Gmail (each user connects their own Google account in Settings); inbox tab for replies.
+- Calendar: all deadlines with urgency colors; deadline alert emails can be enabled per user in Settings.
+- Analytics: success rate, conversion funnel, win/loss by funder type, discovery source breakdown.
+- Settings: org profile, display preferences, AI model selector, Google account connection, deadline alerts toggle.
+- Verified data principle: anything tagged 'IRS-Verified', 'verified', or 'live from Grants.gov' comes from real government/API data. Everything else is AI research and carries a confidence rating — the app is built to never let the AI invent grant facts.
 
 Respond in JSON format:
 {"reply": "your response text"}
@@ -1803,14 +1867,21 @@ export default {
       // The AI only annotates fit — names/EINs/financials can't be invented.
       let irsFoundations: IRSFoundation[] = [];
       if (action === 'discover-foundations') {
+        const institutionType: 'foundation' | 'education' = body.institutionType === 'education' ? 'education' : 'foundation';
+        const defaultKws = institutionType === 'education'
+          ? ['dispute resolution', 'mediation', 'conflict resolution', 'peace studies', 'legal education']
+          : ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice'];
         const fkws: string[] = Array.isArray(body.keywords)
           ? body.keywords.map((k: any) => String(k || '').trim()).filter(Boolean)
-          : ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice'];
-        irsFoundations = await fetchIRSFoundations(fkws.slice(0, 6));
+          : defaultKws;
+        irsFoundations = await fetchIRSFoundations(fkws.slice(0, 6), institutionType);
         if (irsFoundations.length === 0) {
-          return json({ foundations: [], message: 'No IRS-registered foundations matched those keywords. Try broader terms.' }, 200);
+          return json({ foundations: [], message: institutionType === 'education'
+            ? 'No IRS-registered educational institutions matched those keywords. Try broader terms.'
+            : 'No IRS-registered foundations matched those keywords. Try broader terms.' }, 200);
         }
         body.realFoundations = irsFoundations;
+        body.institutionType = institutionType;
       }
 
       // Live federal grants: fetch REAL Grants.gov data before building the prompt.

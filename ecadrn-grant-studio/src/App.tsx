@@ -43,6 +43,7 @@ import {
   GitBranch,
   GitCompare,
   Globe,
+  GraduationCap,
   HardDrive,
   HelpCircle,
   History,
@@ -191,13 +192,13 @@ const WALKTHROUGH_STEPS = [
   {
     title: "Grant Matcher + Autopilot",
     tab: 'grants',
-    content: "Run Discovery to surface grant opportunities matched to ECADRN's mission, or use Federal (Grants.gov) to pull real, currently-open federal grants straight from the live Grants.gov database. Unverified results are clearly flagged. Autopilot can discover, draft, and submit proposals automatically.",
+    content: "Run Discovery for AI-surfaced opportunities, or Federal (Grants.gov) to pull real, currently-open federal grants live from the Grants.gov database — agencies, deadlines, and amounts are real; the AI only scores alignment. Saved searches have a ↻ Re-run button that refreshes both AI and live federal results. Unverified results carry a warning badge — toggle 'Hide Unverified' to filter them out. Autopilot can discover, draft, and submit automatically.",
     highlight: "grants-view"
   },
   {
     title: "Funder Intelligence + Web Search",
     tab: 'funders',
-    content: "Add any funder by website URL and the AI performs deep web research — searching their official site, IRS 990 filings, past grantee records, recent strategic shifts, and upcoming deadlines. Reports now include VERIFIED IRS 990 financials pulled live from ProPublica. Or click 'Find Foundations (IRS)' to discover real, IRS-registered foundations in the ADR/justice space — with verified names, EINs, and financials. This intelligence feeds directly into Autopilot proposals.",
+    content: "Add any funder by website URL for deep AI research — their site, IRS 990 filings, past grantee records, strategic shifts, and deadlines. Every report includes VERIFIED IRS 990 financials pulled live from ProPublica. Use 'Find Funders (IRS)' for real-data discovery: choose Foundations (grantmaking private foundations) or Universities & Educators (research grants, clinics, fellowships, partnerships). Names, EINs, and financials are always verified — the AI only adds fit scores and next steps.",
     highlight: "funders-view"
   },
   {
@@ -233,7 +234,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "AI Strategy Advisor",
     tab: 'chat',
-    content: "Your on-demand grants strategist. Ask about funder landscapes, how to strengthen a proposal section, budget strategy, or mission alignment. It has full context on your org profile and pipeline.",
+    content: "Your on-demand grants strategist AND app concierge. Ask about funder landscapes, proposal sections, budget strategy — or 'what does this button do?' and 'how do I find funders?' — it knows every feature in the app. It has full context on your org profile and pipeline.",
     highlight: "chat-view"
   },
   {
@@ -5969,21 +5970,28 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
   const [funderRecs, setFunderRecs] = useState<any>(null);
   const [isLoadingRecs, setIsLoadingRecs] = useState(false);
   const [isFindingFoundations, setIsFindingFoundations] = useState(false);
+  const [showIrsMenu, setShowIrsMenu] = useState(false);
+  const [irsMode, setIrsMode] = useState<'foundation' | 'education'>('foundation');
 
-  // IRS foundation discovery — real registered orgs from ProPublica Nonprofit
-  // Explorer (free, no key). The AI only annotates fit; facts are API-sourced.
-  const findIRSFoundations = async () => {
+  // IRS funder discovery — real registered orgs (foundations OR universities)
+  // from ProPublica Nonprofit Explorer (free, no key). The AI only annotates
+  // fit; facts are API-sourced.
+  const findIRSFoundations = async (institutionType: 'foundation' | 'education' = 'foundation') => {
+    setShowIrsMenu(false);
     setIsFindingFoundations(true);
+    setIrsMode(institutionType);
     try {
+      const eduDefaults = ['dispute resolution', 'mediation', 'conflict resolution', 'peace studies', 'legal education'];
+      const fndDefaults = ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice'];
       const orgKw: string[] = Array.isArray(organization?.discoveryKeywords)
         ? organization.discoveryKeywords
         : String(organization?.discoveryKeywords || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-      const keywords = (orgKw.length > 0 ? orgKw : ['mediation', 'dispute resolution', 'conflict resolution', 'peace and justice', 'access to justice', 'restorative justice']).slice(0, 6);
+      const keywords = (orgKw.length > 0 ? orgKw : institutionType === 'education' ? eduDefaults : fndDefaults).slice(0, 6);
 
-      const result: any = await callAI('discover-foundations', { orgProfile: organization, keywords });
+      const result: any = await callAI('discover-foundations', { orgProfile: organization, keywords, institutionType });
       const foundations = Array.isArray(result?.foundations) ? result.foundations : [];
       if (foundations.length === 0) {
-        showToast('No IRS-registered foundations matched. Try different keywords.', 'info');
+        showToast(`No IRS-registered ${institutionType === 'education' ? 'educational institutions' : 'foundations'} matched. Try different keywords.`, 'info');
         return;
       }
 
@@ -5994,21 +6002,26 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
       for (const fnd of foundations) {
         if (!fnd?.ein || !fnd?.name) continue;
         if (existingNames.has(String(fnd.name).toLowerCase())) continue;
+        const isEdu = institutionType === 'education';
         await addDoc(fundersRef, {
           funderName: String(fnd.name),
           website: '',
           contactName: '',
           relationshipStage: 'Prospect',
-          tags: ['IRS-Verified', ...(Array.isArray(fnd.fitTags) ? fnd.fitTags.slice(0, 2) : [])],
+          tags: [isEdu ? 'Academic Partner' : 'IRS-Verified', ...(Array.isArray(fnd.fitTags) ? fnd.fitTags.slice(0, 2) : [])],
           notes: `${fnd.rationale || ''}${fnd.suggestedNextStep ? '\n\nNext step: ' + fnd.suggestedNextStep : ''}`,
           fitScore: Number(fnd.fitScore) || 50,
           source: 'irs-registry',
+          institutionType,
           verified: true,
           verificationNote: 'Real IRS-registered org — name, EIN, and financials from ProPublica Nonprofit Explorer',
           intelligence: {
-            funderOverview: fnd.isPrivateFoundation
-              ? 'IRS-registered private foundation (foundation code 03/04). Financials verified from IRS registry data.'
-              : 'IRS-registered 501(c)(3). Financials verified from IRS registry data; grantmaking status unconfirmed.',
+            funderOverview: isEdu
+              ? 'IRS-registered educational institution (verified NTEE B-code). Financials verified from IRS registry data. Typical funding routes: research grants, clinic partnerships, fellowships, community engagement programs — confirm on their site.'
+              : fnd.isPrivateFoundation
+                ? 'IRS-registered private foundation (foundation code 03/04). Financials verified from IRS registry data.'
+                : 'IRS-registered 501(c)(3). Financials verified from IRS registry data; grantmaking status unconfirmed.',
+            missionAlignmentScore: Number(fnd.fitScore) || 50,
             suggestedNextStep: fnd.suggestedNextStep || '',
             researchConfidence: 'low',
             nonprofitData: {
@@ -6024,9 +6037,10 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
         saved++;
         existingNames.add(String(fnd.name).toLowerCase());
       }
+      const label = institutionType === 'education' ? 'educational institution' : 'foundation';
       showToast(saved > 0
-        ? `✓ Added ${saved} IRS-verified foundation${saved === 1 ? '' : 's'} as prospects — run AI Research on any of them for full intelligence.`
-        : 'All matching foundations are already in your funder list.', saved > 0 ? 'success' : 'info');
+        ? `✓ Added ${saved} IRS-verified ${label}${saved === 1 ? '' : 's'} as prospects — run AI Research on any of them for full intelligence.`
+        : `All matching ${label}s are already in your funder list.`, saved > 0 ? 'success' : 'info');
     } catch (err: any) {
       showToast('Foundation search failed: ' + (err?.message || 'unknown error'), 'error');
     } finally {
@@ -6410,15 +6424,42 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
                 </button>
               </div>
 
-              <button
-                onClick={findIRSFoundations}
-                disabled={isFindingFoundations || isLoadingRecs}
-                className="px-3 py-2 rounded-lg text-sm font-medium border bg-emerald-50 dark:bg-slate-800 border-emerald-200 dark:border-slate-700 text-emerald-700 hover:bg-emerald-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer disabled:opacity-50"
-                title="Searches the live IRS registry for real, registered foundations — verified names, EINs, and financials"
-              >
-                {isFindingFoundations ? <RefreshCw className="animate-spin" size={14} /> : <Landmark size={14} />}
-                <span>{isFindingFoundations ? 'Searching IRS...' : 'Find Foundations (IRS)'}</span>
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => (isFindingFoundations ? undefined : setShowIrsMenu(v => !v))}
+                  disabled={isFindingFoundations || isLoadingRecs}
+                  className="px-3 py-2 rounded-lg text-sm font-medium border bg-emerald-50 dark:bg-slate-800 border-emerald-200 dark:border-slate-700 text-emerald-700 hover:bg-emerald-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1 text-[13px] whitespace-nowrap cursor-pointer disabled:opacity-50"
+                  title="Searches the live IRS registry for real, registered funders — verified names, EINs, and financials"
+                >
+                  {isFindingFoundations ? <RefreshCw className="animate-spin" size={14} /> : <Landmark size={14} />}
+                  <span>{isFindingFoundations ? (irsMode === 'education' ? 'Searching universities...' : 'Searching IRS...') : 'Find Funders (IRS)'}</span>
+                  <ChevronDown size={12} className={showIrsMenu ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                </button>
+                {showIrsMenu && !isFindingFoundations && (
+                  <div className="absolute right-0 mt-1.5 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1.5 overflow-hidden">
+                    <button
+                      onClick={() => findIRSFoundations('foundation')}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-slate-700/60 transition-colors flex items-start gap-2.5 cursor-pointer"
+                    >
+                      <Landmark size={15} className="text-emerald-600 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="block text-[13px] font-medium text-slate-800 dark:text-slate-100">Foundations</span>
+                        <span className="block text-[11px] text-slate-500 dark:text-slate-400">Grantmaking private foundations in the ADR/justice space — real EINs &amp; verified financials</span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => findIRSFoundations('education')}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-slate-700/60 transition-colors flex items-start gap-2.5 cursor-pointer border-t border-slate-100 dark:border-slate-700/60"
+                    >
+                      <GraduationCap size={15} className="text-emerald-600 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="block text-[13px] font-medium text-slate-800 dark:text-slate-100">Universities &amp; Educators</span>
+                        <span className="block text-[11px] text-slate-500 dark:text-slate-400">Universities, law schools &amp; institutes — research grants, clinics, fellowships, partnerships</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={loadFunderRecommendations}
                 disabled={isLoadingRecs}
@@ -7301,6 +7342,15 @@ function FunderCard({
               }`}>
                 Score: {f.intelligence?.missionAlignmentScore || 0}%
               </span>
+              {f.source === 'irs-registry' && (
+                <span
+                  className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter bg-emerald-50 dark:bg-slate-800 text-emerald-700 border border-emerald-200 dark:border-slate-700 flex items-center gap-1"
+                  title="Discovered from the live IRS registry — name, EIN, and financials are real verified data"
+                >
+                  {f.institutionType === 'education' ? <GraduationCap size={10} /> : <Landmark size={10} />}
+                  IRS Data
+                </span>
+              )}
             </div>
           </div>
           
@@ -11592,8 +11642,15 @@ function OutreachStat({ label, value, color }: { label: string, value: string, c
 function ChatView({ organization, proposals }: { organization: any, proposals: any[] }) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([
-    { role: 'assistant', text: `Hello! I'm your Nexus OS AI Advisor. I've analyzed your portfolio for ${organization?.name || 'ECADRN'}. How can I assist you with your ${proposals?.length || 0} active projects today?` }
+    { role: 'assistant', text: `Hello! I'm your AI Grant Advisor for ${organization?.name || 'ECADRN'}. I can help with grant strategy and proposal writing — and I know every feature in this app, so ask me "what does X do?" about anything. You currently have ${proposals?.length || 0} active projects. Try a quick-start question below.` }
   ]);
+
+  const QUICK_QUESTIONS = [
+    { label: 'What can this app do?', prompt: 'Walk me through every feature of this app and what each one does.' },
+    { label: 'How do I find funders?', prompt: 'Explain all the ways to find and research funders in this app — which should I use first?' },
+    { label: 'How does Grant Autopilot work?', prompt: 'Explain how Grant Autopilot works, including Assisted vs Full Agent mode.' },
+    { label: 'What is verified data?', prompt: 'Explain which data in this app is verified real data vs AI research, and how to tell the difference.' },
+  ];
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -11651,13 +11708,26 @@ function ChatView({ organization, proposals }: { organization: any, proposals: a
       </div>
 
       <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+        {messages.length <= 1 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {QUICK_QUESTIONS.map(q => (
+              <button
+                key={q.label}
+                onClick={() => setInput(q.prompt)}
+                className="px-3.5 py-1.5 rounded-full border border-indigo-200 dark:border-slate-700 bg-indigo-50/60 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 text-[12px] font-medium hover:bg-indigo-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-4">
           <input 
             type="text" 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Search projects or request strategic insight..."
+            placeholder="Ask anything — strategy, proposals, or what any feature does..."
             className="flex-1 bg-slate-100 border-transparent rounded-full px-6 py-3 text-sm focus:bg-white dark:focus:bg-slate-800 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
           />
           <button 
