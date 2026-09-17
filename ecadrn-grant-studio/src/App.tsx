@@ -274,7 +274,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "✦ NEW: AI Model Selector",
     tab: 'dashboard',
-    content: "In Settings → AI Model, choose how the AI runs: Smart mode (recommended) auto-falls-back to backup models on rate limits — or pick a specific model, including Gemini 2.5 Pro for max-quality drafting. A live status dot shows which model is currently serving. The AI is locked to ECADRN — every prompt is stamped with the ECADRN mission and serves no other organization.",
+    content: "In Settings → AI Model, choose how the AI runs: Smart mode (recommended) auto-falls-back to backup models on rate limits — or pin a specific model. Powered by Gemini 3.8 Flash — Google's latest, Pro-level intelligence at Flash speed. A live status dot shows which model is currently serving. The AI is locked to ECADRN — every prompt is stamped with the ECADRN mission and serves no other organization.",
     highlight: "dashboard-overview"
   },
   {
@@ -1092,12 +1092,20 @@ CORE PROGRAMS:
   // When the system enters fallback mode, shows a toast notification.
   // Also does an initial health check on mount to set the badge immediately.
   useEffect(() => {
+    let searchDegradedActive = false;
     const unsubscribeStatus = subscribeToAIModelStatus((info) => {
       setAIModelStatus(info);
       if (info?.isFallback) {
         showToast('AI switched to fallback model due to rate limits. Quality is maintained.', 'info');
       } else if (info && !info.isFallback && aiModelStatus?.isFallback) {
         showToast('AI primary model restored. Back to optimal performance.', 'success');
+      }
+      if (info?.searchDegraded && !searchDegradedActive) {
+        searchDegradedActive = true;
+        showToast('Web search quota hit — results are from the AI\u2019s knowledge only. Verify funder details before outreach.', 'info');
+      } else if (!info?.searchDegraded && searchDegradedActive) {
+        searchDegradedActive = false;
+        showToast('Web search grounding restored.', 'success');
       }
     });
 
@@ -1520,7 +1528,7 @@ CORE PROGRAMS:
                       ))}
                     </select>
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed">
-                      Smart mode picks the best available model and auto-falls-back to a backup on rate limits. Pick a specific model to start there — capacity fallback still protects you.
+                      Smart mode picks the best available model and auto-falls-back to a backup on rate limits. Pick a specific model to start there — capacity fallback still protects you. Runs on Google's Gemini 3.x family.
                     </p>
                   </div>
                   {aiModelStatus && (
