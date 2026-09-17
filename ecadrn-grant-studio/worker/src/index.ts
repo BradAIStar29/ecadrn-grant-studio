@@ -72,8 +72,11 @@ const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 
 
 const MODEL_TIERS = [
   { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
+  { model: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash' },
   { model: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash' },
+  { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
+  { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
 ];
 
 function isTransientOverloadError(err: any): boolean {
@@ -151,6 +154,31 @@ async function recordModelFallback(env: Env, failedTier: number): Promise<void> 
   } catch (e) {
     console.error('AI Fallback: KV write error:', e);
   }
+}
+
+async function recordOverloadSkip(env: Env, failedTier: number): Promise<void> {
+  // Transient 503 "high demand" — skip the overloaded model for a SHORT window
+  // (3 min) so bursts go straight to the next tier, then revert automatically.
+  // Never clobbers a real quota cooldown state.
+  if (!env.AI_CONFIG) return;
+  try {
+    const existing = await env.AI_CONFIG.get('ai_model_state');
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      if (parsed.kind !== 'overload') return; // real quota state wins
+    }
+    const nextTier = Math.min(failedTier + 1, MODEL_TIERS.length - 1);
+    await env.AI_CONFIG.put('ai_model_state', JSON.stringify({
+      tier: nextTier,
+      lastQuotaHit: new Date().toISOString(),
+      consecutiveFailures: 0,
+      cooldownMinutes: 3,
+      kind: 'overload',
+      failedModel: MODEL_TIERS[failedTier].model,
+      fallbackModel: MODEL_TIERS[nextTier].model,
+    }));
+    console.log(`⚡ Overload skip: ${MODEL_TIERS[failedTier].model} → ${MODEL_TIERS[nextTier].model} for 3 min`);
+  } catch {}
 }
 
 async function getFallbackWaitMinutes(env: Env): Promise<number | null> {
@@ -1995,10 +2023,12 @@ export default {
             }
             if (isTransientOverloadError(err)) {
               // Model is briefly overloaded (common on freshly launched models)
-              // — try the next tier immediately, no KV cooldown
+              // — try the next tier immediately + short KV skip so the next
+              // requests in the burst start one tier deeper
               console.error(`Model ${MODEL_TIERS[tier].model} overloaded for "${action}" — trying next tier`);
+              await recordOverloadSkip(env, tier);
               lastError = `${MODEL_TIERS[tier].model}: temporarily overloaded`;
-              lastErrorIsQuota = true; // chain-continues semantics without recording KV
+              lastErrorIsQuota = true; // chain-continues semantics
               break;
             }
             if (isModelUnavailableError(err)) {

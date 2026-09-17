@@ -276,7 +276,7 @@ const WALKTHROUGH_STEPS = [
   {
     title: "✦ NEW: AI Model Selector",
     tab: 'dashboard',
-    content: "In Settings → AI Model, choose how the AI runs: Smart mode (recommended) auto-falls-back to backup models on rate limits — or pin a specific model. Powered by Gemini 3.8 Flash — Google's latest, Pro-level intelligence at Flash speed. A live status dot shows which model is currently serving. The AI is locked to ECADRN — every prompt is stamped with the ECADRN mission and serves no other organization.",
+    content: "In Settings → AI Model, choose how the AI runs: Smart mode (recommended) auto-falls-back through a 6-model free chain (3.8 → 3.7 → 3.6 → 3.5 → 3.5-Lite → 3.1-Lite Flash) on rate limits or high demand — or pin a specific model to start there. A live status dot shows which model is currently serving. The AI is locked to ECADRN — every prompt is stamped with the ECADRN mission and serves no other organization.",
     highlight: "dashboard-overview"
   },
   {
@@ -1530,7 +1530,7 @@ CORE PROGRAMS:
                       ))}
                     </select>
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed">
-                      Smart mode picks the best available model and auto-falls-back to a backup on rate limits. Pick a specific model to start there — capacity fallback still protects you. Runs on Google's Gemini 3.x family.
+                      Smart mode picks the best available model and auto-falls-back through a 6-model free chain (3.8 → 3.7 → 3.6 → 3.5 → 3.5-Lite → 3.1-Lite Flash) on rate limits or high demand. Pick a specific model to start there — capacity fallback still protects you. All free tier.
                     </p>
                   </div>
                   {aiModelStatus && (
