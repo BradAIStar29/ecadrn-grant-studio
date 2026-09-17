@@ -164,6 +164,25 @@ service cloud.firestore {
         allow delete: if isOrgMember(orgId) && isOwner(uid);
       }
 
+      // ── Feedback (Message Ellis) ──────────────────────────────────────────────
+      // Team feedback messages to the AI assistant. Readable by all org
+      // members; created by the sender, then immutable (no edits/deletes).
+      match /feedback/{docId} {
+        allow list:   if isOrgMember(orgId);
+        allow get:    if isOrgMember(orgId) && isValidId(docId);
+        allow create: if isOrgMember(orgId) && isValidId(docId) &&
+                        incoming().keys().hasAll(['type', 'message', 'userEmail', 'createdAt', 'status']) &&
+                        incoming().type in ['issue', 'recommendation', 'question'] &&
+                        incoming().message is string && incoming().message.size() > 0 && incoming().message.size() <= 5000 &&
+                        incoming().subject is string && incoming().subject.size() <= 200 &&
+                        incoming().userEmail is string && incoming().userEmail.matches('.*@ecadrn\\.org') &&
+                        incoming().createdAt is string && incoming().createdAt.size() <= 40 &&
+                        incoming().status == 'sent' &&
+                        incoming().page is string && incoming().page.size() <= 100;
+        allow update: if false;
+        allow delete: if false;
+      }
+
       // ── Templates ────────────────────────────────────────────────────────────
       match /templates/{templateId} {
         allow list:   if isOrgMember(orgId);
