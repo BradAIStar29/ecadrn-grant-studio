@@ -2410,6 +2410,26 @@ function DashboardView({
         <StatCard title="Voice Maturity" value={`${organization?.voiceProfile?.maturityScore || 78}%`} icon={<Mic className="text-indigo-600" />} trend="Nominal State" />
       </div>
 
+      {/* Real-data sources strip — live counts from the app's grounded integrations */}
+      <div className="bg-gradient-to-r from-emerald-50/70 to-indigo-50/50 dark:from-slate-800/60 dark:to-slate-800/30 border border-emerald-100 dark:border-slate-700 rounded-xl px-5 py-3.5 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Grounded in real data:</span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300" title="Grant opportunities pulled live from the federal Grants.gov database">
+          <Landmark size={13} className="text-emerald-600" />
+          {(grants || []).filter((g: any) => g.source === 'grants.gov').length} live federal grants (Grants.gov)
+        </span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300" title="Funders discovered from the live IRS registry with verified EINs and financials">
+          <ShieldCheck size={13} className="text-emerald-600" />
+          {(funders || []).filter((f: any) => f.source === 'irs-registry').length} IRS-verified funders
+        </span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300" title="Funder reports include verified IRS 990 financials from ProPublica">
+          <BarChart3 size={13} className="text-emerald-600" />
+          {(funders || []).filter((f: any) => f.intelligence?.nonprofitData?.ein).length} funder reports with IRS 990 financials
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 ml-auto" title="Anything unverified is flagged with a warning badge — the AI never invents grant facts">
+          <AlertTriangle size={12} className="text-amber-500" /> AI-researched items are always flagged
+        </span>
+      </div>
+
       {/* Pipeline visualization bar */}
       {totalPipeline > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
@@ -9578,6 +9598,14 @@ Deadline: 2026-11-15`;
         </div>
       </div>
 
+      {/* Data-source legend — surfaces which results are live/verified vs AI research */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-4 px-1 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="font-black uppercase tracking-widest text-[9px] text-slate-400">Data sources:</span>
+        <span className="flex items-center gap-1.5"><Landmark size={11} className="text-emerald-500" /> Live federal — pulled from Grants.gov, facts are real</span>
+        <span className="flex items-center gap-1.5"><ShieldCheck size={11} className="text-green-500" /> ✓ Verified — confirmed real opportunity</span>
+        <span className="flex items-center gap-1.5"><AlertTriangle size={11} className="text-amber-500" /> ⚠️ Unverified — AI research, engage with care</span>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredGrants.length > 0 ? filteredGrants.map(g => (
           <div key={g.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all group relative overflow-hidden flex flex-col h-full border-t-4 border-t-transparent hover:border-t-indigo-500">
@@ -9592,7 +9620,23 @@ Deadline: 2026-11-15`;
                   ⚠️ Unverified
                 </span>
               )}
-              {g.verified === true && (
+              {g.verified === true && g.source === 'grants.gov' && (
+                <span
+                  className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-emerald-50 dark:bg-slate-800 text-emerald-600 border border-emerald-200 dark:border-slate-700 flex items-center gap-1"
+                  title={g.verificationNote || 'Live from the Grants.gov federal database — agency, deadline, and amount are real'}
+                >
+                  <Landmark size={9} /> Live · Grants.gov
+                </span>
+              )}
+              {g.verified === true && g.source === 'saved-search' && (
+                <span
+                  className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-indigo-50 dark:bg-slate-800 text-indigo-600 border border-indigo-200 dark:border-slate-700 flex items-center gap-1"
+                  title="Refreshed via a saved-search re-run (live federal + AI results)"
+                >
+                  ✓ Saved Search
+                </span>
+              )}
+              {g.verified === true && g.source !== 'grants.gov' && g.source !== 'saved-search' && (
                 <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-200">
                   ✓ Verified
                 </span>
