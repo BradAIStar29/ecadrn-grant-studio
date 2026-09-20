@@ -2177,7 +2177,7 @@ CORE PROGRAMS:
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 transition-all duration-300 md:ml-0">
+      <main className={`flex-1 transition-all duration-300 ml-0 ${isSidebarOpen ? 'md:ml-[260px]' : 'md:ml-[80px]'}`}>
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 flex items-center justify-between sticky top-0 z-10 font-sans">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-900 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
