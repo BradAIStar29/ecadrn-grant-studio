@@ -77,6 +77,11 @@ const MODEL_TIERS = [
   { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
   { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
+  // Deeper fallbacks — free-tier Gemini 2.5 models with their own 1,500 RPD
+  // quota pool (separate from 3.x). Only reached when all six 3.x tiers are
+  // rate-limited or overloaded.
+  { model: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
+  { model: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
 ];
 
 function isTransientOverloadError(err: any): boolean {
