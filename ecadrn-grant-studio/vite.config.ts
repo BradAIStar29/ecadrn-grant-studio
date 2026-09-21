@@ -23,12 +23,16 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom'],
-            'editor': ['react-quill'],
-            'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            'motion': ['motion/react'],
-            'icons': ['lucide-react'],
+          // vite 8 (rolldown): manualChunks is gone — use advancedChunks groups.
+          // Same package groupings as before, as regex tests.
+          advancedChunks: {
+            groups: [
+              { name: 'react-vendor', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+              { name: 'editor', test: /[\\/]node_modules[\\/](react-quill|quill)[\\/]/ },
+              { name: 'firebase', test: /[\\/]node_modules[\\/]firebase[\\/]/ },
+              { name: 'motion', test: /[\\/]node_modules[\\/](motion|framer-motion)[\\/]/ },
+              { name: 'icons', test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+            ],
           },
         },
       },
