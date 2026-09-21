@@ -102,5 +102,5 @@ jobs:
         with:
           path: ecadrn-grant-studio/dist
 
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
