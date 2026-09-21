@@ -1,0 +1,43 @@
+# CodeQL code scanning — free on public repos.
+# Deep static analysis for JavaScript/TypeScript (app + Cloudflare worker):
+# SQL injection, XSS, unsafe deserialization, prototype pollution, path
+# traversal, hardcoded-credential queries and more. Alerts appear under
+# Security → Code scanning alerts, with AI-generated Autofix suggestions
+# on public repos.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1' # weekly, Monday mornings
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          config: |
+            paths-ignore:
+              - dist
+              - '**/node_modules'
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
