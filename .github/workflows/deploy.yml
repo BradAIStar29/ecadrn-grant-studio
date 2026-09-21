@@ -96,7 +96,7 @@ jobs:
           VITE_BASE_PATH: '/ecadrn-grant-studio/'
           VITE_API_BASE_URL: 'https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev'
 
-      - uses: actions/configure-pages@v4
+      - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v3
         with:
