@@ -11,3 +11,8 @@ venv/
 .pub-cache/
 Pods/
 DerivedData/
+
+# ── Agent workspace (never track — contains live tokens & function sources) ──
+conversations/
+incoming_files/
+.base44-conversation-workspace
