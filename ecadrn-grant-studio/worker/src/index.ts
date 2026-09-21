@@ -1816,6 +1816,12 @@ export default {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Drive-Token, X-Google-Token',
       'Access-Control-Max-Age': '86400',
       'Access-Control-Expose-Headers': 'Content-Disposition',
+      // Security headers on every API response (free OWASP baseline)
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'X-Frame-Options': 'DENY',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     };
 
     if (request.method === 'OPTIONS') {

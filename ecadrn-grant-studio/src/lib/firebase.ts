@@ -1,9 +1,27 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+// Firebase App Check (reCAPTCHA v3 — invisible, free).
+// DORMANT until VITE_APP_CHECK_SITE_KEY is set at build time — no behavior
+// change until Bradley registers a reCAPTCHA v3 key in the Firebase console
+// (App Check → Apps → register) and adds it as the GitHub secret
+// VITE_APP_CHECK_SITE_KEY. Then: monitor a few days, then flip enforcement.
+const appCheckSiteKey = (import.meta as any).env?.VITE_APP_CHECK_SITE_KEY;
+if (appCheckSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    console.warn('App Check init skipped:', err);
+  }
+}
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 

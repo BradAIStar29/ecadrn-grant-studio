@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Security: strict referrer + CSP. Allowlist covers Firebase (googleapis/firebaseio),
+         Google Drive/Gmail OAuth (accounts.google.com), and the Cloudflare worker API.
+         If App Check is ever enabled, add https://www.google.com to script-src and
+         connect-src (reCAPTCHA v3). localhost ports keep local dev working. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://accounts.google.com https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev http://localhost:3000 http://localhost:5173 http://localhost:8787; frame-src https://accounts.google.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
