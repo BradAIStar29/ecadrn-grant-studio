@@ -8,6 +8,7 @@ export interface Env {
   FIREBASE_PROJECT_ID: string;
   GOOGLE_DRIVE_TOKEN?: string;
   AI_CONFIG?: KVNamespace;
+  ELLIS_FEEDBACK_TOKEN?: string;
 }
 
 // Firebase public keys for JWT signature verification (cached by jose)
@@ -2183,12 +2184,16 @@ export default {
       if (!message) {
         return json({ error: 'Please write a message first.' }, 400);
       }
+      if (!env.ELLIS_FEEDBACK_TOKEN) {
+        console.error('ELLIS_FEEDBACK_TOKEN secret missing — cannot forward feedback');
+        return json({ error: 'Feedback delivery is not configured right now — please reach Bradley directly.' }, 500);
+      }
       try {
         const forward = await fetch('https://ellis-b7e18430.base44.app/functions/receiveEcadrnFeedback', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ***ROTATED-DEAD-TOKEN***',
+            'Authorization': `Bearer ${env.ELLIS_FEEDBACK_TOKEN}`,
           },
           body: JSON.stringify({
             type,
