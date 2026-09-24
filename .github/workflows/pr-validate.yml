@@ -1,0 +1,58 @@
+# PR Validate — build + typecheck every PR touching the app (no deployments)
+#
+# Why: Dependabot PRs previously only ran CodeQL + Secret Scan. Major bumps
+# (vite 8, typescript 7, ...) could pass scanning yet BREAK the build — each
+# had to be hand-tested in a local clone. This workflow makes "CI green" mean
+# "it actually compiles" before anything is merged to main.
+#
+# Mirrors deploy.yml's install/build steps exactly (same node, same flags,
+# same env) so a green PR here means a green deploy there.
+
+name: PR Validate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ecadrn-grant-studio/**'
+      - '.github/workflows/pr-validate.yml'
+
+concurrency:
+  group: pr-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Typecheck (no deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ecadrn-grant-studio/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm install --legacy-peer-deps
+        working-directory: ecadrn-grant-studio
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit
+        working-directory: ecadrn-grant-studio
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: ecadrn-grant-studio
+        env:
+          VITE_BASE_PATH: '/ecadrn-grant-studio/'
+          VITE_API_BASE_URL: 'https://ecadrn-grant-studio-ai.bradley-8b2.workers.dev'
+
+      - name: Install worker dependencies
+        run: npm install
+        working-directory: ecadrn-grant-studio/worker
+
+      - name: Typecheck worker
+        run: npx tsc --noEmit
+        working-directory: ecadrn-grant-studio/worker
