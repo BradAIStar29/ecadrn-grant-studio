@@ -7,7 +7,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
+    "@google/genai": "2.23.0",
     "jose": "^6.2.8"
   },
   "devDependencies": {
