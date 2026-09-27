@@ -72,6 +72,7 @@ export const AI_MODEL_OPTIONS = [
   { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash — reliable backup' },
   { id: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — lightest' },
+  { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview) — high-capacity fallback' },
 ] as const;
 
 export function getPreferredAIModel(): string {

@@ -78,8 +78,12 @@ const MODEL_TIERS = [
   { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
   { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
+  // Gemini 3 Flash (Preview) — free-tier, 1,500 RPD (separate quota pool from
+  // the 3.x Flash/Lite tiers above). Frontier-class quality, acts as a
+  // high-capacity bridge before dropping to the legacy 2.5 models.
+  { model: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
   // Deeper fallbacks — free-tier Gemini 2.5 models with their own 1,500 RPD
-  // quota pool (separate from 3.x). Only reached when all six 3.x tiers are
+  // quota pool. Only reached when all 3.x tiers + 3 Flash Preview are
   // rate-limited or overloaded.
   { model: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
   { model: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
