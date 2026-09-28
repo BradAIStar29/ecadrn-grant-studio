@@ -23,9 +23,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Personal workspace: only the owner can access
+    // Personal workspace: only the owner can access — and the owner must be a
+    // verified @ecadrn.org member (2026-09-28: previously any Firebase-auth'd
+    // user got a personal workspace; the domain rule was only enforced on the
+    // shared org. Caught by the rules tests.)
     function isPersonalOrgMember(orgId) {
-      return isOwner(orgId);
+      return isOwner(orgId) && isEcadrnMember();
     }
 
     // Shared workspace: any verified @ecadrn.org member
