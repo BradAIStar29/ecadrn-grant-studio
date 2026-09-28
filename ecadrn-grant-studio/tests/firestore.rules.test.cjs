@@ -16,6 +16,10 @@ const {
   assertSucceeds,
   assertFails,
   initializeTestEnvironment,
+} = require('@firebase/rules-unit-testing');
+// rules-unit-testing v5 no longer re-exports firestore operations — pull them
+// from the app's own firebase dependency instead.
+const {
   doc,
   setDoc,
   getDoc,
@@ -27,7 +31,7 @@ const {
   limit,
   getDocs,
   addDoc,
-} = require('@firebase/rules-unit-testing');
+} = require('firebase/firestore');
 const fs = require('fs');
 
 const PROJECT_ID = 'demo-ecadrn';
