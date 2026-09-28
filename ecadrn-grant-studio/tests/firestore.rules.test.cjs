@@ -53,7 +53,9 @@ const validFeedback = {
   status: 'sent', page: 'dashboard',
 };
 
-const ctx = (user) => (user ? testEnv.authenticatedContext(user.uid, user) : testEnv.unauthenticatedContext());
+// NOTE: never include `uid` in the claims — firebase v12 mock tokens take uid
+// from the first argument only (a `uid` claim throws).
+const ctx = (user) => (user ? testEnv.authenticatedContext(user.uid, { email: user.email }) : testEnv.unauthenticatedContext());
 const fsx = (user) => ctx(user).firestore();
 
 before(async () => {
