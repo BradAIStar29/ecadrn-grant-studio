@@ -9,7 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:rules": "mocha tests/firestore.rules.test.js --timeout 20000"
+    "test:rules": "mocha tests/firestore.rules.test.cjs --timeout 20000"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
