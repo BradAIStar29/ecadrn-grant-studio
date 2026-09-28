@@ -1,0 +1,69 @@
+# Firestore Rules Tests — unit-test the security rules against the emulator
+#
+# Why: the rules are the app's entire data-permission layer (personal
+# workspaces, the shared org, @ecadrn.org enforcement, per-user scoping) but
+# were only ever checked by `firebase deploy` succeeding. A rules regression
+# could silently lock the team out — or silently open private workspaces.
+# These tests make the rules a first-class tested component.
+#
+# Free: the emulator runs on standard GitHub-hosted runners, no Firebase
+# project or credentials needed (demo- project id).
+
+name: Firestore Rules Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ecadrn-grant-studio/firestore.rules'
+      - 'ecadrn-grant-studio/tests/**'
+      - 'ecadrn-grant-studio/package.json'
+      - 'ecadrn-grant-studio/package-lock.json'
+      - '.github/workflows/firestore-rules-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ecadrn-grant-studio/firestore.rules'
+      - 'ecadrn-grant-studio/tests/**'
+      - 'ecadrn-grant-studio/package.json'
+      - 'ecadrn-grant-studio/package-lock.json'
+      - '.github/workflows/firestore-rules-test.yml'
+
+concurrency:
+  group: rules-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules-tests:
+    name: Emulator rules unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ecadrn-grant-studio/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Firestore emulator
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firestore-emulator-v1
+
+      - name: Install app dependencies (test deps included)
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+        working-directory: ecadrn-grant-studio
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Run rules tests against the emulator
+        run: firebase emulators:exec --only firestore --project demo-ecadrn "npm run test:rules"
+        working-directory: ecadrn-grant-studio

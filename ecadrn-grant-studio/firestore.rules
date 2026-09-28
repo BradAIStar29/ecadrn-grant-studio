@@ -103,7 +103,7 @@ service cloud.firestore {
     // ── Organizations ─────────────────────────────────────────────────────────
     match /organizations/{orgId} {
       allow get:    if isOrgMember(orgId) && isValidId(orgId);
-      allow list:   if isSignedIn() && (isOwner(request.auth.uid) || isEcadrnMember());
+      allow list:   if false; // no collection-root queries (2026-09-28: the old rule's isOwner(request.auth.uid) was always true)
       allow create: if isOrgMember(orgId) && isValidOrganization(incoming());
       allow update: if isOrgMember(orgId) && isValidOrganization(incoming()) &&
                        incoming().diff(existing()).affectedKeys()
@@ -249,7 +249,7 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow get:    if isOrgMember(orgId) && isValidId(notificationId) &&
                          resource.data.userId == request.auth.uid;
-        allow list:   if isOrgMember(orgId);
+        allow list:   if isOrgMember(orgId) && resource.data.userId == request.auth.uid;
         allow create: if isOrgMember(orgId) && isValidNotification(incoming());
         allow update: if isOrgMember(orgId) && isValidId(notificationId) &&
                          resource.data.userId == request.auth.uid &&
