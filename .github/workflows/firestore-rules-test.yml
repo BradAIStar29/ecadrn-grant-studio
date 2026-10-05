@@ -52,7 +52,7 @@ jobs:
           java-version: '21'
 
       - name: Cache Firestore emulator
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: firestore-emulator-v1
