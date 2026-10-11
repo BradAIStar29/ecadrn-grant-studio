@@ -73,9 +73,7 @@ const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 
 
 const MODEL_TIERS = [
   { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
-  { model: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash' },
   { model: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash' },
-  { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
   { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
   // Gemini 3 Flash (Preview) — free-tier, 1,500 RPD (separate quota pool from
