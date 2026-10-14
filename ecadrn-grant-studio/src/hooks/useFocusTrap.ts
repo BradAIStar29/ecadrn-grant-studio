@@ -1,7 +1,7 @@
 import { useEffect, RefObject } from 'react';
 
 export function useFocusTrap(
-  ref: RefObject<HTMLElement>,
+  ref: RefObject<HTMLElement | null>,
   active: boolean,
   onEscape?: () => void
 ) {

@@ -387,7 +387,7 @@ export function showToast(msg: string, type: 'error' | 'success' | 'info' = 'err
   }
 }
 function useToasts() {
-  const [toasts, setToasts] = useState<{id: number, msg: string, type: 'error' | 'success'}[]>([]);
+  const [toasts, setToasts] = useState<{id: number, msg: string, type: 'error' | 'success' | 'info'}[]>([]);
   useEffect(() => {
     _toastSetter = setToasts;
     return () => { _toastSetter = null; };
@@ -510,12 +510,12 @@ export default function App() {
   const globalSearchRef = useRef<HTMLDivElement>(null);
 
   // User preferences (persisted to localStorage)
-  const [prefs, setPrefs] = useState(() => {
+  const [prefs, setPrefs] = useState<Record<string, any>>(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}'); } catch { return {}; }
   });
   const [settingsDraft, setSettingsDraft] = useState({ name: '', profileText: '' });
   // Dark mode
-  const [darkMode, setDarkMode] = useState(() => {
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_dark_mode') || 'false'); } catch { return false; }
   });
   // Sidebar badge counts
@@ -2962,14 +2962,18 @@ function ProposalsView({
     { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 16 steps are always available." }
   ];
 
-  const [newProposalData, setNewProposalData] = useState({
+  const [newProposalData, setNewProposalData] = useState<{
+    title: string; funder: string; description: string;
+    funderType?: string; focusAreas?: string; eligibility?: string;
+    geographicFocus?: string; amountMin?: number; amountMax?: number;
+  }>({
     title: '',
     funder: '',
     description: ''
   });
   const [draftLength, setDraftLength] = useState<'standard' | 'concise' | 'detailed' | 'custom'>('standard');
   const [showSectionTargets, setShowSectionTargets] = useState(false);
-  const [sectionWordTargets, setSectionWordTargets] = useState<Record<string, number>>({});
+  const [sectionWordTargets, setSectionWordTargets] = useState<Record<string, number | undefined>>({});
 
   const SECTION_FIELD_LABELS: Record<string, string> = {
     executiveSummary: 'Executive Summary',
@@ -9088,7 +9092,7 @@ Deadline: 2026-11-15`;
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
 
-      setSelectedAlignmentGrant(prev => {
+      setSelectedAlignmentGrant((prev: any) => {
         if (prev && prev.id === grant.id) {
           return {
             ...prev,
