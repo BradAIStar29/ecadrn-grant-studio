@@ -8730,6 +8730,68 @@ function GrantsView({
       .catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
   };
 
+  // ── One-click source verification ────────────────────────────────────
+  // Fetches the LIVE source page (or Grants.gov record) server-side and has
+  // the AI judge whether the real fetched content matches the grant claim.
+  const [verifyingGrantId, setVerifyingGrantId] = useState<string | null>(null);
+  const verifyGrantSource = async (g: any) => {
+    if (!g || !g.id) return;
+    if (!g.url && !g.number) {
+      showToast('No source URL or federal opportunity number to verify — add one to this grant first.', 'info');
+      return;
+    }
+    setVerifyingGrantId(g.id);
+    try {
+      const result = await callAI('verify-grant-source', {
+        title: g.title,
+        funderName: g.funderName,
+        url: g.url || '',
+        number: g.number || '',
+        deadline: g.deadline || '',
+        amountMin: g.amountMin,
+        amountMax: g.amountMax,
+      });
+      const status = String(result?.status || '');
+      if (!['verified', 'partial', 'mismatch', 'unverifiable'].includes(status)) {
+        throw new Error('Verification did not return a verdict — try again.');
+      }
+      // Models sometimes return 0-1 instead of 0-100 — normalize
+      let confidence = Number(result?.confidence) || 0;
+      if (confidence > 0 && confidence <= 1) confidence = Math.round(confidence * 100);
+      const checkedAt = new Date().toISOString();
+      const grantsPath = `organizations/${orgId}/grants`;
+      const docRef = doc(db, grantsPath, g.id);
+      const update: any = {
+        verification: {
+          status, confidence,
+          evidence: String(result?.evidence || '').slice(0, 500),
+          notes: String(result?.notes || '').slice(0, 300),
+          matchedFields: Array.isArray(result?.matchedFields) ? result.matchedFields : [],
+          checkedAt,
+          checkedBy: user?.email || '',
+        },
+      };
+      // A strong live-source match upgrades the grant to Verified; a mismatch demotes it.
+      if (status === 'verified' && confidence >= 70) update.verified = true;
+      if (status === 'mismatch') update.verified = false;
+      await setDoc(docRef, update, { merge: true })
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
+      if (status === 'verified') {
+        showToast(`✓ Source verified — ${confidence}% confidence${update.verified ? ' — grant marked Verified' : ''}.`, 'success');
+      } else if (status === 'partial') {
+        showToast(`Partial match with the live source (${confidence}%) — ${result?.notes || 'details may differ; check the evidence on the card.'}`, 'info');
+      } else if (status === 'mismatch') {
+        showToast('⚠️ The live source page does not match this grant — flagged Unverified. Investigate before applying.', 'error');
+      } else {
+        showToast('Could not verify — the source was unreachable or empty. Try again later or check the URL.', 'info');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Verification failed.');
+    } finally {
+      setVerifyingGrantId(null);
+    }
+  };
+
   // Load saved searches from Firestore
   useEffect(() => {
     if (!orgId) return;
@@ -9141,7 +9203,7 @@ Deadline: 2026-11-15`;
 
   const guideSteps = [
     { title: "Run Grant Discovery", content: "Click 'Run Discovery' to have the AI surface grant opportunities matched to ECADRN's mission in ADR, conflict resolution, access to justice, and equity. Or click 'Federal (Grants.gov)' to pull REAL, currently-open federal grant opportunities live from the Grants.gov database — every result is a verified, real listing. Unverified AI results are always flagged." },
-    { title: "Verified vs. Unverified Grants", content: "Grants marked with a green ✓ badge are from confirmed sources. Orange '⚠ Unverified' badges mean the AI found a likely match but couldn't confirm the active listing. Always verify unverified grants before submitting." },
+    { title: "Verified vs. Unverified Grants", content: "Grants marked with a green ✓ badge are from confirmed sources. Orange '⚠ Unverified' badges mean the AI found a likely match but couldn't confirm the active listing. Every grant card also has a 'Verify source' button: it fetches the LIVE source page (or Grants.gov record) server-side and has the AI check the grant against what was actually fetched — a strong match upgrades the grant to Verified, a mismatch flags it. Hover the result chip to see the verbatim evidence." },
     { title: "Hide Unverified Toggle", content: "Use the 'Hide Unverified' toggle (top-right of the grants list) to filter your view to confirmed opportunities only. This is on by default to keep your focus clean." },
     { title: "Deadline Urgency Badges", content: "Each grant card shows a color-coded deadline badge: 🔴 pulsing = 7 days or less, 🟡 = 8–21 days, 🟢 = more than 21 days, and CLOSED = past deadline. Sort by urgency to prioritize your pipeline." },
     { title: "Match Score", content: "Each discovered grant shows a match score (0–100) indicating how closely it aligns with ECADRN's mission and profile. Focus on 75+ scores for highest-probability applications." },
@@ -9993,6 +10055,34 @@ Deadline: 2026-11-15`;
                 >
                   <RefreshCcwDot size={10} /> Detect cycle
                 </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); verifyGrantSource(g); }}
+                disabled={verifyingGrantId === g.id}
+                title={g.verification?.evidence
+                  ? `Last check: ${g.verification.status} (${g.verification.confidence}%) — evidence: "${g.verification.evidence}"`
+                  : 'Fetch the live source page (or Grants.gov record) and confirm this grant matches it'}
+                className="text-[9px] font-bold text-slate-400 hover:text-emerald-600 transition-colors flex items-center gap-0.5 disabled:opacity-50"
+              >
+                <ShieldCheck size={10} className={verifyingGrantId === g.id ? 'animate-spin' : ''} />
+                {verifyingGrantId === g.id ? 'Verifying…' : g.verification ? 'Re-verify' : 'Verify source'}
+              </button>
+              {g.verification && (
+                <span
+                  className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border flex items-center gap-1 ${
+                    g.verification.status === 'verified'
+                      ? 'bg-emerald-50 dark:bg-slate-800 text-emerald-600 border-emerald-200 dark:border-slate-700'
+                      : g.verification.status === 'mismatch'
+                      ? 'bg-red-50 dark:bg-slate-800 text-red-600 border-red-200 dark:border-slate-700'
+                      : 'bg-amber-50 dark:bg-slate-800 text-amber-600 border-amber-200 dark:border-slate-700'
+                  }`}
+                  title={`Checked ${g.verification.checkedAt ? new Date(g.verification.checkedAt).toLocaleDateString() : 'recently'} — ${g.verification.notes || ''}${g.verification.evidence ? ` Evidence: "${g.verification.evidence}"` : ''}`}
+                >
+                  {g.verification.status === 'verified' ? `✓ Source ${g.verification.confidence}%`
+                    : g.verification.status === 'mismatch' ? '✕ Source mismatch'
+                    : g.verification.status === 'partial' ? `◐ Partial ${g.verification.confidence}%`
+                    : '? Unverifiable'}
+                </span>
               )}
             </div>
             <h4 className="font-bold text-slate-900 mb-2 leading-tight group-hover:text-indigo-600 pr-12 text-lg tracking-tight">{g.title}</h4>

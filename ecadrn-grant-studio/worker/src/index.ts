@@ -29,6 +29,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'search-grants-gov':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
+  'verify-grant-source':    { model: 'gemini-3.8-flash', temperature: 0.1,  category: 'analysis', maxTokens: 4096,  useSearch: false },
   'discover-foundations':   { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
   'discover-grants':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'autopilot-search':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
@@ -1630,9 +1631,138 @@ Return JSON:
 }`;
     }
 
+    case 'verify-grant-source': {
+      const ev = (data.evidence || {}) as SourceEvidence;
+      const parts: string[] = [];
+      if (ev.pageContent) parts.push(`LIVE PAGE CONTENT fetched from the source URL just now:\n${ev.pageContent}`);
+      if (ev.httpStatus) parts.push(`(HTTP status: ${ev.httpStatus})`);
+      if (ev.grantsGovRecord) parts.push(`LIVE GRANTS.GOV RECORD for this opportunity number, fetched just now:\n${JSON.stringify(ev.grantsGovRecord)}`);
+      if (ev.grantsGovError) parts.push(`Grants.gov lookup note: ${ev.grantsGovError}`);
+      if (ev.fetchError) parts.push(`Source page note: ${ev.fetchError}`);
+      if (parts.length === 0) parts.push('(No evidence could be fetched.)');
+      return `You are a grant verification auditor. You are given a GRANT CLAIM and REAL EVIDENCE that was fetched live from its source moments ago (page content and/or a live Grants.gov record). Your ONLY job is to judge whether the fetched evidence corroborates the claim.
+
+⚠️ GROUNDING RULES — FOLLOW EXACTLY:
+1. Judge ONLY the evidence provided below. Do NOT use outside knowledge, training data, or assumptions about the funder.
+2. NEVER invent evidence. Quote the evidence verbatim (short snippets) in your "evidence" field.
+3. If the evidence is empty, unreachable, or says nothing about the grant, return "unverifiable" — do NOT guess.
+
+GRANT CLAIM (as stored in the app's database):
+${JSON.stringify({
+        title: data.title,
+        funderName: data.funderName,
+        deadline: data.deadline,
+        amountMin: data.amountMin,
+        amountMax: data.amountMax,
+        opportunityNumber: data.number,
+        sourceUrl: data.url,
+      })}
+
+EVIDENCE (fetched live, not from your memory):
+${parts.join('\n\n')}
+
+VERDICT RULES:
+- "verified": the evidence clearly describes this same grant program by this same funder (deadline/amount differences alone do not block this — note them).
+- "partial": the funder or program likely matches, but key details conflict (different program name, closed deadline, very different amounts) or the page is the funder's general site without program specifics.
+- "mismatch": the evidence is clearly about a different grant, program, or organization.
+- "unverifiable": no usable evidence was fetched.
+- "confidence": 0-100, how strongly the evidence supports your verdict.
+- "matchedFields": which of ["title","funder","deadline","amounts"] the evidence confirms.
+- "evidence": 1-3 SHORT verbatim quotes (max ~25 words each) supporting the verdict, or "" if none.
+- "notes": ONE sentence for the user, plain language.
+
+OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
+{
+  "status": "verified" | "partial" | "mismatch" | "unverifiable",
+  "confidence": number,
+  "matchedFields": ["string"],
+  "evidence": "string",
+  "notes": "string"
+}`;
+    }
+
     default:
       return 'INVALID';
   }
+}
+
+// ── Source Verification (grounded — the AI only judges REAL fetched content) ──
+
+/** Crude HTML -> text extraction: strips scripts/styles/tags, collapses whitespace. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&#\d+;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+interface SourceEvidence {
+  pageContent?: string;
+  httpStatus?: number;
+  fetchError?: string;
+  grantsGovRecord?: any;
+  grantsGovError?: string;
+}
+
+/**
+ * Fetches the REAL evidence for a verify-grant-source call:
+ * - the live page at the grant's URL (server-side, so the AI judges actual content)
+ * - the live Grants.gov record by opportunity number, when one exists
+ */
+async function fetchSourceEvidence(url: string, oppNumber: string): Promise<SourceEvidence> {
+  const evidence: SourceEvidence = {};
+
+  if (url && /^https?:\/\//i.test(url)) {
+    try {
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ECADRNGrantStudio/1.0; +https://ecadrn.org)',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(12000),
+      });
+      evidence.httpStatus = r.status;
+      if (r.ok) {
+        const html = (await r.text()).slice(0, 400000); // hard cap before parsing
+        const text = htmlToText(html);
+        evidence.pageContent = text.slice(0, 9000);
+        if (!evidence.pageContent) evidence.fetchError = 'Page fetched but contained no readable text (may be JS-rendered or a PDF).';
+      } else {
+        evidence.fetchError = `Source returned HTTP ${r.status}.`;
+      }
+    } catch (e: any) {
+      evidence.fetchError = 'Source unreachable (blocked, offline, or timed out).';
+    }
+  }
+
+  if (oppNumber) {
+    try {
+      const res = await fetch('https://api.grants.gov/v1/api/search2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oppNum: oppNumber, rows: 1, startRecordNum: 0 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        const d: any = await res.json();
+        const hit = d?.data?.oppHits?.[0];
+        if (hit?.number) evidence.grantsGovRecord = hit;
+        else evidence.grantsGovError = 'No Grants.gov record found for that opportunity number.';
+      } else {
+        evidence.grantsGovError = `Grants.gov API returned HTTP ${res.status}.`;
+      }
+    } catch {
+      evidence.grantsGovError = 'Grants.gov lookup failed (network or timeout).';
+    }
+  }
+
+  return evidence;
 }
 
 // ── Response Validation ──────────────────────────────────────────────────────
@@ -1649,6 +1779,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
 
   const requiredKeys: Record<string, string[]> = {
     'search-grants-gov': ['grants'],
+    'verify-grant-source': ['status', 'confidence'],
     'discover-foundations': ['foundations'],
     'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
@@ -1950,6 +2081,17 @@ export default {
           return json({ grants: [], message: 'No currently-open federal grants matched those keywords. Try broader terms.' }, 200);
         }
         body.realGrants = grantsGovData;
+      }
+
+      // Source verification: fetch REAL evidence first — the AI only judges
+      // what was actually fetched and can never invent corroboration.
+      if (action === 'verify-grant-source') {
+        const vUrl = typeof body.url === 'string' ? body.url.trim() : '';
+        const vNum = typeof body.number === 'string' ? body.number.trim() : '';
+        if (!vUrl && !vNum) {
+          return json({ error: 'Nothing to verify — this grant has no source URL or federal opportunity number.' }, 400);
+        }
+        body.evidence = await fetchSourceEvidence(vUrl, vNum);
       }
 
       const prompt = getPrompt(action, body);
