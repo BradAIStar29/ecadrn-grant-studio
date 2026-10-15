@@ -374,6 +374,16 @@ function printShortcutsCheatSheet() {
   w.document.close();
 }
 
+// Normalized identity key for deduplicating grants by title + funder
+const grantKey = (title?: string, funder?: string): string =>
+  `${String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${String(funder || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+// List of "title — funder" strings the worker should exclude from discovery re-runs
+const knownGrantsForExclusion = (allGrants: any[]): string[] =>
+  (allGrants || [])
+    .map((g: any) => `${g.title || g.grantTitle || ''} — ${g.funderName || g.funder || ''}`.trim())
+    .filter((line: string) => line.length > 3)
+    .slice(0, 40);
+
 // ── Toast notification system ────────────────────────────────────────────────
 let _toastId = 0;
 let _toastSetter: ((toasts: any[] | ((prev: any[]) => any[])) => void) | null = null;
@@ -8785,7 +8795,9 @@ function GrantsView({
             geographicFocus: search.geographicFocus || 'National',
             amountMin: search.amountMin || 10000,
             amountMax: search.amountMax || 100000,
-            searchQuery: search.filterText || search.searchQuery || ''
+            searchQuery: search.filterText || search.searchQuery || '',
+            count: 10,
+            excludeGrants: knownGrantsForExclusion(grants)
           }),
           callAI('search-grants-gov', { orgProfile: organization, keywords: fedKeywords, count: 10 })
         ]);
@@ -8797,10 +8809,17 @@ function GrantsView({
         const existingNumbers = new Set(grants.map((g: any) => g?.number).filter(Boolean));
 
         let aiSaved = 0;
+        let aiDupes = 0;
         if (results.length > 0) {
+          const existingKeys = new Set(grants.map((g: any) => grantKey(g.title, g.funderName)));
           const verifiedResults = results
             .map((g: any) => ({ ...g, title: g?.title || g?.grantTitle || '', funderName: g?.funderName || g?.funder || '' }))
-            .filter((g: any) => Boolean(g.title && g.funderName));
+            .filter((g: any) => Boolean(g.title && g.funderName))
+            .filter((g: any) => {
+              if (existingKeys.has(grantKey(g.title, g.funderName))) { aiDupes++; return false; }
+              existingKeys.add(grantKey(g.title, g.funderName)); // also dedupes within this batch
+              return true;
+            });
           for (const g of verifiedResults) {
             await addDoc(grantsRef, {
               ...g, tags: Array.isArray(g.focusAreas) ? [...g.focusAreas] : [],
@@ -8848,7 +8867,7 @@ function GrantsView({
 
         const total = aiSaved + fedSaved;
         if (total > 0) {
-          showToast(`✓ Found ${total} new grants from "${search.name}"${fedSaved > 0 ? ` (incl. ${fedSaved} live federal)` : ''}`, 'success');
+          showToast(`✓ Found ${total} new grants from "${search.name}"${fedSaved > 0 ? ` (incl. ${fedSaved} live federal)` : ''}${aiDupes > 0 ? ` — ${aiDupes} duplicate${aiDupes === 1 ? '' : 's'} skipped` : ''}`, 'success');
         } else {
           showToast('No new grants found for this saved search.', 'info');
         }
@@ -8913,6 +8932,8 @@ function GrantsView({
     try {
       const results = await callAI('discover-grants', {
         orgProfile: organization,
+        count: 10,
+        excludeGrants: knownGrantsForExclusion(grants),
         focusAreas: "ADR, Restorations, Facilitation, Conflict Coaching",
         geographicFocus: "National",
         amountMin: 20000,
@@ -8922,8 +8943,15 @@ function GrantsView({
 
       const grantsPath = `organizations/${orgId}/grants`;
       const grantsRef = collection(db, grantsPath);
-      const validResults = Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [];
-      if (validResults.length === 0) throw new Error('No valid grants returned by AI — refusing to save unverified data.');
+      const existingKeys = new Set(grants.map((g: any) => grantKey(g.title, g.funderName)));
+      const validResults = (Array.isArray(results) ? results.filter((g: any) => g?.title && g?.funderName) : [])
+        .filter((g: any) => {
+          if (existingKeys.has(grantKey(g.title, g.funderName))) return false;
+          existingKeys.add(grantKey(g.title, g.funderName));
+          return true;
+        });
+      if (validResults.length === 0) showToast('No new grants found — your list already covers what the AI could verify.', 'info');
+      if (Array.isArray(results) && validResults.length === 0) return;
       for (const g of validResults) {
         const autoTags = Array.isArray(g.focusAreas) ? [...g.focusAreas] : [];
         if (g.geographicFocus && !autoTags.includes(g.geographicFocus)) {
@@ -9382,7 +9410,8 @@ Deadline: 2026-11-15`;
         amountMin: orgAmountMin,
         amountMax: orgAmountMax,
         searchQuery: orgSearchQuery,
-        count: 8
+        count: 12,
+        excludeGrants: knownGrantsForExclusion(grants)
       });
 
       const grantsPath = `organizations/${orgId}/grants`;
@@ -9393,10 +9422,17 @@ Deadline: 2026-11-15`;
             .filter((g: any) => Boolean(g.title && g.funderName))
         : [];
       if (validGrants.length === 0) throw new Error('AI returned no verifiable grants — nothing saved.');
+      const existingKeys = new Set(grants.map((g: any) => grantKey(g.title, g.funderName)));
+      const newGrants = validGrants.filter((g: any) => {
+        if (existingKeys.has(grantKey(g.title, g.funderName))) return false;
+        existingKeys.add(grantKey(g.title, g.funderName)); // dedupe within this batch too
+        return true;
+      });
+      const dupeCount = validGrants.length - newGrants.length;
 
       // Score grants by ECADRN alignment keywords
       const alignmentKeywords = ['adr', 'mediation', 'dispute resolution', 'conflict', 'justice', 'equity', 'restorative', 'peacebuilding', 'access to justice'];
-      for (const g of validGrants) {
+      for (const g of newGrants) {
         const grantText = `${g.title || ''} ${g.funderName || ''} ${g.description || ''} ${(g.focusAreas || []).join(' ')}`.toLowerCase();
         const matchCount = alignmentKeywords.filter(kw => grantText.includes(kw)).length;
         const ecadrnAlignmentScore = Math.min(100, Math.round((matchCount / alignmentKeywords.length) * 100 + (g.verified ? 10 : 0)));
@@ -9419,7 +9455,11 @@ Deadline: 2026-11-15`;
           discoveredBy: user?.email || auth.currentUser?.email || ''
         }).catch(e => handleFirestoreError(e, OperationType.WRITE, grantsPath));
       }
-      showToast(`Discovered ${validGrants.length} grant${validGrants.length === 1 ? '' : 's'}.`, 'success');
+      if (newGrants.length > 0) {
+        showToast(`Discovered ${newGrants.length} new grant${newGrants.length === 1 ? '' : 's'}${dupeCount > 0 ? ` (${dupeCount} duplicate${dupeCount === 1 ? '' : 's'} skipped — already in your list)` : ''}.`, 'success');
+      } else {
+        showToast('No NEW grants found this run — your list already covers what the AI could verify. Try broadening focus areas or discovery keywords in Settings.', 'info');
+      }
     } catch (err: any) {
       console.error(err);
       showToast(err?.message || 'Discovery failed.');

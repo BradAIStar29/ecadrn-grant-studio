@@ -852,7 +852,7 @@ ${JSON.stringify(data.realFoundations)}`;
     case 'discover-grants':
       return `You are a nonprofit grants researcher specializing in ADR, conflict resolution, access to justice, restorative justice, and civic equity funding. You have access to web search — USE IT to find REAL, CURRENT, ACTIVE grant opportunities.
 
-TASK: Search the web to identify up to ${data.count || 5} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities that are a strong mission fit for the organization below.
+TASK: Search the web to identify up to ${data.count || 10} REAL, VERIFIABLE, CURRENTLY ACTIVE grant opportunities that are a strong mission fit for the organization below. Maximize variety across funder types (foundations, government, corporate, community foundations, bar associations, universities).
 
 SEARCH INSTRUCTIONS:
 1. Search for current grant opportunities in ADR, conflict resolution, restorative justice, access to justice, mediation, and civic equity
@@ -873,6 +873,12 @@ Focus areas: ${data.focusAreas}
 Geographic scope: ${data.geographicFocus}
 Preferred award range: $${data.amountMin}–$${data.amountMax}
 Additional guidance: ${data.searchQuery}
+
+KNOWN GRANTS — the organization ALREADY has these in its database. Do NOT return them again.
+Seek DIFFERENT programs and funders than the ones below. (A genuinely distinct program from an
+already-known funder is acceptable, but prioritize funders not on this list. When uncertain whether
+a program is the same as a known one, EXCLUDE it.)
+${(Array.isArray(data.excludeGrants) && data.excludeGrants.length ? data.excludeGrants.map((g: string) => `- ${g}`).join('\n') : '- (none yet — build a broad, diverse list across many funders)')}
 
 ⚠️ STRICT ANTI-HALLUCINATION RULES — FOLLOW EXACTLY:
 1. ONLY include funders that ACTUALLY EXIST and are KNOWN to fund nonprofits in the ADR, conflict resolution, access to justice, or civic equity space.
