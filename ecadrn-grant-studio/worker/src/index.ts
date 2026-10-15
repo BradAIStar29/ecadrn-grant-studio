@@ -878,6 +878,9 @@ KNOWN GRANTS — the organization ALREADY has these in its database. Do NOT retu
 Seek DIFFERENT programs and funders than the ones below. (A genuinely distinct program from an
 already-known funder is acceptable, but prioritize funders not on this list. When uncertain whether
 a program is the same as a known one, EXCLUDE it.)
+CRITICAL: NEVER lower your verification standards to satisfy the 'seek different funders'
+instruction. If you cannot find NEW programs you can verify as real, return fewer results or none
+at all — an empty result set is acceptable; a fabricated or half-remembered grant is NOT.
 ${(Array.isArray(data.excludeGrants) && data.excludeGrants.length ? data.excludeGrants.map((g: string) => `- ${g}`).join('\n') : '- (none yet — build a broad, diverse list across many funders)')}
 
 ⚠️ STRICT ANTI-HALLUCINATION RULES — FOLLOW EXACTLY:
