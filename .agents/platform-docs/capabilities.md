@@ -1,8 +1,10 @@
 # capabilities
 
-> Complete index of Superagent capabilities and the sub-skills to load for deeper instructions. Activate when asked what the agent can do, before saying a capability does not exist, or when choosing an approach.
+> Complete index of Superagent capabilities and the sub-skills to load for deeper instructions. Activate when asked what the agent can do, before saying a capability does not exist, when choosing an approach, or when recovery requires another capability.
 
 This map describes platform capabilities, not a guarantee that every feature is enabled in this conversation. Check the current tools, permissions, and relevant read-more skill before promising a capability or declaring it unavailable.
+
+Choose capabilities around the user's outcome. If one route fails, use this map to identify the most promising alternative and load its guide. A missing dedicated tool may still be supported through an authorized connector or a documented sandbox workflow; check before concluding you cannot complete the task. Respect access denials and the user's scope across every route.
 
 ## Capability Map
 
@@ -12,7 +14,9 @@ This map describes platform capabilities, not a guarantee that every feature is 
 
 **Share and clone the agent.** You can share the live chat URL so people can talk to this Superagent, and the editor can publish a cloneable template link that copies selected configuration such as skills, memory, files, and tasks. These are different: the chat URL opens this agent, while a template link creates a new agent copy for someone else. The header can also show active collaborators and, when collaboration is available for an editor, invite people to collaborate. Read more: `activate_platform_skill("sharing")`.
 
-**Editor settings and admin surfaces.** The Settings window controls things the chat runtime may not edit directly: AI model choices for chat and tasks, live voice when available, appearance, clone, template sharing, move-to-workspace, delete, credit usage, personalization, security, secrets, tool permissions, connector guards, API docs, and webhook manager. Some rows or tabs appear only when available for the current workspace/environment; if hidden, explain the unavailable state instead of claiming the capability does not exist. Read more: `activate_platform_skill("editor-settings")`.
+**Contact another person.** Choose the authorized delivery route, resolve the recipient, and handle replies and follow-ups using the tools available in this conversation. Load the guide before sending a message or invitation: `activate_platform_skill("contacting-people")`.
+
+**Editor settings and admin surfaces.** The Settings window controls things the chat runtime may not edit directly: AI model choices for chat and tasks, live voice when available, appearance, clone, template sharing, move-to-workspace, delete, credit usage, security, secrets, tool permissions, connector guards, API docs, and webhook manager. Some rows or tabs appear only when available for the current workspace/environment; if hidden, explain the unavailable state instead of claiming the capability does not exist. Read more: `activate_platform_skill("editor-settings")`.
 
 **External Agent API.** External clients can use the Superagent API to create/list conversations, fetch the default conversation, send messages, delete messages, and list/delete API-visible memory through `/api/agents/<agent_id>`. The editor can copy or download complete API docs as a `SKILL.md`. This is the right route when another system needs to message the agent directly using the agent's API key. Read more: `activate_platform_skill("agent-api")`.
 
@@ -60,6 +64,6 @@ This map describes platform capabilities, not a guarantee that every feature is 
 
 **Payments.** The agent can help set up payment providers where available. When Stripe is connected it can always create checkout links; managing Stripe products/prices needs payment backend-function access, so if that tool isn't in your list, create checkout links rather than promising product/price management. Wix-backed payment tools are available when those integrations are active. Read more: `activate_platform_skill("payments")` and `activate_platform_skill("stripe-payments")`.
 
-**Web search.** The agent has a web search tool for current or external information. Use it when the answer may have changed recently or depends on information outside the sandbox, then cite or summarize the source in normal chat. Read more: use the `web_search` tool.
+**Web search.** The agent has a web search tool for current or external information. Use it when the answer may have changed recently or depends on information outside the sandbox. When the task calls for original evidence, follow promising leads, open the source, verify the match, and retrieve the useful record, image, or document. Use the available browser tools for interactive sites or viewers when needed. Deliver the evidence with its source link; finding where it can be obtained is an intermediate step. Read more: use the `web_search` tool and `activate_platform_skill("browser")` for browser interaction.
 
 **Feedback and support.** Users can open the editor feedback modal from the sidebar or message feedback entry points, and low ratings can route them to support conversations. This is a user-facing help surface; keep explanations limited to visible editor feedback and support paths. Read more: `activate_platform_skill("chat-experience")`.

@@ -9,6 +9,7 @@ A browser session is automatically created when you first use any of the browser
 - Do NOT install Playwright, Puppeteer, websockets, or ANY browser automation library. Do NOT pip install anything for browser control. You already have built-in tools.
 - Typical workflow: navigate to the page -> read its content -> interact as needed -> stop the session when finished.
 - Screenshots are user-visible in external messaging channels. Take one only when visual details directly help answer the user's request, and only after reading the page content to verify it is not a 404 or other error page.
+- When a visual source is useful evidence for the requested result, retrieve the original image or document with available tools, or capture the relevant view if the original cannot be retrieved. The user does not need to explicitly ask for a screenshot. Deliver the evidence with its source link using files or URLs returned by tools and the current channel's supported delivery method.
 
 ## Personal WhatsApp
 
