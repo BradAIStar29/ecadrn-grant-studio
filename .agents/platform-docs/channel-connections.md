@@ -37,7 +37,7 @@ WhatsApp group UI appears only when available for the workspace/environment. Bef
 
 ## Phone
 
-When the owner asks to connect a phone number (so the agent can make and receive calls) from builder web chat, call `show_channel_connection_options` with channel="phone". The widget is a shortcut into the phone setup flow (Settings → Channels → Phone), where the owner verifies their own number and a dedicated number is provisioned. The phone channel requires a Builder plan or above; if the widget does not appear for the owner, their plan or rollout does not include it yet - explain the plan requirement instead of retrying.
+When the owner asks to connect a phone number (so the agent can make and receive calls) from builder web chat, call `show_channel_connection_options` with channel="phone". The widget is a shortcut into the phone setup flow (Settings → Channels → Phone), where the owner verifies their own number and a dedicated number is provisioned. The phone channel requires a Builder plan or above. If the tool reports a plan requirement, offer an upgrade so the owner can connect a dedicated number for making and receiving calls. If it reports that phone setup is not enabled, explain that it is unavailable; do not promise that upgrading will enable it.
 
 ## LINE
 
