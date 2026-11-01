@@ -32,6 +32,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'generate-draft':          { model: 'gemini-3.8-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
   'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
   'reformat-proposal':       { model: 'gemini-3.8-flash', temperature: 0.35, category: 'writing',  maxTokens: 32768, useSearch: false },
+  'generate-section':        { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'search-grants-gov':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
@@ -265,6 +266,20 @@ function safeTruncateContext(obj: any, maxLen = 4000): string {
 // ── Section length control ─────────────────────────────────────────────────
 // Base per-section word ranges (standard). 'concise' ≈ 60%, 'detailed' ≈ 150%.
 // 'custom' uses per-section target word counts supplied by the user.
+// Plain-language guidance per section, used when generating a single section.
+const SECTION_GUIDE: Record<string, string> = {
+  'Executive Summary': 'Open with a specific, compelling hook about the community need — not a mission restatement. State the ask, the population served, and 2-3 headline outcomes.',
+  'Need Statement': 'Data-backed need with at least two cited statistics, urgency, and community voice. Tie each fact to the population ECADRN serves.',
+  'Project Description': 'Specific activities, timeline and populations served. What happens, in what order, for whom, and how many people.',
+  'Goals & Objectives': '3-4 SMART goals with baseline figures and measurable targets. Each objective must be verifiable within the grant period.',
+  'Methodology': 'Evidence-based approach and a step-by-step implementation plan with phases, timelines and responsible parties.',
+  'Evaluation Plan': 'Concrete metrics, data collection methods, reporting cadence and accountable roles.',
+  'Sustainability': 'At least three concrete revenue diversification strategies beyond the grant period, with realistic sequencing.',
+  'Organizational Capacity': 'Real track record, team credentials and program outcomes. Never invent staff, partners or numbers.',
+  'Budget Narrative': 'Itemised rationale tied to activities, showing the math and cost-effectiveness. Match any requested match.',
+  'Letter of Inquiry': 'Two-page letter: ask in the first two sentences, then need, approach, capacity and closing.',
+};
+
 const SECTION_BASE_WORDS: Record<string, [number, number, string]> = {
   executiveSummary:      [300, 400, 'compelling hook, mission alignment, ask amount, key outcomes'],
   needStatement:         [300, 400, 'data-backed, community voice, urgency'],
@@ -642,6 +657,42 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "sustainability": "string",
   "organizationalCapacity": "string",
   "budgetNarrative": "string"
+}`;
+
+    case 'generate-section':
+      return `You are ECADRN's senior grant writer. Write ONE section of a grant proposal — nothing else. No outline, no other sections, no commentary.
+
+SECTION TO WRITE: ${data.sectionName}
+SECTION GUIDANCE: ${SECTION_GUIDE[data.sectionName] || 'Write a complete, submission-ready section in ECADRN voice.'}
+TARGET LENGTH: ${data.targetWords ? `${data.targetWords} words` : 'the range implied by the guidance (typically 300-500 words)'}
+
+GRANT: ${data.grantTitle || 'Unknown grant'} — ${data.funderName || 'Unknown funder'}
+FUNDER PRIORITIES: ${data.funderPriorities || 'Not specified'}
+GRANT DESCRIPTION: ${data.funderDescription || 'Not specified'}
+DEADLINE: ${data.deadline || 'Not specified'}
+
+ORGANIZATION: ${JSON.stringify(data.orgProfile)}
+
+OTHER SECTIONS ALREADY WRITTEN (for continuity — do not repeat their content or contradict them):
+${JSON.stringify(data.existingSections || {}).slice(0, 6000)}
+
+USER INSTRUCTIONS: ${data.instructions || 'None'}
+VOICE: ${data.toneDescriptors || 'plain, specific, warm'} | Signature phrases: ${data.keyPhrases || ''} | Rules: ${data.voiceRules || ''}
+Sample writing: ${String(data.writingSamples || '').slice(0, 1500)}
+
+REQUIREMENTS:
+1. Write this section only, complete and submission-ready — no placeholders like "TBD" or "[insert]".
+2. Use ECADRN's REAL programs only: free national membership; the Intern Program (remote ~10-week cohorts — spring/fall mostly high school students, summer mostly undergraduate/graduate students); Career Advising (1:1 with seasoned ADR practitioners); the Resource Hub (Education Hub guides, national ADR Job Board, networking events); the ADR Organization Directory; volunteering. Never invent programs, staff, partners, budgets, statistics or outcomes.
+3. If a specific fact is genuinely unknown and required, write "[NEEDS INPUT: <exactly what is missing>]" and keep going.
+4. Active voice. Banned: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+5. Hit the target length; specificity over volume, never filler.
+
+OUTPUT FORMAT — respond ONLY with this exact JSON:
+{
+  "sectionTitle": "string — the section name",
+  "content": "string — the finished section",
+  "wordCount": number,
+  "needsInput": ["string — anything the user must supply, empty array if none"]
 }`;
 
     case 'reformat-proposal':
@@ -1950,6 +2001,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
       ? ['sections']
       : ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'reformat-proposal': ['formatName', 'sections'],
+    'generate-section': ['sectionTitle', 'content'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
     'research-grant-url': ['grantTitle', 'funderName'],
     'score-alignment': ['overallScore', 'dimensionScores'],

@@ -4036,6 +4036,8 @@ function ProposalEditor({
   const [showEditorGuide, setShowEditorGuide] = useState(false);
   const [refineFeedback, setRefineFeedback] = useState('');
   const [showRefineBox, setShowRefineBox] = useState(false);
+  const [showGenerateBox, setShowGenerateBox] = useState(false);
+  const [generateInstructions, setGenerateInstructions] = useState('');
   const [preSubmitResults, setPreSubmitResults] = useState<any>(null);
   const [showPreSubmitCheck, setShowPreSubmitCheck] = useState(false);
   const [factCheckResults, setFactCheckResults] = useState<any>(null);
@@ -4406,6 +4408,50 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
     }
   };
 
+  // Write (or rewrite from scratch) the section currently open in the editor
+  const generateCurrentSection = async () => {
+    setIsAIWorking('generate');
+    try {
+      const activeProfile = voiceProfiles.find(p => p.id === selectedVoiceProfileId) || organization?.voiceProfile;
+      const otherSections: Record<string, string> = {};
+      sections.forEach((sec, i) => {
+        if (i !== activeSectionIdx && (sec.content || '').trim()) {
+          otherSections[sec.title || `Section ${i + 1}`] = String(sec.content).replace(/<[^>]*>/g, '').slice(0, 600);
+        }
+      });
+      const matchedFunder = funders.find((f: any) => f.funderName?.toLowerCase() === proposal.funder?.toLowerCase());
+
+      const result = await callAI('generate-section', {
+        sectionName: currentSection.title || 'Section',
+        grantTitle: proposal.title,
+        funderName: proposal.funder,
+        funderDescription: proposal.description || '',
+        funderPriorities: matchedFunder?.intelligence?.givingPriorities?.join(', ') || '',
+        deadline: '',
+        orgProfile: organization,
+        existingSections: otherSections,
+        instructions: generateInstructions,
+        toneDescriptors: activeProfile?.toneDescriptors?.join(', ') || '',
+        keyPhrases: activeProfile?.keyPhrases?.join(', ') || '',
+        voiceRules: activeProfile?.voiceRules?.join('; ') || '',
+        writingSamples: activeProfile?.writingSamples?.join('\n') || '',
+      });
+
+      const content = String(result?.content || '').trim();
+      if (!content) throw new Error('The AI returned an empty section.');
+
+      const newSections = [...sections];
+      newSections[activeSectionIdx].content = content;
+      setSections(newSections);
+      setShowGenerateBox(false);
+      setGenerateInstructions('');
+    } catch (e: any) {
+      console.error('Generate section error:', e);
+    } finally {
+      setIsAIWorking(null);
+    }
+  };
+
   // Pre-submission quality gate check
   const runPreSubmitCheck = async () => {
     setIsAIWorking('presubmit');
@@ -4613,6 +4659,14 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 title="Strategic Funder Alignment"
               >
                 <Globe size={18} className={isAIWorking === 'align' ? 'animate-pulse' : ''} />
+              </button>
+              <button
+                onClick={() => setShowGenerateBox(!showGenerateBox)}
+                disabled={!!isAIWorking}
+                className={`p-2 rounded-lg transition-all ${isAIWorking === 'generate' ? 'bg-violet-100 text-violet-600' : showGenerateBox ? 'bg-violet-100 text-violet-600' : 'text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:bg-slate-800'}`}
+                title="Generate this section"
+              >
+                <Sparkles size={18} className={isAIWorking === 'generate' ? 'animate-pulse' : ''} />
               </button>
               <button 
                 onClick={() => setShowRefineBox(!showRefineBox)}
@@ -5219,6 +5273,36 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                       </div>
                     </div>
                   </div>
+
+                  {showGenerateBox && (
+                    <div className="mb-4 p-4 bg-violet-50 dark:bg-slate-800 border border-violet-200 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={16} className="text-violet-600" />
+                        <h4 className="text-sm font-bold text-violet-800">Generate: {currentSection.title || 'this section'}</h4>
+                        <button onClick={() => setShowGenerateBox(false)} className="ml-auto text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
+                      </div>
+                      <p className="text-[11px] text-violet-700 mb-2 leading-relaxed">
+                        The agent writes this section from scratch, using the grant, the funder's priorities, your voice profile and the sections you've already written. Any existing text in this section will be replaced.
+                      </p>
+                      <textarea
+                        value={generateInstructions}
+                        onChange={(e) => setGenerateInstructions(e.target.value)}
+                        placeholder="Optional: 'Focus on the summer undergraduate cohort', '300 words', 'Emphasize the advisory board'..."
+                        className="w-full p-3 text-sm border border-violet-200 rounded-lg bg-white dark:bg-slate-900 resize-none focus:outline-none focus:ring-2 focus:ring-violet-300"
+                        rows={2}
+                      />
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-violet-600 font-medium">Facts are never invented — unknowns come back as [NEEDS INPUT].</p>
+                        <button
+                          onClick={() => generateCurrentSection()}
+                          disabled={!!isAIWorking}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          {isAIWorking === 'generate' ? 'Writing...' : 'Generate Section'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {showRefineBox && (
                     <div className="mb-4 p-4 bg-amber-50 dark:bg-slate-800 border border-amber-200 rounded-xl">
@@ -8053,7 +8137,9 @@ function AgentProposalWriter({
   const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   // 'full' = the 9-section proposal, 'loi' = a two-page letter of inquiry
-  const [documentType, setDocumentType] = useState<'full' | 'loi'>('full');
+  const [documentType, setDocumentType] = useState<'full' | 'loi' | 'section'>('full');
+  const [sectionTarget, setSectionTarget] = useState<string>('Executive Summary');
+  const [customSectionName, setCustomSectionName] = useState('');
   const [draftBlocks, setDraftBlocks] = useState<Array<{ label: string; content: string }> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -8154,33 +8240,72 @@ function AgentProposalWriter({
       // PHASE 2 — Write the proposal
       setStep('writing');
       const isLoi = documentType === 'loi';
+      const isSection = documentType === 'section';
+      const targetSectionName = (sectionTarget === '__custom' ? customSectionName : sectionTarget).trim();
+      if (isSection && !targetSectionName) {
+        throw new Error('Choose which section to write, or type a section name.');
+      }
+
       addLog('');
-      addLog(isLoi
-        ? '✍️ Phase 2 of 3 — Writing letter of inquiry in ECADRN voice...'
-        : '✍️ Phase 2 of 3 — Writing full proposal in ECADRN voice...');
+      addLog(isSection
+        ? `✍️ Phase 2 of 3 — Writing "${targetSectionName}" in ECADRN voice...`
+        : isLoi
+          ? '✍️ Phase 2 of 3 — Writing letter of inquiry in ECADRN voice...'
+          : '✍️ Phase 2 of 3 — Writing full proposal in ECADRN voice...');
       addLog('   Applying voice profile: ' + (activeVoice?.profileName || 'Default ECADRN'));
-      addLog(isLoi
-        ? '   Format: ~2 pages (700-900 words) — opening & ask, background, need,'
-        : '   Sections: Executive Summary, Need Statement, Project Description,');
-      addLog(isLoi
-        ? '   approach, capacity, budget overview, closing.'
-        : '   Goals & Objectives, Methodology, Evaluation Plan,');
-      if (!isLoi) addLog('   Sustainability, Organizational Capacity, Budget Narrative');
+      if (isSection) {
+        addLog('   Writing this one section only, matching the rest of the application.');
+      } else if (isLoi) {
+        addLog('   Format: ~2 pages (700-900 words) — opening & ask, background, need,');
+        addLog('   approach, capacity, budget overview, closing.');
+      } else {
+        addLog('   Sections: Executive Summary, Need Statement, Project Description,');
+        addLog('   Goals & Objectives, Methodology, Evaluation Plan,');
+        addLog('   Sustainability, Organizational Capacity, Budget Narrative');
+      }
       addLog('   Applying anti-AI-cliché filter...');
 
-      const sections = await callAI('agent-write-proposal', {
-        documentType,
-        orgProfile: organization,
-        ...safeResearch,
-        userInstructions,
-        toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || 'Scholarly, Equitable, Community-centered',
-        keyPhrases: activeVoice?.keyPhrases?.join(', ') || 'access to justice, early-career ADR professionals',
-        voiceRules: activeVoice?.voiceRules?.join(', ') || '',
-        writingSamples: activeVoice?.writingSamples?.join('\n') || '',
-      });
+      let sections: any = null;
+      let sectionBlocks: Array<{ label: string; content: string }> = [];
+
+      if (isSection) {
+        const result = await callAI('generate-section', {
+          sectionName: targetSectionName,
+          grantTitle: safeResearch.grantTitle,
+          funderName: safeResearch.funderName,
+          funderDescription: safeResearch.description || '',
+          funderPriorities: Array.isArray(safeResearch.focusAreas) ? safeResearch.focusAreas.join(', ') : '',
+          deadline: safeResearch.deadline,
+          orgProfile: organization,
+          existingSections: prefillGrant?.sections || {},
+          instructions: userInstructions,
+          toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || 'Scholarly, Equitable, Community-centered',
+          keyPhrases: activeVoice?.keyPhrases?.join(', ') || 'access to justice, early-career ADR professionals',
+          voiceRules: activeVoice?.voiceRules?.join(', ') || '',
+          writingSamples: activeVoice?.writingSamples?.join('\n') || '',
+        });
+        const content = String(result?.content || '').trim();
+        if (!content) throw new Error('The AI returned an empty section. Please try again.');
+        sectionBlocks = [{ label: String(result?.sectionTitle || targetSectionName), content }];
+        const pending = Array.isArray(result?.needsInput) ? result.needsInput.filter(Boolean) : [];
+        if (pending.length) addLog('   Needs your input: ' + pending.join('; '));
+      } else {
+        sections = await callAI('agent-write-proposal', {
+          documentType,
+          orgProfile: organization,
+          ...safeResearch,
+          userInstructions,
+          toneDescriptors: activeVoice?.toneDescriptors?.join(', ') || 'Scholarly, Equitable, Community-centered',
+          keyPhrases: activeVoice?.keyPhrases?.join(', ') || 'access to justice, early-career ADR professionals',
+          voiceRules: activeVoice?.voiceRules?.join(', ') || '',
+          writingSamples: activeVoice?.writingSamples?.join('\n') || '',
+        });
+      }
 
       addLog('');
-      addLog(isLoi ? '✅ Phase 2 complete — letter of inquiry written.' : '✅ Phase 2 complete — all 9 sections written.');
+      addLog(isSection
+        ? `✅ Phase 2 complete — ${targetSectionName} written.`
+        : isLoi ? '✅ Phase 2 complete — letter of inquiry written.' : '✅ Phase 2 complete — all 9 sections written.');
       addLog('');
       addLog('🔎 Phase 3 of 3 — Self-review pass...');
       addLog('   Checking for AI clichés, vague language, ungrounded claims...');
@@ -8195,7 +8320,11 @@ function AgentProposalWriter({
             .map((sec: any) => ({ label: String(sec.label || 'Section'), content: String(sec.content) }))
         : [];
 
-      if (isLoi) {
+      if (isSection) {
+        setDraftBlocks(sectionBlocks);
+        setProposalSections(null);
+        setActiveSection('loi-0');
+      } else if (isLoi) {
         if (!loiBlocks.length) throw new Error('The AI returned an empty letter of inquiry. Please try again.');
         setDraftBlocks(loiBlocks);
         setProposalSections(null);
@@ -8212,7 +8341,11 @@ function AgentProposalWriter({
       try {
         const savedId = await saveProposalToHub(
           safeResearch,
-          isLoi ? loiBlocks : Object.entries(SECTION_LABELS).map(([id, label]) => ({ label, content: String((sections as any)?.[id] || '') })),
+          isSection
+            ? sectionBlocks
+            : isLoi
+              ? loiBlocks
+              : Object.entries(SECTION_LABELS).map(([id, label]) => ({ label, content: String((sections as any)?.[id] || '') })),
           documentType
         );
         if (savedId) {
@@ -8278,7 +8411,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
   const saveProposalToHub = async (
     research: any,
     blocks: Array<{ label: string; content: string }>,
-    type: 'full' | 'loi'
+    type: 'full' | 'loi' | 'section'
   ): Promise<string | null> => {
     const sectionList = blocks.map((sec, i) => ({
       id: `${type}-${i}`,
@@ -8296,7 +8429,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
         research?.grantTitle ||
         grantName ||
         'Untitled proposal'
-      ) + (type === 'loi' ? ' — LOI' : ''),
+      ) + (type === 'loi' ? ' — LOI' : type === 'section' ? ` — ${blocks[0]?.label || 'Section'}` : ''),
       funder: research?.funderName || '',
       description: research?.description || additionalContext || '',
       sections: sectionList,
@@ -8734,7 +8867,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
                   <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
                     What should the agent write?
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setDocumentType('full')}
@@ -8759,7 +8892,45 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
                       <p className={`text-[11px] font-black ${documentType === 'loi' ? 'text-violet-800' : 'text-slate-700'}`}>Letter of Inquiry</p>
                       <p className="text-[9px] text-slate-500 mt-0.5">~2 pages · intro + ask</p>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentType('section')}
+                      className={`text-left rounded-xl border px-3 py-2.5 transition-all ${
+                        documentType === 'section'
+                          ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-violet-300'
+                      }`}
+                    >
+                      <p className={`text-[11px] font-black ${documentType === 'section' ? 'text-violet-800' : 'text-slate-700'}`}>One Section</p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">just one block</p>
+                    </button>
                   </div>
+
+                  {documentType === 'section' && (
+                    <div className="mt-2 space-y-2">
+                      <select
+                        value={sectionTarget}
+                        onChange={e => setSectionTarget(e.target.value)}
+                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[12px] text-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      >
+                        {Object.values(SECTION_LABELS).map(label => (
+                          <option key={label} value={label}>{label}</option>
+                        ))}
+                        <option value="__custom">Other (type a name)…</option>
+                      </select>
+                      {sectionTarget === '__custom' && (
+                        <input
+                          value={customSectionName}
+                          onChange={e => setCustomSectionName(e.target.value)}
+                          placeholder="e.g. Timeline & Work Plan, Logic Model, Evaluation Matrix…"
+                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[12px] text-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        />
+                      )}
+                      <p className="text-[10px] text-slate-400">
+                        Writes only this section — useful when a funder's form asks for one thing at a time.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Voice profile picker */}
