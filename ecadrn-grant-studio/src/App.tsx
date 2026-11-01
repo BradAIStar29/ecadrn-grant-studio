@@ -483,6 +483,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [firestoreHealth, setFirestoreHealth] = useState<null | "ok" | "error">(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [agentWriteIntent, setAgentWriteIntent] = useState<{ mode: 'full' | 'loi' | 'section', nonce: number } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     try { return JSON.parse(safeLocalStorage.getItem('ecadrn_prefs') || '{}').sidebarDefault !== 'closed'; } catch { return true; }
   });
@@ -2349,9 +2350,9 @@ CORE PROGRAMS:
               transition={{ duration: 0.2 }}
             >
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={startOrResumeTour} onExportMaster={exportMasterMarkdown} />}
-            {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onExportPdf={exportProposalAsPdf} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
+            {activeTab === 'proposals' && <ProposalsView grants={grants} onOpenAgentWrite={(mode: 'full' | 'loi' | 'section') => { setAgentWriteIntent({ mode, nonce: Date.now() }); setActiveTab('grants'); }} proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onExportPdf={exportProposalAsPdf} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} onOpenProposals={() => setActiveTab('proposals')} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} onOpenProposals={() => setActiveTab('proposals')} agentWriteIntent={agentWriteIntent} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
@@ -2934,9 +2935,9 @@ function PriorityItem({ label, urgency, date }: PriorityItemProps) {
 }
 
 function ProposalsView({ 
-  proposals, proposalsLoaded, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onExportPdf, onPrintProposal, onWinLossAnalysis, winLossResults
+  proposals, proposalsLoaded, organization, funders, voiceProfiles, selectedVoiceProfileId, onSetVoiceProfileId, orgId, user, onExportDocx, onExportPdf, onPrintProposal, onWinLossAnalysis, winLossResults, onOpenAgentWrite, grants = []
 }: { 
-  proposals: any[], proposalsLoaded: boolean, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onExportPdf?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any
+  proposals: any[], proposalsLoaded: boolean, organization: any, funders: any[], voiceProfiles: any[], selectedVoiceProfileId: string | null, onSetVoiceProfileId: (id: string) => void, orgId: string, user?: any, onExportDocx?: (p: any) => void, onExportPdf?: (p: any) => void, onPrintProposal?: (p: any) => void, onWinLossAnalysis?: (p: any, outcome: 'awarded' | 'declined') => void, winLossResults?: any, onOpenAgentWrite?: (mode: 'full' | 'loi' | 'section') => void, grants?: any[]
 }) {
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2948,6 +2949,8 @@ function ProposalsView({
   const [showGuide, setShowGuide] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
+  const [showTools, setShowTools] = useState(false);
+  const [showQuestionWriter, setShowQuestionWriter] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [aiComparison, setAiComparison] = useState<any>(null);
   const [aiComparisonLoading, setAiComparisonLoading] = useState(false);
@@ -3123,6 +3126,13 @@ function ProposalsView({
             title="How to use Proposals"
           >
             <HelpCircle size={14} />
+          </button>
+          <button
+            onClick={() => setShowTools(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-widest transition-all"
+            title="All writing tools"
+          >
+            <Sparkles size={13} /> Writing Tools
           </button>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4 min-w-0">
@@ -3830,7 +3840,297 @@ function ProposalsView({
           </div>
         </div>
       )}
+      <WritingTools
+        isOpen={showTools}
+        onClose={() => setShowTools(false)}
+        onOpenAgentWrite={(mode) => { if (onOpenAgentWrite) onOpenAgentWrite(mode); }}
+        onOpenQuestionWriter={() => setShowQuestionWriter(true)}
+      />
+      <QuestionWriter
+        isOpen={showQuestionWriter}
+        onClose={() => setShowQuestionWriter(false)}
+        organization={organization}
+        orgId={orgId}
+        voiceProfiles={voiceProfiles}
+        selectedVoiceProfileId={selectedVoiceProfileId}
+        grants={grants || []}
+        proposals={proposals}
+      />
     </motion.div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// QUESTION WRITER — answer one-off / miscellaneous funder questions
+// ──────────────────────────────────────────────────────────────────────────────
+function QuestionWriter({
+  isOpen, onClose, organization, orgId, voiceProfiles, selectedVoiceProfileId, grants, proposals
+}: {
+  isOpen: boolean, onClose: () => void, organization: any, orgId: string,
+  voiceProfiles: any[], selectedVoiceProfileId: string | null, grants: any[], proposals: any[]
+}) {
+  const [question, setQuestion] = useState('');
+  const [answerFormat, setAnswerFormat] = useState('concise paragraph');
+  const [lengthLimit, setLengthLimit] = useState('150-250 words');
+  const [instructions, setInstructions] = useState('');
+  const [grantId, setGrantId] = useState('');
+  const [result, setResult] = useState<any>(null);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [saveTo, setSaveTo] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) { setError(''); setCopied(false); setSaveMsg(''); }
+  }, [isOpen]);
+
+  const grant = (grants || []).find((g: any) => g.id === grantId);
+  const voice = (voiceProfiles || []).find((v: any) => v.id === selectedVoiceProfileId) || (voiceProfiles || [])[0];
+
+  const run = async () => {
+    if (!question.trim()) { setError('Paste the question you need answered first.'); return; }
+    setWorking(true); setError(''); setSaveMsg('');
+    try {
+      const contextProposal = saveTo ? (proposals || []).find((x: any) => x.id === saveTo) : null;
+      const res = await callAI('answer-question', {
+        question: question.trim(),
+        answerFormat,
+        lengthLimit,
+        instructions,
+        grantTitle: grant?.title || '',
+        funderName: grant?.funderName || '',
+        funderPriorities: grant?.funderPriorities || grant?.description || '',
+        orgProfile: organization || {},
+        context: contextProposal
+          ? (contextProposal.sections || []).map((x: any) => `${x.title}: ${String(x.content || '').slice(0, 600)}`).join('\n\n')
+          : '',
+        toneDescriptors: (voice?.toneDescriptors || []).join(', '),
+        keyPhrases: (voice?.keyPhrases || []).join(', '),
+        avoidWords: (voice?.avoidWords || []).join(', '),
+      });
+      if (!res?.answer) throw new Error('The AI returned an empty answer. Please try again.');
+      setResult(res);
+    } catch (e: any) {
+      setError(e?.message || 'Could not write an answer. Please try again.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const copyAnswer = () => {
+    if (!result?.answer) return;
+    navigator.clipboard.writeText(result.answer);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const saveToProposal = async () => {
+    if (!result?.answer || !saveTo) return;
+    const target = (proposals || []).find((x: any) => x.id === saveTo);
+    if (!target) { setSaveMsg('Pick a proposal first.'); return; }
+    try {
+      const existing = Array.isArray(target.sections) ? target.sections : [];
+      await setDoc(doc(db, 'organizations', orgId, 'proposals', saveTo), {
+        sections: [...existing, { id: `q-${Date.now()}`, title: `Q: ${question.trim().slice(0, 70)}`, content: result.answer }],
+        updatedAt: new Date().toISOString(),
+        lastEditedBy: auth.currentUser?.email || '',
+      }, { merge: true });
+      setSaveMsg('Added to that proposal.');
+    } catch (e: any) {
+      setSaveMsg('Could not save: ' + (e?.message || 'unknown error'));
+    }
+  };
+
+  const saveAsNew = async () => {
+    if (!result?.answer) return;
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'organizations', orgId, 'proposals'), {
+        title: `${grant?.title || question.trim().slice(0, 60)} — Q&A`,
+        funder: grant?.funderName || '',
+        description: question.trim().slice(0, 500),
+        sections: [{ id: 'qa-0', title: `Q: ${question.trim().slice(0, 70)}`, content: result.answer }],
+        status: 'draft',
+        documentType: 'q-and-a',
+        source: 'question-writer',
+        grantId: grant?.id || null,
+        createdBy: auth.currentUser?.email || '',
+        lastEditedBy: auth.currentUser?.email || '',
+        collaborators: auth.currentUser?.email ? [auth.currentUser.email] : [],
+        createdAt: now,
+        updatedAt: now,
+      });
+      setSaveMsg('Saved as a new Q&A draft in Proposals.');
+    } catch (e: any) {
+      setSaveMsg('Could not save: ' + (e?.message || 'unknown error'));
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl my-6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">Question Writer</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">For the one-off questions a funder asks that don't belong in a proposal section.</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white" aria-label="Close question writer">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">The question</label>
+            <textarea
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              rows={3}
+              placeholder="Paste the funder's question exactly, e.g. 'Describe how your organization safeguards participant data.'"
+              className="mt-1 w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Answer format</label>
+              <select value={answerFormat} onChange={e => setAnswerFormat(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl">
+                <option>concise paragraph</option>
+                <option>short answer (1-2 sentences)</option>
+                <option>bulleted list</option>
+                <option>multi-paragraph essay</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Length limit</label>
+              <input value={lengthLimit} onChange={e => setLengthLimit(e.target.value)}
+                placeholder="150-250 words or 1000 characters"
+                className="mt-1 w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Grant context</label>
+              <select value={grantId} onChange={e => setGrantId(e.target.value)}
+                className="mt-1 w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl">
+                <option value="">No specific grant</option>
+                {(grants || []).map((g: any) => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Instructions (optional)</label>
+            <input value={instructions} onChange={e => setInstructions(e.target.value)}
+              placeholder="e.g. emphasise equity; keep it under 120 words; use bullets"
+              className="mt-1 w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl" />
+          </div>
+
+          {error && <p className="text-[11px] text-rose-600 font-semibold">{error}</p>}
+
+          <button onClick={run} disabled={working}
+            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-black uppercase tracking-widest">
+            {working ? 'Writing…' : 'Write the answer'}
+          </button>
+
+          {result?.answer && (
+            <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Answer · {result.wordCount || 0} words
+                </p>
+                <button onClick={copyAnswer} className="text-[10px] font-bold uppercase text-indigo-600 hover:underline">
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                {result.answer}
+              </div>
+              {Array.isArray(result.needsInput) && result.needsInput.length > 0 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1">You need to supply</p>
+                  <ul className="text-[11px] text-amber-800 dark:text-amber-200 list-disc pl-4 space-y-0.5">
+                    {result.needsInput.map((n: string, i: number) => <li key={i}>{n}</li>)}
+                  </ul>
+                </div>
+              )}
+              {result.followUp && <p className="text-[11px] text-slate-500 italic">{result.followUp}</p>}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <select value={saveTo} onChange={e => setSaveTo(e.target.value)}
+                  className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl">
+                  <option value="">Add to a proposal…</option>
+                  {(proposals || []).map((pr: any) => <option key={pr.id} value={pr.id}>{pr.title}</option>)}
+                </select>
+                <button onClick={saveToProposal} disabled={!saveTo}
+                  className="px-3 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+                  Add section
+                </button>
+                <button onClick={saveAsNew}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest">
+                  Save as new Q&amp;A draft
+                </button>
+              </div>
+              {saveMsg && <p className="text-[11px] text-emerald-600 font-semibold">{saveMsg}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// WRITING TOOLS — one place to find every writing capability
+// ──────────────────────────────────────────────────────────────────────────────
+function WritingTools({
+  isOpen, onClose, onOpenAgentWrite, onOpenQuestionWriter
+}: {
+  isOpen: boolean, onClose: () => void,
+  onOpenAgentWrite: (mode: 'full' | 'loi' | 'section') => void,
+  onOpenQuestionWriter: () => void
+}) {
+  if (!isOpen) return null;
+  const tools = [
+    { icon: FileText, name: 'Full Proposal', desc: 'Nine submission-ready sections written from grant research, funder priorities and your voice.', action: () => { onClose(); onOpenAgentWrite('full'); } },
+    { icon: Send, name: 'Letter of Inquiry', desc: 'A two-page LOI that puts the ask first, then need, approach, capacity and budget.', action: () => { onClose(); onOpenAgentWrite('loi'); } },
+    { icon: Sparkles, name: 'Single Section', desc: 'Generate one section — Executive Summary, Logic Model, Timeline, or any name the funder uses.', action: () => { onClose(); onOpenAgentWrite('section'); } },
+    { icon: HelpCircle, name: 'Question Writer', desc: 'Answer miscellaneous funder questions that are not part of the standard format.', action: () => { onClose(); onOpenQuestionWriter(); } },
+  ];
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl my-10">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">Writing Tools</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">Everything the agent can write for you.</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white" aria-label="Close writing tools">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {tools.map(t => (
+            <button key={t.name} onClick={t.action}
+              className="text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-slate-800 transition-all">
+              <div className="flex items-center gap-2 mb-1.5">
+                <t.icon size={16} className="text-indigo-600" />
+                <p className="text-xs font-black text-slate-900 dark:text-white">{t.name}</p>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-snug">{t.desc}</p>
+            </button>
+          ))}
+        </div>
+        <div className="px-5 pb-5">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-[11px] text-slate-500 leading-relaxed">
+            Inside any proposal: <b>Generate Section</b> (sparkle icon) writes the section you are in, and
+            <b> Different format needed?</b> in an Agent Write review rewrites a finished draft into a funder's own structure.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -8100,7 +8400,7 @@ function FunderCard({
 // AGENT PROPOSAL WRITER
 // ──────────────────────────────────────────────────────────────────────────────
 function AgentProposalWriter({
-  isOpen, onClose, organization, voiceProfiles, selectedVoiceProfileId, orgId, prefillGrant, onOpenProposals
+  isOpen, onClose, organization, voiceProfiles, selectedVoiceProfileId, orgId, prefillGrant, onOpenProposals, initialDocumentType = 'full'
 }: {
   isOpen: boolean,
   onClose: () => void,
@@ -8109,7 +8409,8 @@ function AgentProposalWriter({
   selectedVoiceProfileId: string | null,
   orgId: string,
   prefillGrant?: any,
-  onOpenProposals?: () => void
+  onOpenProposals?: () => void,
+  initialDocumentType?: 'full' | 'loi' | 'section'
 }) {
   const [step, setStep] = useState<'input' | 'researching' | 'writing' | 'review'>('input');
   const [grantName, setGrantName] = useState('');
@@ -8138,6 +8439,11 @@ function AgentProposalWriter({
   const [saveError, setSaveError] = useState('');
   // 'full' = the 9-section proposal, 'loi' = a two-page letter of inquiry
   const [documentType, setDocumentType] = useState<'full' | 'loi' | 'section'>('full');
+
+  // Writing Tools can open Agent Write straight into a specific mode.
+  useEffect(() => {
+    if (isOpen) setDocumentType(initialDocumentType);
+  }, [isOpen, initialDocumentType]);
   const [sectionTarget, setSectionTarget] = useState<string>('Executive Summary');
   const [customSectionName, setCustomSectionName] = useState('');
   const [draftBlocks, setDraftBlocks] = useState<Array<{ label: string; content: string }> | null>(null);
@@ -9240,7 +9546,8 @@ function GrantsView({
   funders = [],
   onDetectRecurring,
   recurringResults = {},
-  onOpenProposals
+  onOpenProposals,
+  agentWriteIntent = null
 }: { 
   grants: any[], 
   organization: any, 
@@ -9251,7 +9558,8 @@ function GrantsView({
   funders?: any[],
   onDetectRecurring?: (grant: any) => void,
   recurringResults?: Record<string, any>,
-  onOpenProposals?: () => void
+  onOpenProposals?: () => void,
+  agentWriteIntent?: { mode: 'full' | 'loi' | 'section', nonce: number } | null
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
@@ -9498,6 +9806,17 @@ function GrantsView({
   const [selectedVoiceIdForSuggestion, setSelectedVoiceIdForSuggestion] = useState<string | null>(selectedVoiceProfileId || null);
   const [agentWriterOpen, setAgentWriterOpen] = useState(false);
   const [agentPrefillGrant, setAgentPrefillGrant] = useState<any>(null);
+  const [agentWriteMode, setAgentWriteMode] = useState<'full' | 'loi' | 'section'>('full');
+
+  // Writing Tools can request a specific mode from another tab.
+  useEffect(() => {
+    if (agentWriteIntent && agentWriteIntent.nonce) {
+      setAgentPrefillGrant(null);
+      setAgentWriteMode(agentWriteIntent.mode);
+      setAgentWriterOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentWriteIntent?.nonce]);
   const [prioritizeResults, setPrioritizeResults] = useState<any>(null);
   const [showPrioritizeModal, setShowPrioritizeModal] = useState(false);
   const [isPrioritizing, setIsPrioritizing] = useState(false);
@@ -10998,6 +11317,7 @@ function GrantsView({
         selectedVoiceProfileId={selectedVoiceProfileId}
         orgId={orgId}
         prefillGrant={agentPrefillGrant}
+        initialDocumentType={agentWriteMode}
         onOpenProposals={onOpenProposals}
       />
     </motion.div>

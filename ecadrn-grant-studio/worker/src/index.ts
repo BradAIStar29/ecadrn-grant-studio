@@ -32,6 +32,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'generate-draft':          { model: 'gemini-3.8-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
   'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
   'reformat-proposal':       { model: 'gemini-3.8-flash', temperature: 0.35, category: 'writing',  maxTokens: 32768, useSearch: false },
+  'answer-question':         { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'writing',  maxTokens: 4096,  useSearch: false },
   'generate-section':        { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
@@ -657,6 +658,47 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "sustainability": "string",
   "organizationalCapacity": "string",
   "budgetNarrative": "string"
+}`;
+
+    case 'answer-question':
+      return `You are ECADRN's grant writer answering ONE question from a funder or application form.
+
+QUESTION:
+${data.question}
+
+ANSWER FORMAT: ${data.answerFormat || 'concise paragraph'}
+LENGTH LIMIT: ${data.lengthLimit || '150-250 words unless the question implies otherwise'} — obey any word or character limit the funder set, exactly.
+FUNDER / GRANT: ${data.funderName || 'unspecified'} — ${data.grantTitle || 'unspecified'}
+FUNDER PRIORITIES: ${data.funderPriorities || 'not supplied'}
+ORGANIZATION PROFILE (authoritative): ${JSON.stringify(data.orgProfile || {}).slice(0, 4000)}
+RELATED APPLICATION MATERIAL (for consistency only; may be empty):
+${String(data.context || '').slice(0, 6000)}
+USER INSTRUCTIONS: ${data.instructions || 'none'}
+VOICE — tone: ${data.toneDescriptors || 'warm, precise, professional'}; signature phrases: ${data.keyPhrases || 'access to justice, early-career ADR professionals'}; avoid: ${data.avoidWords || 'delve, robust, tapestry, leverage, testament, moreover, it is important to note, at the heart of, navigating the landscape, bridging divides, fostering dialogue'}.
+
+ORGANIZATION FACTS YOU MAY USE (do not exceed these):
+- ECADRN is the Early Career ADR Network, a nonprofit that helps people enter and navigate alternative dispute resolution.
+- Free membership for mediators, arbitrators, ombuds, facilitators, students and career changers. ECADRN is a connector and pipeline builder — NOT a certifying body, training provider, or direct-service mediation provider.
+- Intern Program: remote ~10-week cohorts; spring and fall mostly high school students meeting weekly; summer mostly undergraduate/graduate students meeting biweekly.
+- Career Advising: one-to-one pairing with experienced ADR practitioners.
+- Resource Hub: education guides, a national ADR job board, networking events, and an ADR organization directory.
+- Fundraising events fund registration, insurance, virtual tools and program development.
+
+RULES:
+1. Answer the question asked, nothing else. No preamble, no restating the question.
+2. Use only the facts above or the supplied material. If the question requires a fact you do not have (budget, staff count, insurance carrier, data policy, legal registrations, evaluation results), insert [NEEDS INPUT: <the exact fact needed>] exactly where it belongs. Never guess or invent.
+3. If asked about a policy or practice ECADRN may not have, state what is true and note what is in development. Never claim commitments ECADRN has not made.
+4. Match the requested format exactly (bullets as "- ", short answer in one or two sentences, essay with paragraphs).
+5. Respect the length limit precisely; do not pad.
+6. Write in ECADRN's voice: plain, specific, active voice, no AI clichés.
+
+OUTPUT FORMAT — respond ONLY with valid JSON:
+{
+  "answer": "string — the answer itself, formatted as requested",
+  "wordCount": 0,
+  "format": "string — the format you used",
+  "needsInput": ["string — each fact the applicant must supply"],
+  "followUp": "string — one sentence of practical advice about this answer"
 }`;
 
     case 'generate-section':
@@ -2001,6 +2043,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
       ? ['sections']
       : ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'reformat-proposal': ['formatName', 'sections'],
+    'answer-question': ['answer'],
     'generate-section': ['sectionTitle', 'content'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
     'research-grant-url': ['grantTitle', 'funderName'],
