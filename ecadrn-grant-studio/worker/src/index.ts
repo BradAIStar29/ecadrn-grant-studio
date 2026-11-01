@@ -952,11 +952,11 @@ SEARCH INSTRUCTIONS — perform these searches:
 9. Search for "funder name + grants + dispute resolution" or "funder name + grants + mediation" to find ADR-specific funding history.
 
 FUNDER:
-Name: ${data.funderName}
-Website: ${data.funderWebsite}
-Primary contact: ${data.contactName}
-Relationship stage: ${data.relationshipStage}
-Notes: ${data.funderNotes}
+Name: ${data.funderName || 'Unspecified funder'}
+Website: ${data.funderWebsite || 'Not provided'}
+Primary contact: ${data.contactName || 'Not provided'}
+Relationship stage: ${data.relationshipStage || 'Prospect'}
+Notes: ${data.funderNotes || 'None supplied'}
 
 APPLYING ORGANIZATION:
 ${JSON.stringify(data.orgProfile)}

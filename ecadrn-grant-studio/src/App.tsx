@@ -2972,7 +2972,8 @@ function ProposalsView({
     { title: "Compliance Requirements Tab", content: "In the Proposal Editor, the 'Requirements' tab extracts a checkable compliance list from the grant's eligibility criteria — status, geography, budget caps, required documents. Red flags mark hard eligibility gates. Everything saves to the proposal so the team can check items off together." },
     { title: "Learn from Wins", content: "When you generate a new draft, the AI now studies your past WINNING proposals (status 'Awarded' or 'Approved') and mirrors the patterns that actually got funded — structure, evidence density, specificity. Mark your wins in the status column to teach the system." },
     { title: "PDF & DOCX Export", content: "Every proposal row has one-click export: DOCX for editing, a formatted PDF for submissions and sharing, and print for a quick paper copy. The PDF includes a title page, full sections, and page numbers." },
-    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 16 steps are always available." }
+    { title: "Writing Tools & Question Writer", content: "Click 'Writing Tools' at the top of Proposals for every way to write: a full proposal, a letter of inquiry, a single section, or the Question Writer. Use Question Writer for one-off funder questions that live outside the standard format — data protection, governance, DEI practice — and it answers from ECADRN's real programs, flagging anything you still need to supply." },
+    { title: "Replay This Guide", content: "Click the ? icon next to any page title at any time to reopen this guide and walk through any feature again. All 17 steps are always available." }
   ];
 
   const [newProposalData, setNewProposalData] = useState<{
@@ -3602,19 +3603,22 @@ function ProposalsView({
                         setAiComparisonLoading(true);
                         setAiComparison(null);
                         try {
+                          // The worker prompt reads `proposalA` / `proposalB`, so the
+                          // drafts have to be flattened to readable text here.
+                          const renderDraft = (pr: any) => [
+                            `Title: ${pr?.title || 'Untitled'}`,
+                            `Funder: ${pr?.funder || 'unspecified'}`,
+                            `Status: ${pr?.status || 'draft'}`,
+                            ...SECTION_KEYS.map((k: string) => {
+                              const body = getSectionContent(pr, k);
+                              return body ? `\n## ${k}\n${body}` : '';
+                            }),
+                          ].filter(Boolean).join('\n');
                           const result = await callAI('compare-proposals', {
-                            proposal1Title: p1.title,
-                            proposal1Funder: p1.funder,
-                            proposal1Sections: Object.fromEntries(
-                              SECTION_KEYS.map(k => [k, getSectionContent(p1, k)])
-                            ),
-                            proposal2Title: p2.title,
-                            proposal2Funder: p2.funder,
-                            proposal2Sections: Object.fromEntries(
-                              SECTION_KEYS.map(k => [k, getSectionContent(p2, k)])
-                            ),
-                            funderName: p1.funder || p2.funder,
-                            focusAreas: p1.focusAreas || p2.focusAreas || ''
+                            proposalA: renderDraft(p1),
+                            proposalB: renderDraft(p2),
+                            funderName: p1?.funder || p2?.funder || '',
+                            focusAreas: p1?.focusAreas || p2?.focusAreas || ''
                           });
                           setAiComparison(result);
                         } catch (err: any) {
@@ -3885,6 +3889,13 @@ function QuestionWriter({
     if (isOpen) { setError(''); setCopied(false); setSaveMsg(''); }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const grant = (grants || []).find((g: any) => g.id === grantId);
   const voice = (voiceProfiles || []).find((v: any) => v.id === selectedVoiceProfileId) || (voiceProfiles || [])[0];
 
@@ -3970,7 +3981,11 @@ function QuestionWriter({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto"
+      role="dialog" aria-modal="true" aria-label="Question Writer"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl my-6">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <div>
@@ -4092,6 +4107,13 @@ function WritingTools({
   onOpenAgentWrite: (mode: 'full' | 'loi' | 'section') => void,
   onOpenQuestionWriter: () => void
 }) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   const tools = [
     { icon: FileText, name: 'Full Proposal', desc: 'Nine submission-ready sections written from grant research, funder priorities and your voice.', action: () => { onClose(); onOpenAgentWrite('full'); } },
@@ -4100,7 +4122,11 @@ function WritingTools({
     { icon: HelpCircle, name: 'Question Writer', desc: 'Answer miscellaneous funder questions that are not part of the standard format.', action: () => { onClose(); onOpenQuestionWriter(); } },
   ];
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[100] bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto"
+      role="dialog" aria-modal="true" aria-label="Writing Tools"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl my-10">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <div>
@@ -4656,6 +4682,13 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
         );
         const result = await callAI('align-to-funder', {
           funderIntelligence: funder?.intelligence || {},
+          funderPriorities: (funder?.intelligence?.givingPriorities || funder?.intelligence?.fundingPriorities || []).join(', '),
+          funderLanguage: [
+            funder?.intelligence?.missionAlignmentRationale,
+            funder?.intelligence?.recentStrategicShifts,
+            funder?.intelligence?.typicalGrantees,
+          ].filter(Boolean).join(' | '),
+          funderName: funder?.name || funder?.funderName || '',
           content: sections[activeSectionIdx].content
         });
         const alignedContent = typeof result === 'string' ? result : (result?.alignedContent || result?.content || '');
@@ -7008,6 +7041,8 @@ function FundersView({ funders, organization, orgId }: { funders: any[], organiz
     try {
       const result = await callAI('analyze-competitors', {
         funderName: funder.funderName,
+        grantTitle: funder.grantTitle || funder.programName || '',
+        funderUrl: funder.funderUrl || funder.website || funder.intelligence?.website || '',
         orgMission: organization?.missionStatement || '',
         funderPriorities: funder.intelligence?.givingPriorities?.join(', ') || '',
         funderType: funder.intelligence?.funderType || '',
