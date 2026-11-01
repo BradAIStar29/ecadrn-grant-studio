@@ -217,7 +217,11 @@ service cloud.firestore {
                                      'createdBy', 'lastEditedBy', 'funder', 'assignee',
                                      'description', 'source', 'autopilot', 'matchScore',
                                      'createdAt', 'requirements', 'requirementsMissingInfo',
-                                     'requirementsUpdatedAt', 'attachments']);
+                                     'requirementsUpdatedAt', 'attachments',
+                                     // Agent Write reformat + grant linkage
+                                     'originalSections', 'formattedTo', 'formatNotes',
+                                     'grantId', 'alignmentScore', 'amountMin', 'amountMax',
+                                     'deadline', 'funderUrl']);
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);
 
         // Comments — any org member can read/write

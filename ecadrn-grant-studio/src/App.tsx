@@ -2351,7 +2351,7 @@ CORE PROGRAMS:
             {activeTab === 'dashboard' && <DashboardView organization={organization} proposals={proposals} grants={grants} funders={funders} onStartTour={startOrResumeTour} onExportMaster={exportMasterMarkdown} />}
             {activeTab === 'proposals' && <ProposalsView proposals={proposals} proposalsLoaded={proposalsLoaded} organization={organization} funders={funders} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} onSetVoiceProfileId={setSelectedVoiceProfileId} orgId={orgId} user={user} onExportDocx={exportProposalAsDocx} onExportPdf={exportProposalAsPdf} onPrintProposal={printProposal} onWinLossAnalysis={runWinLossAnalysis} winLossResults={winLossResults} />}
             {activeTab === 'funders' && <FundersView funders={funders} organization={organization} orgId={orgId} />}
-            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} />}
+            {activeTab === 'grants' && <GrantsView grants={grants} organization={organization} voiceProfiles={voiceProfiles} selectedVoiceProfileId={selectedVoiceProfileId} orgId={orgId} user={user} funders={funders} onDetectRecurring={detectRecurringGrant} recurringResults={recurringResults} onOpenProposals={() => setActiveTab('proposals')} />}
             {activeTab === 'voice' && <VoiceView organization={organization} profiles={voiceProfiles} selectedProfileId={selectedVoiceProfileId} onSetSelectedProfileId={setSelectedVoiceProfileId} funders={funders} grants={grants} orgId={orgId} />}
             {activeTab === 'outreach' && <OutreachView organization={organization} funders={funders} proposals={proposals} />}
             {activeTab === 'chat' && <ChatView organization={organization} proposals={proposals} />}
@@ -8016,7 +8016,7 @@ function FunderCard({
 // AGENT PROPOSAL WRITER
 // ──────────────────────────────────────────────────────────────────────────────
 function AgentProposalWriter({
-  isOpen, onClose, organization, voiceProfiles, selectedVoiceProfileId, orgId, prefillGrant
+  isOpen, onClose, organization, voiceProfiles, selectedVoiceProfileId, orgId, prefillGrant, onOpenProposals
 }: {
   isOpen: boolean,
   onClose: () => void,
@@ -8024,7 +8024,8 @@ function AgentProposalWriter({
   voiceProfiles: any[],
   selectedVoiceProfileId: string | null,
   orgId: string,
-  prefillGrant?: any
+  prefillGrant?: any,
+  onOpenProposals?: () => void
 }) {
   const [step, setStep] = useState<'input' | 'researching' | 'writing' | 'review'>('input');
   const [grantName, setGrantName] = useState('');
@@ -8047,6 +8048,10 @@ function AgentProposalWriter({
   const [formatFileName, setFormatFileName] = useState('');
   const [formatError, setFormatError] = useState('');
   const [isReformatting, setIsReformatting] = useState(false);
+  // The finished draft is filed in the Proposals collection automatically, so
+  // the hub, dashboard, analytics and outreach all see it.
+  const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -8101,6 +8106,8 @@ function AgentProposalWriter({
     setFormatInstructions('');
     setFormatFileName('');
     setFormatError('');
+    setSavedProposalId(null);
+    setSaveError('');
     setChatHistory([]);
     setStep('researching');
 
@@ -8172,6 +8179,20 @@ function AgentProposalWriter({
       setActiveSection('executiveSummary');
       setStep('review');
 
+      // File it in Proposals immediately — a finished draft should never live
+      // only inside this modal.
+      try {
+        const savedId = await saveProposalToHub(safeResearch, sections);
+        if (savedId) {
+          setSavedProposalId(savedId);
+          addLog('📁 Filed in Proposals.');
+        } else {
+          setSaveError('The draft had no usable content, so it was not filed in Proposals.');
+        }
+      } catch (err: any) {
+        setSaveError('Draft created, but saving to Proposals failed: ' + (err?.message || 'unknown error'));
+      }
+
     } catch (err: any) {
       addLog('');
       addLog('❌ Error: ' + (err?.message || 'Unknown error'));
@@ -8213,6 +8234,57 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     } finally {
       setIsChatting(false);
     }
+  };
+
+  // ── File the finished draft in Proposals ─────────────────────────────────
+  const proposeSectionsArray = (sections: any) =>
+    Object.entries(SECTION_LABELS).map(([id, title]) => ({
+      id,
+      title,
+      content: String((sections as any)?.[id] || ''),
+    }));
+
+  const saveProposalToHub = async (research: any, sections: any): Promise<string | null> => {
+    const sectionList = proposeSectionsArray(sections);
+    if (!sectionList.some(sec => sec.content.trim())) return null;
+
+    const email = auth.currentUser?.email || '';
+    const now = new Date().toISOString();
+    const proposalsPath = `organizations/${orgId}/proposals`;
+
+    const docRef = await addDoc(collection(db, proposalsPath), {
+      title: research?.grantTitle || grantName || 'Untitled proposal',
+      funder: research?.funderName || '',
+      description: research?.description || additionalContext || '',
+      sections: sectionList,
+      status: 'draft',
+      source: 'agent-write',
+      grantId: prefillGrant?.id || null,
+      alignmentScore: typeof research?.ecadrnAlignmentScore === 'number' ? research.ecadrnAlignmentScore : null,
+      amountMin: typeof research?.amountMin === 'number' ? research.amountMin : null,
+      amountMax: typeof research?.amountMax === 'number' ? research.amountMax : null,
+      deadline: research?.deadline || '',
+      funderUrl: grantUrl || '',
+      createdBy: email,
+      lastEditedBy: email,
+      collaborators: email ? [email] : [],
+      createdAt: now,
+      updatedAt: now,
+    }).catch(e => {
+      handleFirestoreError(e, OperationType.WRITE, proposalsPath);
+      throw e;
+    });
+
+    // Connect the grant card back to its proposal so the pipeline stays in sync.
+    if (prefillGrant?.id) {
+      await setDoc(
+        doc(db, 'organizations', orgId, 'grants', prefillGrant.id),
+        { proposalId: docRef.id, pipelineStage: 'Drafting', updatedAt: now },
+        { merge: true }
+      ).catch(() => { /* grant link is best-effort; the proposal is already saved */ });
+    }
+
+    return docRef.id;
   };
 
   // ── Rewrite into a funder-required format ───────────────────────────────
@@ -8267,12 +8339,39 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
 
       if (!sections.length) throw new Error("The AI returned no sections. Try pasting the funder's questions in explicitly.");
 
-      setReformatted({
+      const reformattedDoc = {
         formatName: String(result?.formatName || 'Requested format'),
         formatNotes: String(result?.formatNotes || ''),
         sections,
-      });
+      };
+      setReformatted(reformattedDoc);
       setActiveSection('rf-0');
+
+      // Update the filed proposal so Proposals shows the version that will be
+      // submitted, while keeping the original draft alongside it.
+      const sectionList = sections.map((sec: { label: string; content: string }, i: number) => ({ id: `rf-${i}`, title: sec.label, content: sec.content }));
+      const email = auth.currentUser?.email || '';
+      try {
+        if (savedProposalId) {
+          await setDoc(
+            doc(db, 'organizations', orgId, 'proposals', savedProposalId),
+            {
+              sections: sectionList,
+              originalSections: proposeSectionsArray(proposalSections),
+              formattedTo: reformattedDoc.formatName,
+              formatNotes: reformattedDoc.formatNotes,
+              updatedAt: new Date().toISOString(),
+              lastEditedBy: email,
+            },
+            { merge: true }
+          );
+        } else {
+          const savedId = await saveProposalToHub(researchData, proposalSections);
+          if (savedId) setSavedProposalId(savedId);
+        }
+      } catch (err: any) {
+        setFormatError('Rewritten, but syncing to Proposals failed: ' + (err?.message || 'unknown error'));
+      }
     } catch (err: any) {
       setFormatError(err?.message || 'Rewrite failed. Please try again.');
     } finally {
@@ -8486,6 +8585,18 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
           <div className="flex items-center gap-2">
             {step === 'review' && (
               <>
+                {savedProposalId ? (
+                  <button
+                    onClick={() => { onOpenProposals?.(); onClose(); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-black uppercase tracking-wider text-emerald-700 hover:bg-emerald-100 transition-all shadow-sm"
+                    title="This draft is saved in the Proposals tab"
+                  >
+                    <CheckCircle size={12} />
+                    Filed in Proposals
+                  </button>
+                ) : saveError ? (
+                  <span className="text-[10px] font-bold text-rose-600 max-w-[260px] leading-tight">{saveError}</span>
+                ) : null}
                 <button
                   onClick={copyAllSections}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
@@ -8880,7 +8991,8 @@ function GrantsView({
   user = null,
   funders = [],
   onDetectRecurring,
-  recurringResults = {}
+  recurringResults = {},
+  onOpenProposals
 }: { 
   grants: any[], 
   organization: any, 
@@ -8890,7 +9002,8 @@ function GrantsView({
   user?: any,
   funders?: any[],
   onDetectRecurring?: (grant: any) => void,
-  recurringResults?: Record<string, any>
+  recurringResults?: Record<string, any>,
+  onOpenProposals?: () => void
 }) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isVoiceSuggesting, setIsVoiceSuggesting] = useState(false);
@@ -10637,6 +10750,7 @@ function GrantsView({
         selectedVoiceProfileId={selectedVoiceProfileId}
         orgId={orgId}
         prefillGrant={agentPrefillGrant}
+        onOpenProposals={onOpenProposals}
       />
     </motion.div>
   );
