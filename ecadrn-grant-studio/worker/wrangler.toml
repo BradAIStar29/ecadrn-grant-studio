@@ -3,6 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+# Workers Logs — required to see runtime errors (the 2026-10-31 Agent Write
+# failure left no trace because this was never enabled).
+[observability]
+enabled = true
+
 [vars]
 ALLOWED_ORIGIN = "https://bradaistar29.github.io"
 

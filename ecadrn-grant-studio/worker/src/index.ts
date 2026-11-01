@@ -81,11 +81,8 @@ const MODEL_TIERS = [
   // the 3.x Flash/Lite tiers above). Frontier-class quality, acts as a
   // high-capacity bridge before dropping to the legacy 2.5 models.
   { model: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
-  // Deeper fallbacks — free-tier Gemini 2.5 models with their own 1,500 RPD
-  // quota pool. Only reached when all 3.x tiers + 3 Flash Preview are
-  // rate-limited or overloaded.
-  { model: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
-  { model: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+  // Gemini 2.5 tiers removed 2026-10-31 — Google retired them (404 "no longer
+  // available to new users"), so they only wasted a slot in the fallback chain.
 ];
 
 function isTransientOverloadError(err: any): boolean {
@@ -618,9 +615,16 @@ GRANT NAME: ${data.grantName}
 GRANT URL: ${data.grantUrl || 'Not provided'}
 ADDITIONAL CONTEXT: ${data.additionalContext || 'None'}
 
-APPLYING ORGANIZATION — ECADRN:
-Mission: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
-Programs: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network
+APPLYING ORGANIZATION — ECADRN (Early Career ADR Network, ecadrn.org):
+Mission: empowers and equips emerging Alternative Dispute Resolution (ADR) professionals from diverse racial, religious, economic, sexual orientation, and educational backgrounds with the skills, knowledge and resources to become ethical, effective neutrals; bridges gaps in access to justice.
+Positioning: a national connector and pipeline builder — NOT a certifying body, a training provider, or a direct-service mediation center.
+Programs (complete, accurate list — do not invent others):
+- Free national membership for mediators, arbitrators, ombuds, facilitators, students and career changers ("early-career is an experience, not an age")
+- Intern Program: remote ~10-week cohorts — Spring/Fall cohorts mostly high school students (weekly meetings), Summer cohorts mostly undergraduate/graduate students (biweekly); workshops and lectures on mediation, arbitration and conflict resolution
+- Career Advising: 1:1 pairing of early-career professionals with seasoned ADR practitioners
+- Resource Hub: Education Hub guides, ADR field overviews, "how to get started" pathways, national ADR Job Board, networking events
+- ADR Organization Directory of the field's leading organizations
+- Volunteer program
 
 OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown fences):
 {
@@ -1432,9 +1436,16 @@ FUNDER: ${data.funderName || ''}
 GRANT PROGRAM: ${data.grantTitle || ''}
 FUNDER WEBSITE: ${data.funderUrl || 'Not provided'}
 
-APPLYING ORGANIZATION — ECADRN:
-Mission: Supports early-career ADR professionals through structural equity, trauma-informed mediation, peer networks, access to justice, restorative circle spaces, and professional empowerment.
-Programs: ADR Fellowship, Peer Mediation Circles, Justice Access Lab, Early Career Mentorship Network.
+APPLYING ORGANIZATION — ECADRN (Early Career ADR Network, ecadrn.org):
+Mission: empowers and equips emerging Alternative Dispute Resolution (ADR) professionals from diverse racial, religious, economic, sexual orientation, and educational backgrounds with the skills, knowledge and resources to become ethical, effective neutrals; bridges gaps in access to justice.
+Positioning: a national connector and pipeline builder — NOT a certifying body, a training provider, or a direct-service mediation center.
+Programs (complete, accurate list — do not invent others):
+- Free national membership for mediators, arbitrators, ombuds, facilitators, students and career changers ("early-career is an experience, not an age")
+- Intern Program: remote ~10-week cohorts — Spring/Fall cohorts mostly high school students (weekly meetings), Summer cohorts mostly undergraduate/graduate students (biweekly); workshops and lectures on mediation, arbitration and conflict resolution
+- Career Advising: 1:1 pairing of early-career professionals with seasoned ADR practitioners
+- Resource Hub: Education Hub guides, ADR field overviews, "how to get started" pathways, national ADR Job Board, networking events
+- ADR Organization Directory of the field's leading organizations
+- Volunteer program.
 
 ⚠️ ANTI-HALLUCINATION RULES:
 1. ONLY include organizations you can verify via web search actually received funding.
@@ -1943,7 +1954,15 @@ async function runGeneration(
   });
 
   const res = await Promise.race([generationPromise, timeoutPromise]);
-  return res.text?.trim() || '';
+  const text = res.text?.trim() || '';
+  if (!text) {
+    // Gemini can return an empty candidate (MALFORMED_FUNCTION_CALL, SAFETY,
+    // RECITATION). That is retryable, not fatal — the caller must be able to
+    // try the other attempt mode or the next model tier.
+    const finish = (res as any)?.candidates?.[0]?.finishReason || 'UNKNOWN';
+    throw new Error(`EMPTY_RESPONSE:${finish}`);
+  }
+  return text;
 }
 
 export default {
@@ -2124,6 +2143,7 @@ export default {
 
       let lastError = '';
       let lastErrorIsQuota = false;
+      let sawCapacityHit = false; // real quota/overload hit (vs a bad/empty response)
       let activeTier = startTier;
       let usedFallback = false;
 
@@ -2151,7 +2171,12 @@ export default {
             }
           } catch (err: any) {
             if (err.message === 'TIMEOUT') {
-              return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+              // A slow model must not kill the request — fall through to the
+              // next (usually much faster) tier instead of erroring out.
+              console.error(`AI timeout on ${MODEL_TIERS[tier].model} for "${action}" — trying next tier`);
+              lastError = `${MODEL_TIERS[tier].model}: timed out`;
+              lastErrorIsQuota = true; // chain-continues semantics
+              break;
             }
             if (isQuotaError(err)) {
               // Search-grounding quota is separate from generation quota:
@@ -2161,7 +2186,9 @@ export default {
                 console.warn(`Search grounding quota hit for "${action}" — retrying without web search (results flagged as unverified)`);
                 try {
                   const degradedPrompt = `${prompt}\n\nNOTE: Web search grounding is temporarily unavailable (quota). Base your answer ONLY on your existing knowledge. For anything you cannot verify, say so explicitly and mark researchConfidence (or equivalent confidence field) as "low". Do NOT invent specific statistics, URLs, or dates.`;
-                  resultText = await runGeneration(tierAi, degradedPrompt, { ...tierConfig, useSearch: false }, false);
+                  // JSON mode is safe here (no search tool attached) and prevents
+                  // empty MALFORMED_FUNCTION_CALL responses on some models.
+                  resultText = await runGeneration(tierAi, degradedPrompt, { ...tierConfig, useSearch: false }, true);
                   if (resultText) {
                     searchDegraded = true;
                     tierSucceeded = true;
@@ -2172,7 +2199,10 @@ export default {
                   }
                 } catch (err2: any) {
                   if (err2.message === 'TIMEOUT') {
-                    return json({ error: 'The AI is taking longer than expected. Please try again.' }, 503);
+                    console.error(`AI timeout (degraded) on ${MODEL_TIERS[tier].model} for "${action}" — trying next tier`);
+                    lastError = `${MODEL_TIERS[tier].model}: timed out`;
+                    lastErrorIsQuota = true;
+                    break;
                   }
                   if (!isQuotaError(err2)) {
                     lastError = err2.message || String(err2);
@@ -2184,6 +2214,7 @@ export default {
               }
               // Rate-limited — record fallback and try next model tier
               console.error(`AI quota hit on ${MODEL_TIERS[tier].model} for "${action}": ${err.message}`);
+              sawCapacityHit = true;
               await recordModelFallback(env, tier);
               lastError = `${MODEL_TIERS[tier].model}: rate limited`;
               lastErrorIsQuota = true;
@@ -2194,6 +2225,7 @@ export default {
               // — try the next tier immediately + short KV skip so the next
               // requests in the burst start one tier deeper
               console.error(`Model ${MODEL_TIERS[tier].model} overloaded for "${action}" — trying next tier`);
+              sawCapacityHit = true;
               await recordOverloadSkip(env, tier);
               lastError = `${MODEL_TIERS[tier].model}: temporarily overloaded`;
               lastErrorIsQuota = true; // chain-continues semantics
@@ -2207,9 +2239,10 @@ export default {
               lastErrorIsQuota = true; // chain-continues semantics without recording KV
               break;
             }
-            // Non-quota error — try second attempt mode, or give up
+            // Non-quota error — try second attempt mode; an empty candidate is
+            // worth another model too, so let the chain continue.
             lastError = err.message || String(err);
-            lastErrorIsQuota = false;
+            lastErrorIsQuota = String(lastError).startsWith('EMPTY_RESPONSE') && attempt === 1;
             console.error(`AI attempt ${attempt + 1} failed on ${MODEL_TIERS[tier].model} for "${action}": ${lastError}`);
           }
         }
@@ -2221,7 +2254,7 @@ export default {
       }
 
       if (!resultText) {
-        if (lastErrorIsQuota) {
+        if (sawCapacityHit) {
           const waitMin = await getFallbackWaitMinutes(env);
           const hint = waitMin ? ` Please try again in ~${waitMin} minute${waitMin === 1 ? '' : 's'}.` : ' Please try again in a few minutes.';
           const headers: Record<string, string> = {
