@@ -3114,8 +3114,8 @@ function ProposalsView({
 
   return (
     <motion.div id="proposals-view" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex justify-between items-center text-slate-900 dark:text-white">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap gap-y-3 gap-x-4 justify-between items-center text-slate-900 dark:text-white">
+        <div className="flex items-center gap-4 min-w-0">
           <h3 className="text-2xl font-bold tracking-tight">Your Proposals</h3>
           <button 
             onClick={() => setShowGuide(true)}
@@ -3125,8 +3125,8 @@ function ProposalsView({
             <HelpCircle size={14} />
           </button>
         </div>
-        <div className="flex gap-4">
-          <div className="relative">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4 min-w-0">
+          <div className="relative flex-1 min-w-[160px] sm:flex-none sm:w-56">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input 
               type="text" 
@@ -3147,23 +3147,23 @@ function ProposalsView({
             <option value="submitted">Submitted</option>
             <option value="approved">Approved</option>
           </select>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
             <button 
               onClick={() => setShowTemplateModal(true)}
-              className="flex items-center gap-2 text-indigo-600 font-medium px-4 py-2 rounded-lg border border-indigo-100 hover:bg-indigo-50 dark:bg-slate-800 transition-colors"
+              className="flex items-center gap-2 whitespace-nowrap text-indigo-600 font-medium px-3 sm:px-4 py-2 rounded-lg border border-indigo-100 hover:bg-indigo-50 dark:bg-slate-800 transition-colors"
             >
               <Copy size={18} /> Templates
             </button>
             <button
               onClick={() => { setCompareMode(!compareMode); setCompareSelected([]); setShowCompareModal(false); }}
-              className={`flex items-center gap-2 font-medium px-4 py-2 rounded-lg transition-colors ${compareMode ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100'}`}
+              className={`flex items-center gap-2 whitespace-nowrap font-medium px-3 sm:px-4 py-2 rounded-lg transition-colors ${compareMode ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100'}`}
             >
               <GitCompare size={20} />
               {compareMode ? 'Exit Compare' : 'Compare'}
             </button>
             <button 
               onClick={() => setShowNewForm(!showNewForm)}
-              className="flex items-center gap-2 bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 whitespace-nowrap bg-indigo-600 text-white font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
             >
               {showNewForm ? <X size={20} /> : <Plus size={20} />}
               {showNewForm ? 'Cancel' : 'New Draft'}
@@ -4496,28 +4496,28 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
   const totalWordCount = sections.reduce((acc, s) => acc + (s.content ? s.content.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0), 0);
 
   return (
-    <div className={`flex flex-col h-[calc(100vh-120px)] bg-slate-50 dark:bg-slate-800 relative ${focusMode ? 'fixed inset-0 z-[100] h-screen w-screen -m-0' : '-m-8'}`}>
+    <div className={`flex flex-col h-[calc(100vh-120px)] bg-slate-50 dark:bg-slate-800 relative overflow-x-hidden ${focusMode ? 'fixed inset-0 z-[100] h-screen w-screen -m-0' : '-m-4 sm:-m-8'}`}>
       {!focusMode && (
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-8 py-3 sm:py-4 flex flex-wrap gap-y-3 justify-between items-center">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <button onClick={onBack} className="p-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 rounded-lg text-slate-400 dark:text-slate-500" aria-label="Back to proposals" title="Back to proposals">
               <ArrowLeft size={20} />
             </button>
-            <nav aria-label="Proposal breadcrumb" className="flex items-center gap-2 text-sm">
+            <nav aria-label="Proposal breadcrumb" className="flex items-center gap-2 text-sm min-w-0">
               <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 font-medium transition-colors">Proposals</button>
               <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
-              <span className="font-bold text-slate-900 leading-tight truncate max-w-[300px]">{proposal.title}</span>
+              <span className="font-bold text-slate-900 leading-tight truncate max-w-[32vw] sm:max-w-[300px]">{proposal.title}</span>
             </nav>
-            <div className="ml-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <div className="ml-2 hidden lg:block min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 truncate">
                 <span className="text-indigo-600">Funder: {proposal.funder}</span>
                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                 <span className="flex items-center gap-1"><Users size={10} /> {presence.length} Collaborators Active</span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex -space-x-2 mr-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end min-w-0">
+            <div className="flex -space-x-2 mr-2 sm:mr-4">
               {presence.filter(p => p.id !== auth.currentUser?.uid).map(p => (
                 <div key={p.id}
                   className={`w-8 h-8 rounded-full border-2 border-white ${getAvatarColor(p.userEmail || '')} flex items-center justify-center text-[10px] font-bold text-white relative`}
@@ -4541,13 +4541,13 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
             </div>
             <button 
               onClick={() => setFocusMode(true)}
-              className="text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors flex items-center gap-2"
+              className="text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Maximize size={16} /> Focus Mode
             </button>
             <button 
               onClick={() => setShowTemplateConfirm(true)}
-              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors whitespace-nowrap"
             >
               <Copy size={16} /> Save as Template
             </button>
@@ -4562,18 +4562,18 @@ The East Coast ADR Network (ECADRN) possesses the necessary logistical, programm
                 a.download = `${proposal.title.replace(/\s+/g, '_')}_Grant_Proposal.md`;
                 a.click();
               }}
-              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-emerald-600 transition-colors"
+              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-emerald-600 transition-colors whitespace-nowrap"
             >
               <FileText size={16} /> Export MD
             </button>
             <button 
               onClick={() => setShowVersions(!showVersions)}
-              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+              className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors whitespace-nowrap"
             >
               <History size={16} /> History
             </button>
             <div className="h-6 w-px bg-slate-200"></div>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="flex bg-slate-100 p-1 rounded-xl max-w-full overflow-x-auto shrink-0">
                <button 
                  onClick={() => setActiveSubTab('editor')}
                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'editor' ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
