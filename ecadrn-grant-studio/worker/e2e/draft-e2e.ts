@@ -14,9 +14,8 @@ import { getPrompt } from '../src/index';
 // ── Same model chain as the worker ─────────────────────────────────────────
 const MODEL_TIERS = [
   'gemini-3.8-flash',
-  'gemini-3.7-flash',
+  // 3.7/3.5 Flash deprecated 2026-10-08 (auto-route to 3.8/3.6) — removed.
   'gemini-3.6-flash',
-  'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
 ];

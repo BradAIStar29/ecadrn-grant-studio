@@ -80,9 +80,10 @@ const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 
 
 const MODEL_TIERS = [
   { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
-  { model: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash' },
+  // Gemini 3.7 Flash & 3.5 Flash removed 2026-11-01 — Google deprecated them
+  // (2026-10-08) and auto-routes requests into 3.8/3.6 Flash, so after a quota
+  // failure they just doubled up on an exhausted pool and wasted a retry.
   { model: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash' },
-  { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
   { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
   // Gemini 3 Flash (Preview) — free-tier, 1,500 RPD (separate quota pool from

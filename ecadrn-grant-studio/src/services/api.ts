@@ -68,9 +68,8 @@ const AI_MODEL_PREF_KEY = 'ecadrn_ai_model_pref';
 export const AI_MODEL_OPTIONS = [
   { id: 'auto',                  label: 'Smart (auto — recommended)' },
   { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash — newest & sharpest' },
-  { id: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash — high performance' },
+  // 3.7/3.5 Flash dropped: deprecated 2026-10-08, auto-route into 3.8/3.6.
   { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash — reliable backup' },
-  { id: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash — steady backup' },
   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite — lightest' },
   { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview) — high-capacity fallback' },
 ] as const;
