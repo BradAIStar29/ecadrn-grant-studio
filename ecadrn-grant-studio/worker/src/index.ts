@@ -9,6 +9,11 @@ export interface Env {
   GOOGLE_DRIVE_TOKEN?: string;
   AI_CONFIG?: KVNamespace;
   ELLIS_FEEDBACK_TOKEN?: string;
+  // Optional extra free providers (OpenAI-compatible). Only used when the
+  // secret exists; the worker is unchanged when they are absent.
+  GROQ_API_KEY?: string;
+  CEREBRAS_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 }
 
 // Firebase public keys for JWT signature verification (cached by jose)
@@ -34,13 +39,11 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'discover-grants':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'autopilot-search':        { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'find-adr-partners':       { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
-  'align-proposal':          { model: 'gemini-3.8-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'align-grant-ecadrn':      { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
   'align-to-funder':         { model: 'gemini-3.8-flash', temperature: 0.5,  category: 'analysis', maxTokens: 8192,  useSearch: false },
   'compare-proposals':       { model: 'gemini-3.8-flash', temperature: 0.4,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'review-proposal':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'humanize-proposal':       { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'analysis', maxTokens: 16384, useSearch: false },
-  'score-alignment':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 8192,  useSearch: false },
   'analyze-voice':           { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'analysis', maxTokens: 8192,  useSearch: false },
   'analyze-uploaded-grant':  { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'utility',  maxTokens: 8192,  useSearch: false },
   'generate-budget':         { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'writing',  maxTokens: 16384, useSearch: false },
@@ -51,7 +54,6 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'rewrite-voice':           { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'identify-missing':        { model: 'gemini-3.8-flash', temperature: 0.5,  category: 'utility',  maxTokens: 8192,  useSearch: false },
   'verify-facts':            { model: 'gemini-3.8-flash', temperature: 0.1,  category: 'analysis', maxTokens: 16384, useSearch: true  },
-  'search-grants':           { model: 'gemini-3.8-flash', temperature: 0.3,  category: 'research', maxTokens: 16384, useSearch: true  },
   'refine-section':         { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'writing',  maxTokens: 16384, useSearch: false },
   'pre-submit-check':       { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'analysis', maxTokens: 16384, useSearch: false },
   'analyze-competitors':    { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
@@ -74,16 +76,58 @@ const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 
 
 const MODEL_TIERS = [
   { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
+  { model: 'gemini-3.7-flash',      label: 'Gemini 3.7 Flash' },
   { model: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash' },
+  { model: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash' },
   { model: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
   { model: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
   // Gemini 3 Flash (Preview) — free-tier, 1,500 RPD (separate quota pool from
   // the 3.x Flash/Lite tiers above). Frontier-class quality, acts as a
   // high-capacity bridge before dropping to the legacy 2.5 models.
   { model: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
+  // Alias tier — Google's rolling "latest" lite model. Separate quota pool,
+  // so it still serves when the pinned 3.x tiers above are exhausted.
+  { model: 'gemini-flash-lite-latest', label: 'Gemini Flash-Lite (latest)' },
   // Gemini 2.5 tiers removed 2026-10-31 — Google retired them (404 "no longer
   // available to new users"), so they only wasted a slot in the fallback chain.
 ];
+
+// ── Optional free providers (OpenAI-compatible) ──────────────────────────────
+// Free tiers from other vendors. Each is used ONLY when its secret exists, so
+// adding a key instantly extends the chain and removing it is a no-op.
+// See cheahjs/free-llm-api-resources for the current free-tier list.
+const EXTERNAL_PROVIDERS: Array<{ id: string; label: string; endpoint: string; keyEnv: 'GROQ_API_KEY' | 'CEREBRAS_API_KEY' | 'OPENROUTER_API_KEY'; model: string }> = [
+  { id: 'groq',       label: 'Groq Llama 3.3 70B',       endpoint: 'https://api.groq.com/openai/v1/chat/completions',       keyEnv: 'GROQ_API_KEY',       model: 'llama-3.3-70b-versatile' },
+  { id: 'cerebras',   label: 'Cerebras Llama 3.3 70B',   endpoint: 'https://api.cerebras.ai/v1/chat/completions',           keyEnv: 'CEREBRAS_API_KEY',   model: 'llama-3.3-70b' },
+  { id: 'openrouter', label: 'OpenRouter free (Llama 3.3)', endpoint: 'https://openrouter.ai/api/v1/chat/completions',       keyEnv: 'OPENROUTER_API_KEY', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+];
+
+async function runExternalGeneration(
+  prov: (typeof EXTERNAL_PROVIDERS)[number],
+  apiKey: string,
+  prompt: string,
+  config: { temperature: number; maxTokens: number },
+  jsonMode: boolean
+): Promise<string> {
+  const body: any = {
+    model: prov.model,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: config.temperature,
+    max_tokens: Math.min(config.maxTokens, 8192),
+  };
+  if (jsonMode) body.response_format = { type: 'json_object' };
+  const res = await fetch(prov.endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (!res.ok) throw new Error(`${prov.id}: HTTP ${res.status}`);
+  const d: any = await res.json();
+  const text = String(d?.choices?.[0]?.message?.content || '').trim();
+  if (!text) throw new Error(`EMPTY_RESPONSE:${prov.id}`);
+  return text;
+}
 
 function isTransientOverloadError(err: any): boolean {
   // Brand-new Gemini models (e.g. 3.8 Flash right after launch) intermittently
@@ -1003,6 +1047,7 @@ Proposal Section: ${data.content || ''}`;
 Return JSON:
 {
   "winner": "A | B",
+  "comparison": "string — 2-3 sentence side-by-side summary of how the two drafts differ",
   "reasoning": "string — 3-4 sentences explaining the choice",
   "strengthsA": ["string"], "weaknessesA": ["string"],
   "strengthsB": ["string"], "weaknessesB": ["string"],
@@ -1014,7 +1059,7 @@ Proposal B: ${safeTruncateContext(data.proposalB, 4000)}`;
 
     case 'analyze-uploaded-grant':
       return `Analyze this grant document and extract key information. Return JSON with:
-- "title" (string): grant name
+- "grantTitle" (string): grant name
 - "funderName" (string): funding organization
 - "deadline" (string): application deadline if found
 - "amount" (string): funding amount if found
@@ -1027,7 +1072,8 @@ ${(data.text || '').slice(0, 8000)}`;
 
     case 'analyze-voice':
       return `Analyze the following documents to identify the organization's unique writing voice and style. Return JSON with:
-- "tone" (string): dominant tone (formal, conversational, urgent, etc.)
+- "toneDescriptors" (array of 3-6 short strings): dominant tones (formal, conversational, urgent, etc.)
+- "tone" (string): dominant tone as one phrase
 - "vocabulary" (array of strings): frequently used distinctive words
 - "sentenceStyle" (string): description of sentence structure patterns
 - "keyPhrases" (array of strings): signature phrases or themes
@@ -1778,6 +1824,36 @@ async function fetchSourceEvidence(url: string, oppNumber: string): Promise<Sour
 
 // ── Response Validation ──────────────────────────────────────────────────────
 
+// Models sometimes answer with a synonym of the field we asked for. Normalize
+// those aliases before validation so a correct answer is never thrown away as a
+// "schema invalid" error (this was silently breaking Voice training, Proposal
+// comparison, and Uploaded-grant analysis).
+function normalizeParsed(action: string, parsed: any): any {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+
+  const alias = (from: string, to: string) => {
+    if (parsed[to] === undefined && parsed[from] !== undefined) parsed[to] = parsed[from];
+  };
+
+  if (action === 'analyze-voice') {
+    if (parsed.toneDescriptors === undefined) {
+      const t = parsed.tone;
+      if (Array.isArray(t)) parsed.toneDescriptors = t.map((x: any) => String(x));
+      else if (typeof t === 'string' && t.trim()) parsed.toneDescriptors = t.split(/[,;]/).map((x: string) => x.trim()).filter(Boolean);
+      else parsed.toneDescriptors = ['professional'];
+    }
+    if (parsed.keyPhrases === undefined && Array.isArray(parsed.vocabulary)) parsed.keyPhrases = parsed.vocabulary;
+  }
+
+  if (action === 'analyze-uploaded-grant') alias('title', 'grantTitle');
+
+  if (action === 'compare-proposals' && parsed.comparison === undefined) {
+    parsed.comparison = parsed.mergedRecommendation || parsed.reasoning || '';
+  }
+
+  return parsed;
+}
+
 function validateResponse(action: string, parsed: any): { valid: boolean; error?: string } {
   if (parsed === null || parsed === undefined) return { valid: false, error: 'Null response' };
   if (typeof parsed !== 'object') return { valid: false, error: 'Expected object or array' };
@@ -2253,6 +2329,27 @@ export default {
         if (!lastErrorIsQuota) break;
       }
 
+      // Last resort: free providers from other vendors (only if configured).
+      if (!resultText) {
+        for (const prov of EXTERNAL_PROVIDERS) {
+          const apiKey = (env as any)[prov.keyEnv];
+          if (!apiKey) continue;
+          for (const jsonMode of [true, false]) {
+            try {
+              resultText = await runExternalGeneration(prov, apiKey, prompt, config, jsonMode);
+              servedModel = prov.label;
+              usedFallback = true;
+              console.log(`Served "${action}" from ${prov.label} after Gemini tiers failed`);
+              break;
+            } catch (err: any) {
+              lastError = err?.message || String(err);
+              console.error(`External provider ${prov.id} failed for "${action}": ${lastError}`);
+            }
+          }
+          if (resultText) break;
+        }
+      }
+
       if (!resultText) {
         if (sawCapacityHit) {
           const waitMin = await getFallbackWaitMinutes(env);
@@ -2338,7 +2435,8 @@ export default {
         parsed = { foundations: merged };
       }
 
-      // Validate the response structure
+      // Validate the response structure (after alias normalization)
+      parsed = normalizeParsed(action, parsed);
       const validation = validateResponse(action, parsed);
       if (!validation.valid) {
         console.error(`Validation failed for action "${action}": ${validation.error}`);
