@@ -219,7 +219,7 @@ service cloud.firestore {
                                      'createdAt', 'requirements', 'requirementsMissingInfo',
                                      'requirementsUpdatedAt', 'attachments',
                                      // Agent Write reformat + grant linkage
-                                     'originalSections', 'formattedTo', 'formatNotes',
+                                     'documentType', 'originalSections', 'formattedTo', 'formatNotes',
                                      'grantId', 'alignmentScore', 'amountMin', 'amountMax',
                                      'deadline', 'funderUrl']);
         allow delete: if isOrgMember(orgId) && isValidId(proposalId);

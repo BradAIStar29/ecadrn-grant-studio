@@ -8052,6 +8052,9 @@ function AgentProposalWriter({
   // the hub, dashboard, analytics and outreach all see it.
   const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
+  // 'full' = the 9-section proposal, 'loi' = a two-page letter of inquiry
+  const [documentType, setDocumentType] = useState<'full' | 'loi'>('full');
+  const [draftBlocks, setDraftBlocks] = useState<Array<{ label: string; content: string }> | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -8092,7 +8095,9 @@ function AgentProposalWriter({
   // reformatted version once the user rewrites it to a funder's structure.
   const displaySections: Array<{ key: string; label: string; content: string }> = reformatted
     ? reformatted.sections.map((sec, i) => ({ key: `rf-${i}`, label: sec.label, content: sec.content }))
-    : Object.entries(SECTION_LABELS).map(([key, label]) => ({ key, label, content: proposalSections?.[key] || '' }));
+    : draftBlocks && draftBlocks.length
+      ? draftBlocks.map((sec, i) => ({ key: `loi-${i}`, label: sec.label, content: sec.content }))
+      : Object.entries(SECTION_LABELS).map(([key, label]) => ({ key, label, content: proposalSections?.[key] || '' }));
   const activeEntry = displaySections.find(sec => sec.key === activeSection) || displaySections[0] || { key: '', label: '', content: '' };
 
   const runAgentWrite = async () => {
@@ -8108,6 +8113,7 @@ function AgentProposalWriter({
     setFormatError('');
     setSavedProposalId(null);
     setSaveError('');
+    setDraftBlocks(null);
     setChatHistory([]);
     setStep('researching');
 
@@ -8147,15 +8153,23 @@ function AgentProposalWriter({
 
       // PHASE 2 — Write the proposal
       setStep('writing');
+      const isLoi = documentType === 'loi';
       addLog('');
-      addLog('✍️ Phase 2 of 3 — Writing full proposal in ECADRN voice...');
+      addLog(isLoi
+        ? '✍️ Phase 2 of 3 — Writing letter of inquiry in ECADRN voice...'
+        : '✍️ Phase 2 of 3 — Writing full proposal in ECADRN voice...');
       addLog('   Applying voice profile: ' + (activeVoice?.profileName || 'Default ECADRN'));
-      addLog('   Sections: Executive Summary, Need Statement, Project Description,');
-      addLog('   Goals & Objectives, Methodology, Evaluation Plan,');
-      addLog('   Sustainability, Organizational Capacity, Budget Narrative');
+      addLog(isLoi
+        ? '   Format: ~2 pages (700-900 words) — opening & ask, background, need,'
+        : '   Sections: Executive Summary, Need Statement, Project Description,');
+      addLog(isLoi
+        ? '   approach, capacity, budget overview, closing.'
+        : '   Goals & Objectives, Methodology, Evaluation Plan,');
+      if (!isLoi) addLog('   Sustainability, Organizational Capacity, Budget Narrative');
       addLog('   Applying anti-AI-cliché filter...');
 
       const sections = await callAI('agent-write-proposal', {
+        documentType,
         orgProfile: organization,
         ...safeResearch,
         userInstructions,
@@ -8166,7 +8180,7 @@ function AgentProposalWriter({
       });
 
       addLog('');
-      addLog('✅ Phase 2 complete — all 9 sections written.');
+      addLog(isLoi ? '✅ Phase 2 complete — letter of inquiry written.' : '✅ Phase 2 complete — all 9 sections written.');
       addLog('');
       addLog('🔎 Phase 3 of 3 — Self-review pass...');
       addLog('   Checking for AI clichés, vague language, ungrounded claims...');
@@ -8175,14 +8189,32 @@ function AgentProposalWriter({
       addLog('');
       addLog('✅ Proposal ready. Tap any section to read, edit, or ask follow-up questions.');
 
-      setProposalSections(sections);
-      setActiveSection('executiveSummary');
+      const loiBlocks = Array.isArray((sections as any)?.sections)
+        ? (sections as any).sections
+            .filter((sec: any) => sec && typeof sec.content === 'string' && sec.content.trim())
+            .map((sec: any) => ({ label: String(sec.label || 'Section'), content: String(sec.content) }))
+        : [];
+
+      if (isLoi) {
+        if (!loiBlocks.length) throw new Error('The AI returned an empty letter of inquiry. Please try again.');
+        setDraftBlocks(loiBlocks);
+        setProposalSections(null);
+        setActiveSection('loi-0');
+      } else {
+        setDraftBlocks(null);
+        setProposalSections(sections);
+        setActiveSection('executiveSummary');
+      }
       setStep('review');
 
       // File it in Proposals immediately — a finished draft should never live
       // only inside this modal.
       try {
-        const savedId = await saveProposalToHub(safeResearch, sections);
+        const savedId = await saveProposalToHub(
+          safeResearch,
+          isLoi ? loiBlocks : Object.entries(SECTION_LABELS).map(([id, label]) => ({ label, content: String((sections as any)?.[id] || '') })),
+          documentType
+        );
         if (savedId) {
           setSavedProposalId(savedId);
           addLog('📁 Filed in Proposals.');
@@ -8237,15 +8269,22 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
   };
 
   // ── File the finished draft in Proposals ─────────────────────────────────
-  const proposeSectionsArray = (sections: any) =>
-    Object.entries(SECTION_LABELS).map(([id, title]) => ({
-      id,
-      title,
-      content: String((sections as any)?.[id] || ''),
-    }));
+  // The draft as it was first written, regardless of document type.
+  const originalDraftBlocks = (): Array<{ label: string; content: string }> =>
+    draftBlocks && draftBlocks.length
+      ? draftBlocks
+      : Object.entries(SECTION_LABELS).map(([id, label]) => ({ label, content: String(proposalSections?.[id] || '') }));
 
-  const saveProposalToHub = async (research: any, sections: any): Promise<string | null> => {
-    const sectionList = proposeSectionsArray(sections);
+  const saveProposalToHub = async (
+    research: any,
+    blocks: Array<{ label: string; content: string }>,
+    type: 'full' | 'loi'
+  ): Promise<string | null> => {
+    const sectionList = blocks.map((sec, i) => ({
+      id: `${type}-${i}`,
+      title: sec.label,
+      content: sec.content,
+    }));
     if (!sectionList.some(sec => sec.content.trim())) return null;
 
     const email = auth.currentUser?.email || '';
@@ -8253,12 +8292,17 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     const proposalsPath = `organizations/${orgId}/proposals`;
 
     const docRef = await addDoc(collection(db, proposalsPath), {
-      title: research?.grantTitle || grantName || 'Untitled proposal',
+      title: (
+        research?.grantTitle ||
+        grantName ||
+        'Untitled proposal'
+      ) + (type === 'loi' ? ' — LOI' : ''),
       funder: research?.funderName || '',
       description: research?.description || additionalContext || '',
       sections: sectionList,
       status: 'draft',
       source: 'agent-write',
+      documentType: type,
       grantId: prefillGrant?.id || null,
       alignmentScore: typeof research?.ecadrnAlignmentScore === 'number' ? research.ecadrnAlignmentScore : null,
       amountMin: typeof research?.amountMin === 'number' ? research.amountMin : null,
@@ -8357,7 +8401,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
             doc(db, 'organizations', orgId, 'proposals', savedProposalId),
             {
               sections: sectionList,
-              originalSections: proposeSectionsArray(proposalSections),
+              originalSections: originalDraftBlocks().map((b, i) => ({ id: `orig-${i}`, title: b.label, content: b.content })),
               formattedTo: reformattedDoc.formatName,
               formatNotes: reformattedDoc.formatNotes,
               updatedAt: new Date().toISOString(),
@@ -8366,7 +8410,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
             { merge: true }
           );
         } else {
-          const savedId = await saveProposalToHub(researchData, proposalSections);
+          const savedId = await saveProposalToHub(researchData, originalDraftBlocks(), documentType);
           if (savedId) setSavedProposalId(savedId);
         }
       } catch (err: any) {
@@ -8380,7 +8424,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
   };
 
   const downloadProposal = async () => {
-    if ((!proposalSections && !reformatted) || !researchData) return;
+    if (!researchData || !displaySections.some(sec => (sec.content || '').trim())) return;
 
     // ── Build the Word document ──
     const children: any[] = [];
@@ -8388,7 +8432,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     // Cover header
     children.push(
       new Paragraph({
-        text: 'GRANT PROPOSAL',
+        text: documentType === 'loi' ? 'LETTER OF INQUIRY' : 'GRANT PROPOSAL',
         heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
         spacing: { after: 200 },
@@ -8627,9 +8671,9 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
               <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-2xl p-4 border border-violet-100">
                 <p className="text-[12px] text-violet-800 font-semibold leading-relaxed">
-                  Give me a grant name and optional URL — I'll research the funder, analyze the requirements, 
-                  write a complete 9-section proposal in ECADRN's voice, and deliver a download-ready document. 
-                  You can then ask questions or request edits before downloading.
+                  Give me a grant name and optional URL — I'll research the funder, analyze the requirements,
+                  then write either a complete 9-section proposal or a two-page letter of inquiry in ECADRN's voice.
+                  It's filed in Proposals automatically, and you can ask for edits before downloading.
                 </p>
               </div>
 
@@ -8683,6 +8727,39 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
                     rows={3}
                     className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-slate-900 resize-none"
                   />
+                </div>
+
+                {/* Document type */}
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2 block">
+                    What should the agent write?
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDocumentType('full')}
+                      className={`text-left rounded-xl border px-3 py-2.5 transition-all ${
+                        documentType === 'full'
+                          ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-violet-300'
+                      }`}
+                    >
+                      <p className={`text-[11px] font-black ${documentType === 'full' ? 'text-violet-800' : 'text-slate-700'}`}>Full Proposal</p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">9 sections · submission-ready</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentType('loi')}
+                      className={`text-left rounded-xl border px-3 py-2.5 transition-all ${
+                        documentType === 'loi'
+                          ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-violet-300'
+                      }`}
+                    >
+                      <p className={`text-[11px] font-black ${documentType === 'loi' ? 'text-violet-800' : 'text-slate-700'}`}>Letter of Inquiry</p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">~2 pages · intro + ask</p>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Voice profile picker */}

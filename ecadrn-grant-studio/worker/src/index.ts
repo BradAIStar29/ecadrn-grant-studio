@@ -723,6 +723,54 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON (strictly valid, no markdown
 }`;
 
     case 'agent-write-proposal':
+      if (data.documentType === 'loi') return `You are ECADRN's senior grant writer. You are writing a LETTER OF INQUIRY (LOI) — a short, specific, two-page letter introducing ECADRN and asking a program officer for permission to submit a full proposal.
+
+ORGANIZATION: ECADRN (Early Career ADR Network, ecadrn.org)
+${JSON.stringify(data.orgProfile)}
+
+GRANT OPPORTUNITY (fully researched):
+Title: ${data.grantTitle}
+Funder: ${data.funderName}
+Funder type: ${data.funderType}
+Description: ${data.description}
+Focus areas: ${JSON.stringify(data.focusAreas)}
+Award range: $${data.amountMin}–$${data.amountMax}
+Geographic focus: ${data.geographicFocus}
+Eligibility: ${data.eligibility}
+Key selection criteria: ${JSON.stringify(data.keySelectionCriteria)}
+Strategic approach: ${data.strategicApproach}
+Deadline: ${data.deadline}
+
+VOICE: ${data.toneDescriptors} | Signature phrases: ${data.keyPhrases} | Rules: ${data.voiceRules}
+Sample writing: ${data.writingSamples}
+USER INSTRUCTIONS: ${data.userInstructions || 'None'}
+
+AN LOI IS NOT A SHORTENED PROPOSAL. Write it the way a program officer expects to read one:
+- Open with who ECADRN is, the specific population served, and the concrete ask (amount and purpose) in the first two sentences.
+- Establish the need with one or two verified-style data points, then the approach, then why ECADRN is positioned to deliver it.
+- Use ECADRN's REAL programs only: free national membership; the Intern Program (remote ~10-week cohorts — spring/fall mostly high school students, summer mostly undergraduate/graduate students); Career Advising (1:1 with seasoned ADR practitioners); the Resource Hub (Education Hub guides, national ADR Job Board, networking events); the ADR Organization Directory; volunteering.
+- Never invent programs, staff, statistics, partners, outcomes or budget lines. If a required detail is unknown, write "[NEEDS INPUT: <what is missing>]".
+- Total length 700–900 words across all sections combined. Hit these minimums (expand with specifics, never filler):
+  Opening & Ask 90–130 · Organization Background 90–120 · Statement of Need 120–160 · Proposed Work 140–180 · Organizational Capacity 90–120 · Budget Overview 70–100 · Closing & Contact 50–80.
+- Active voice. Banned: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+
+OUTPUT FORMAT — respond ONLY with this exact JSON:
+{
+  "documentType": "loi",
+  "formatName": "Letter of Inquiry",
+  "formatNotes": "string — 2-3 sentences: the line of argument used and anything that still needs input",
+  "wordCount": number,
+  "sections": [
+    { "label": "Opening & Ask", "content": "string" },
+    { "label": "Organization Background", "content": "string" },
+    { "label": "Statement of Need", "content": "string" },
+    { "label": "Proposed Work", "content": "string" },
+    { "label": "Organizational Capacity", "content": "string" },
+    { "label": "Budget Overview", "content": "string" },
+    { "label": "Closing & Contact", "content": "string" }
+  ]
+}`;
+
       return `You are ECADRN's elite grant writer — a senior fundraising strategist who writes proposals that win. You are writing the COMPLETE, FINAL, SUBMISSION-READY grant proposal for this opportunity.
 
 ORGANIZATION: ECADRN
@@ -1898,7 +1946,9 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'verify-grant-source': ['status', 'confidence'],
     'discover-foundations': ['foundations'],
     'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
-    'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
+    'agent-write-proposal': parsed?.documentType === 'loi'
+      ? ['sections']
+      : ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'reformat-proposal': ['formatName', 'sections'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
     'research-grant-url': ['grantTitle', 'funderName'],
