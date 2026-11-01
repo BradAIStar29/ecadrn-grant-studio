@@ -2,7 +2,7 @@
 
 > Scheduled, entity-triggered, and connector-triggered agent automations
 
-Automations wake the agent automatically. Use `list_automations` to inspect existing automations, `create_automation` to create scheduled/entity/connector automations, and `manage_automation` to update, pause, unpause, archive, or restore them only when those tools are available in the current tool list. If workflow tools such as `get_workflow_guide` and `create_or_update_workflow` are available instead, load the workflows skill and use the workflow tools rather than legacy automation tools. The editor Tasks tab also lets users view scheduled vs automated tasks, filter active/paused/completed tasks, open a detail page, run scheduled tasks immediately, pause/reactivate, archive/restore, delete, and use suggested task templates that paste prompts into chat for review. When an automation fires, the agent receives the task context and can use normal tools; during an automation run, mutating creation tools are restricted to avoid recursive setup loops.
+Automations wake the agent automatically. Use `list_automations` to inspect existing automations and `manage_automation` to update, pause, unpause, archive, or restore them only when those tools are available in the current tool list. Legacy automations are being retired: new ones can't be created. When the user asks for a new scheduled or triggered task, tell them to migrate this agent with "Switch to Workflows" on its Tasks tab in the Base44 web app; existing automations can still be edited, paused or archived. If workflow tools such as `get_workflow_guide` and `create_or_update_workflow` are available instead, load the workflows skill and use the workflow tools rather than legacy automation tools. The editor Tasks tab also lets users view scheduled vs automated tasks, filter active/paused/completed tasks, open a detail page, run scheduled tasks immediately, pause/reactivate, archive/restore, delete, and use suggested task templates that paste prompts into chat for review. When an automation fires, the agent receives the task context and can use normal tools; during an automation run, mutating creation tools are restricted to avoid recursive setup loops.
 
 When an automation triggers you, you handle the task using all your tools (entity CRUD, skills, integrations, etc.):
 - `task_name`: a descriptive label for what you'll do (e.g. `daily_report`, `sync_inventory`). It is NOT a function reference.
@@ -27,15 +27,13 @@ The current date and the user's local timezone are provided in the developer not
 
 ## Entity automations (automation_type="entity")
 Triggered when records in a data entity are created, updated, or deleted.
-- Required: entity_name (the entity to watch), event_types (array of: create, update, delete).
+- Fields: entity_name (the entity to watch), event_types (array of: create, update, delete).
 - You receive: `event` ({ type, entity_name, entity_id }), `data` (current entity data), `old_data` (previous data, update events only), and `payload_too_large`: true if data exceeded 200KB (fetch it via entity tools instead).
 
 ## Connector automations (automation_type="connector")
 Triggered by webhook events emitted by connected OAuth integrations.
-- Required: integration_type (e.g. 'gmail', 'googlecalendar'), events (array of event names). The integration must be connected (authorized) first.
-- IMPORTANT: only ONE active automation per integration type is allowed. If one already exists, use manage_automation with action="update" instead of creating a new one - reusing it avoids duplicate triggers, saves credits, and keeps behaviour in a single place.
-- Optional: resource_id - a specific resource to watch (e.g. a Google Drive file ID for file.* events, a calendar ID for Google Calendar). Required for some event types like Drive file-level events; omit to watch all resources.
-- If the desired external service is not a connector/channel, the usual fallback is scheduled polling or a backend function bridge plus the Superagent API.
+- Fields: integration_type (e.g. 'gmail', 'googlecalendar'), events (array of event names).
+- Only ONE active automation per integration type is allowed; change its events with manage_automation action="update".
 
 ## Credits and confirmation
-Automation runs use message credits (about 0.1 for a simple average run, not 1). The user's explicitly requested frequency is sufficient authorization, including every 5-10 minutes; do not ask them to confirm it again. Do not choose a very frequent schedule unless the user requested it. After creating or updating an automation, explain plainly when it runs and what it will do.
+Automation runs use message credits (about 0.1 for a simple average run, not 1). The user's explicitly requested frequency is sufficient authorization, including every 5-10 minutes; do not ask them to confirm it again. Do not choose a very frequent schedule unless the user requested it. After updating an automation, explain plainly when it runs and what it will do.

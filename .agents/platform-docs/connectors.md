@@ -63,12 +63,13 @@ For quick operations, call `get_connector_token` then use `bash` with the env va
 
 ## Handling external API auth errors
 
-If an external API returns an authentication error (e.g. token_revoked, invalid_auth, 401 Unauthorized, 403 Forbidden), follow this recovery sequence:
-1. Call `get_connector_token` once, passing the exact scopes required for the intended operation in `required_scopes` using the provider's exact OAuth scope names
-2. If it reports missing required scopes or a stale or expired connection, call `request_oauth_authorization` with the full scope set the app needs — the missing scopes plus the currently granted scopes still in use (re-authorization replaces the grant)
-3. If it returns a fresh token, retry the failed API call once
-4. If the API still rejects the fresh token, stop refreshing and call `request_oauth_authorization`
+When a connector tool or external API fails, distinguish token rejection, missing permissions, resource access, rate limits and temporary failures. A scope mismatch or 403 alone does not establish that the account is disconnected, expired or revoked.
+For authentication or scope failures, follow this recovery sequence:
+1. For an external API authentication failure, call `get_connector_token` once with the operation's exact OAuth scopes in `required_scopes`. If `get_connector_token` itself failed, inspect that result directly instead of repeating the same request.
+2. If the connection is active but the scope check fails, inspect the reported granted scopes and `get_connectors_info`'s guide. Check the provider's API documentation for an already-granted scope or supported API operation that can do the same task. Retry once with those documented scopes in `required_scopes`, preserving the user's intent and approval requirements. Never omit required scopes, bypass a check or switch accounts to evade a permission failure.
+3. If a token is returned, retry the failed API operation once. If it still fails, inspect the provider's error; request re-authorization only for confirmed token rejection or permissions the existing grant cannot satisfy.
+4. If the tool explicitly reports a stale or expired connection, or no existing permission supports the task, call `request_oauth_authorization` with the full scope set the app needs — the missing scopes plus the currently granted scopes still in use (re-authorization replaces the grant).
 
-Do not loop on `get_connector_token`; repeated refreshes cannot repair a stale grant or add missing scopes.
+Do not repeat identical failed token requests. Before sending a blocker or reconnect notice, try the available authorized recovery above. If still blocked, describe the specific observed failure; claim disconnection, expiry or revocation only when the connection state or provider confirms it.
 
 If the requested external service is available as a connector, always prefer connectors over other methods (secrets). If the service is NOT available as a connector, do NOT attempt to use the app connectors. Instead, use other methods like secrets or direct API calls.

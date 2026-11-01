@@ -17,12 +17,17 @@ To discover existing functions, search for files in the functions/ directory. If
 ## Coding rules
 - Use `Deno.serve(async (req) => { ... })` - no other patterns.
 - External packages must use `npm:` with a pinned version. Base44 virtual imports such as `base44:private-data-sources/<type>` are platform modules, not packages.
-- For app auth or entity access, import the request client exactly as `import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';` and create it with `const base44 = createClientFromRequest(req);` inside the handler - the deploy validator rejects any other pattern.
+- For app auth or entity access, use `import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';` and create it with `const base44 = createClientFromRequest(req);` inside the handler. Existing pinned SDK versions remain valid, but use this version for new functions.
 - No local imports between function files - each file is deployed independently.
 - Use camelCase for function names (e.g. `getJoke`, `exportTasks`).
 - Parameters are passed through the request body only, not URL params.
 - Return `Response` objects - never return strings or plain objects directly.
 - Never ask users for internal service credentials.
+
+## Entity reads
+- `await base44.entities.Task.list({limit: 50})` returns a page object: `{items, next_cursor, has_more}`. Read `page.items`, not `page.length`.
+- Use `filter(query, {sort: '-created_date', limit: 50})` for filtered pages. For subsequent pages, pass `cursor: page.next_cursor` while `page.has_more` is true.
+- The positional form `list('-created_date', 50, 0)` returns an array. Do not mix its response shape with the options form.
 
 ## Function checklist
 Every function should:
