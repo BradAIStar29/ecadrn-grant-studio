@@ -31,6 +31,7 @@ type ActionCategory = 'research' | 'writing' | 'analysis' | 'chat' | 'utility';
 const ACTION_CONFIG: Record<string, { model: string; temperature: number; category: ActionCategory; maxTokens: number; useSearch: boolean }> = {
   'generate-draft':          { model: 'gemini-3.8-flash', temperature: 0.75, category: 'writing',  maxTokens: 16384, useSearch: false },
   'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
+  'reformat-proposal':       { model: 'gemini-3.8-flash', temperature: 0.35, category: 'writing',  maxTokens: 32768, useSearch: false },
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'search-grants-gov':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: false },
@@ -641,6 +642,34 @@ OUTPUT FORMAT — Respond ONLY with this exact JSON. No preamble. No markdown fe
   "sustainability": "string",
   "organizationalCapacity": "string",
   "budgetNarrative": "string"
+}`;
+
+    case 'reformat-proposal':
+      return `You are ECADRN's senior grant editor. You are rewriting an EXISTING proposal into a DIFFERENT required format — same facts, new structure, new length.
+
+FUNDER / GRANT: ${data.grantTitle || 'Unknown grant'} — ${data.funderName || 'Unknown funder'}
+TARGET FORMAT: ${data.formatName || 'Funder-specified format'}
+USER INSTRUCTIONS: ${data.instructions || 'None provided'}
+
+TARGET FORMAT TEMPLATE / GUIDELINES (verbatim from the funder — obey its section names, questions, order and limits; may be empty):
+${String(data.formatTemplate || 'None provided').slice(0, 12000)}
+
+EXISTING PROPOSAL (preserve every fact in here):
+${JSON.stringify(data.sections || {}, null, 1).slice(0, 22000)}
+
+RULES:
+1. Carry over every fact, number, program name and claim from the existing proposal. Do NOT invent programs, statistics, partners, outcomes, staff or budget lines.
+   ECADRN's REAL programs are only: free national membership; the Intern Program (remote ~10-week cohorts — spring/fall mostly high school, summer mostly undergraduate/graduate); Career Advising (1:1 with seasoned practitioners); the Resource Hub (Education Hub guides, national ADR Job Board, networking events); the ADR Organization Directory; and volunteering.
+2. If the template sets its own sections, questions, character limits or word limits, follow them exactly and in that order.
+3. If a required question genuinely cannot be answered from the existing material, write the best-supported answer and append "[NEEDS INPUT: <exactly what is missing>]". Never fabricate to fill a gap.
+4. Keep ECADRN's voice: plain, specific, active voice. Banned: "delve", "tapestry", "testament", "leverage", "robust", "moreover", "it is important to note", "in today's world", "at the heart of", "navigating the landscape", "catalyst for change", "bridging divides", "fostering dialogue".
+5. Respect the target length. Shorten rather than pad; never add filler to hit a word count.
+
+OUTPUT FORMAT — respond ONLY with this exact JSON:
+{
+  "formatName": "string — short name of the format you produced",
+  "formatNotes": "string — 2-3 sentences: what changed and anything that still needs the user's input",
+  "sections": [ { "label": "string — section heading exactly as the funder names it", "content": "string — the rewritten section" } ]
 }`;
 
     case 'research-grant-url':
@@ -1870,6 +1899,7 @@ function validateResponse(action: string, parsed: any): { valid: boolean; error?
     'discover-foundations': ['foundations'],
     'generate-draft': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
     'agent-write-proposal': ['executiveSummary', 'needStatement', 'projectDescription', 'methodology'],
+    'reformat-proposal': ['formatName', 'sections'],
     'research-funder': ['funderOverview', 'missionAlignmentScore'],
     'research-grant-url': ['grantTitle', 'funderName'],
     'score-alignment': ['overallScore', 'dimensionScores'],

@@ -8039,6 +8039,14 @@ function AgentProposalWriter({
   const [isChatting, setIsChatting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeSection, setActiveSection] = useState('executiveSummary');
+  // Reformat / upload-a-template support (same facts, funder-required format)
+  const [reformatted, setReformatted] = useState<{ formatName: string; formatNotes: string; sections: Array<{ label: string; content: string }> } | null>(null);
+  const [showReformat, setShowReformat] = useState(false);
+  const [formatTemplate, setFormatTemplate] = useState('');
+  const [formatInstructions, setFormatInstructions] = useState('');
+  const [formatFileName, setFormatFileName] = useState('');
+  const [formatError, setFormatError] = useState('');
+  const [isReformatting, setIsReformatting] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -8075,11 +8083,24 @@ function AgentProposalWriter({
     budgetNarrative: 'Budget Narrative',
   };
 
+  // What the review pane currently shows: the original 9-section draft, or the
+  // reformatted version once the user rewrites it to a funder's structure.
+  const displaySections: Array<{ key: string; label: string; content: string }> = reformatted
+    ? reformatted.sections.map((sec, i) => ({ key: `rf-${i}`, label: sec.label, content: sec.content }))
+    : Object.entries(SECTION_LABELS).map(([key, label]) => ({ key, label, content: proposalSections?.[key] || '' }));
+  const activeEntry = displaySections.find(sec => sec.key === activeSection) || displaySections[0] || { key: '', label: '', content: '' };
+
   const runAgentWrite = async () => {
     if (!grantName.trim()) return;
     setLog([]);
     setResearchData(null);
     setProposalSections(null);
+    setReformatted(null);
+    setShowReformat(false);
+    setFormatTemplate('');
+    setFormatInstructions('');
+    setFormatFileName('');
+    setFormatError('');
     setChatHistory([]);
     setStep('researching');
 
@@ -8168,8 +8189,8 @@ function AgentProposalWriter({
 
     try {
       // Build a context-aware chat prompt via the existing 'chat' worker action
-      const fullProposalText = Object.entries(SECTION_LABELS)
-        .map(([key, label]) => `## ${label}\n${proposalSections?.[key] || ''}`)
+      const fullProposalText = displaySections
+        .map(sec => `## ${sec.label}\n${sec.content || ''}`)
         .join('\n\n');
 
       const response = await callAI('chat', {
@@ -8194,8 +8215,73 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     }
   };
 
+  // ── Rewrite into a funder-required format ───────────────────────────────
+  const handleFormatFile = (file?: File) => {
+    if (!file) return;
+    setFormatError('');
+    const isText = /\.(txt|md|markdown|csv|json|rtf)$/i.test(file.name);
+    if (!isText) {
+      setFormatFileName('');
+      setFormatError('PDF and Word files cannot be read in the browser. Open the file, copy its text, and paste it into the box below.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      setFormatTemplate(String(e.target?.result || '').slice(0, 20000));
+      setFormatFileName(file.name);
+    };
+    reader.onerror = () => setFormatError('Could not read that file.');
+    reader.readAsText(file);
+  };
+
+  const runReformat = async () => {
+    if (isReformatting || !researchData) return;
+    if (!formatTemplate.trim() && !formatInstructions.trim()) {
+      setFormatError("Upload the funder's template or describe the format you need.");
+      return;
+    }
+    setFormatError('');
+    setIsReformatting(true);
+    try {
+      // Rewrite from whatever is currently on screen, so repeated rewrites build
+      // on each other instead of snapping back to the original draft.
+      const current = displaySections.reduce((acc: Record<string, string>, sec) => {
+        acc[sec.label] = sec.content || '';
+        return acc;
+      }, {});
+
+      const result = await callAI('reformat-proposal', {
+        grantTitle: researchData.grantTitle,
+        funderName: researchData.funderName,
+        sections: current,
+        formatTemplate,
+        instructions: formatInstructions,
+        formatName: formatFileName || reformatted?.formatName || '',
+      });
+
+      const sections = Array.isArray(result?.sections)
+        ? result.sections
+            .filter((sec: any) => sec && typeof sec.content === 'string' && sec.content.trim())
+            .map((sec: any) => ({ label: String(sec.label || 'Section'), content: String(sec.content) }))
+        : [];
+
+      if (!sections.length) throw new Error("The AI returned no sections. Try pasting the funder's questions in explicitly.");
+
+      setReformatted({
+        formatName: String(result?.formatName || 'Requested format'),
+        formatNotes: String(result?.formatNotes || ''),
+        sections,
+      });
+      setActiveSection('rf-0');
+    } catch (err: any) {
+      setFormatError(err?.message || 'Rewrite failed. Please try again.');
+    } finally {
+      setIsReformatting(false);
+    }
+  };
+
   const downloadProposal = async () => {
-    if (!proposalSections || !researchData) return;
+    if ((!proposalSections && !reformatted) || !researchData) return;
 
     // ── Build the Word document ──
     const children: any[] = [];
@@ -8270,11 +8356,11 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
     children.push(new Paragraph({ children: [new PageBreak()] }));
 
     // Each proposal section
-    Object.entries(SECTION_LABELS).forEach(([key, label], i) => {
+    displaySections.forEach((sec, i) => {
       // Section heading
       children.push(
         new Paragraph({
-          text: label.toUpperCase(),
+          text: sec.label.toUpperCase(),
           heading: HeadingLevel.HEADING_1,
           spacing: { before: i === 0 ? 0 : 480, after: 160 },
           border: {
@@ -8284,7 +8370,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
       );
 
       // Section body — split on newlines to preserve paragraph breaks
-      const bodyText = (proposalSections[key] || '').trim();
+      const bodyText = (sec.content || '').trim();
       const paragraphs = bodyText.split(/\n{2,}/);
       paragraphs.forEach((para: string) => {
         if (para.trim()) {
@@ -8367,9 +8453,9 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
   };
 
   const copyAllSections = () => {
-    if (!proposalSections) return;
-    const text = Object.entries(SECTION_LABELS)
-      .map(([key, label]) => `${label.toUpperCase()}\n${proposalSections[key] || ''}`)
+    if (!displaySections.length) return;
+    const text = displaySections
+      .map(sec => `${sec.label.toUpperCase()}\n${sec.content || ''}`)
       .join('\n\n---\n\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -8582,17 +8668,17 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
 
                 <div className="p-2 flex-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1.5">Sections</p>
-                  {Object.entries(SECTION_LABELS).map(([key, label]) => (
+                  {displaySections.map(sec => (
                     <button
-                      key={key}
-                      onClick={() => setActiveSection(key)}
+                      key={sec.key}
+                      onClick={() => setActiveSection(sec.key)}
                       className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-semibold transition-all mb-0.5 ${
-                        activeSection === key
+                        activeSection === sec.key
                           ? 'bg-violet-100 text-violet-800 font-black'
                           : 'text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
-                      {label}
+                      {sec.label}
                     </button>
                   ))}
                 </div>
@@ -8612,11 +8698,105 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
 
                 {/* Section content */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                  {/* Reformat / upload-a-template */}
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <FileText size={12} /> Different format needed?
+                      </p>
+                      <button
+                        onClick={() => setShowReformat(v => !v)}
+                        className="text-[10px] font-black uppercase tracking-wider text-violet-700 hover:text-violet-900"
+                      >
+                        {showReformat ? 'Hide' : 'Open'}
+                      </button>
+                    </div>
+
+                    {reformatted && (
+                      <p className="text-[10px] text-violet-800 mt-1.5">
+                        Showing <span className="font-black">{reformatted.formatName}</span>
+                        {' · '}
+                        <button
+                          onClick={() => { setReformatted(null); setActiveSection('executiveSummary'); }}
+                          className="underline font-bold hover:text-violet-950"
+                        >
+                          back to the original draft
+                        </button>
+                      </p>
+                    )}
+
+                    {showReformat && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[10px] text-slate-600 leading-relaxed">
+                          Upload the funder's form or guidelines (or paste them) and the agent rewrites this proposal to match — same facts, new structure and length.
+                        </p>
+
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-violet-200 text-[10px] font-bold text-violet-800 cursor-pointer hover:bg-violet-50 truncate">
+                            <Upload size={11} />
+                            <span className="truncate">{formatFileName || 'Upload template (.txt, .md)'}</span>
+                            <input
+                              type="file"
+                              accept=".txt,.md,.markdown,.csv,.json,.rtf"
+                              className="hidden"
+                              onChange={e => handleFormatFile(e.target.files?.[0])}
+                            />
+                          </label>
+                          {(formatTemplate || formatFileName) && (
+                            <button
+                              onClick={() => { setFormatTemplate(''); setFormatFileName(''); }}
+                              className="text-[10px] font-bold text-slate-500 hover:text-slate-800"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+
+                        <textarea
+                          value={formatTemplate}
+                          onChange={e => setFormatTemplate(e.target.value)}
+                          rows={4}
+                          placeholder="Paste the funder's questions, section names, or format instructions here..."
+                          className="w-full border border-violet-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+                        />
+
+                        <textarea
+                          value={formatInstructions}
+                          onChange={e => setFormatInstructions(e.target.value)}
+                          rows={2}
+                          placeholder="e.g. 'Convert to a 2-page letter of intent' or 'Only three sections, 300 words each'"
+                          className="w-full border border-violet-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+                        />
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={runReformat}
+                            disabled={isReformatting || (!formatTemplate.trim() && !formatInstructions.trim())}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-wider hover:from-violet-700 hover:to-indigo-700 disabled:opacity-40 transition-all"
+                          >
+                            {isReformatting ? <RefreshCw size={11} className="animate-spin" /> : <FileEdit size={11} />}
+                            {isReformatting ? 'Rewriting…' : 'Rewrite in this format'}
+                          </button>
+                          {reformatted && !isReformatting && (
+                            <span className="text-[10px] text-violet-700 font-bold">Applied</span>
+                          )}
+                        </div>
+
+                        {formatError && (
+                          <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">{formatError}</p>
+                        )}
+                        {reformatted?.formatNotes && !isReformatting && (
+                          <p className="text-[10px] text-slate-600 italic leading-relaxed">{reformatted.formatNotes}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex items-center justify-between">
-                    <h3 className="font-black text-slate-900 text-base">{SECTION_LABELS[activeSection]}</h3>
+                    <h3 className="font-black text-slate-900 text-base">{activeEntry.label}</h3>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(proposalSections[activeSection] || '');
+                        navigator.clipboard.writeText(activeEntry.content || '');
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
                       }}
@@ -8628,7 +8808,7 @@ INSTRUCTIONS: If the user asks to edit, rewrite, improve, or change a section �
                   </div>
 
                   <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 leading-relaxed text-sm text-slate-800 whitespace-pre-wrap min-h-[120px]">
-                    {proposalSections[activeSection] || '—'}
+                    {activeEntry.content || '—'}
                   </div>
                 </div>
 
@@ -9083,17 +9263,12 @@ function GrantsView({
         let text = e.target?.result as string;
         
         if (isBinaryFormat || !text || text.trim().length < 50) {
-          // Gracefully synthesize rich structured ADR guidelines text derived from the file name to feed to the model
-          const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-          text = `GRANT DOCUMENT GUIDELINES RFP
-Title: ${cleanName}
-Funder: Eastern Seaboard Alternative Dispute Resolution Endowment
-Description: Funding high-integrity projects that support and empower early-career ADR professionals, emphasizing trauma-informed mediation, structural equity, access to justice, and community-academic dialogue integration.
-Focus Areas: Conflict Resolution, Trauma-Informed Mediation, Peer Networks, Access to Justice, Professional Empowerment
-Geographic Scope: East Coast Regions
-Eligibility: Early Career Mediation Networks, ADR Clinics, and 501(c)(3) partnerships
-Award Range: $20,000 to $100,000
-Deadline: 2026-11-15`;
+          // Never fabricate funder details. If we cannot read real text out of the
+          // file, stop and ask for it rather than inventing an RFP.
+          setIsUploading(false);
+          setUploadError('That file could not be read as text. Open the PDF/Word document, copy its contents, and paste them into a text file (.txt), then upload that.');
+          showToast('Could not read that file. Copy the text into a .txt file and upload it.', 'info');
+          return;
         }
         
         try {
