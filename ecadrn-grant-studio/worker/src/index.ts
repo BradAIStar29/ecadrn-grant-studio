@@ -33,6 +33,7 @@ const ACTION_CONFIG: Record<string, { model: string; temperature: number; catego
   'agent-write-proposal':    { model: 'gemini-3.8-flash', temperature: 0.8,  category: 'writing',  maxTokens: 32768, useSearch: false },
   'reformat-proposal':       { model: 'gemini-3.8-flash', temperature: 0.35, category: 'writing',  maxTokens: 32768, useSearch: false },
   'answer-question':         { model: 'gemini-3.8-flash', temperature: 0.6,  category: 'writing',  maxTokens: 4096,  useSearch: false },
+  'extract-requirements':    { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'utility',  maxTokens: 4096,  useSearch: false },
   'generate-section':        { model: 'gemini-3.8-flash', temperature: 0.7,  category: 'writing',  maxTokens: 8192,  useSearch: false },
   'research-funder':         { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },
   'research-grant-url':      { model: 'gemini-3.8-flash', temperature: 0.2,  category: 'research', maxTokens: 16384, useSearch: true  },

@@ -10467,7 +10467,7 @@ function GrantsView({
         <div className="flex gap-4">
           {/* Agent Write Proposal Button */}
           <button
-            onClick={() => { setAgentPrefillGrant(null); setAgentWriterOpen(true); }}
+            onClick={() => { setAgentPrefillGrant(null); setAgentWriteMode('full'); setAgentWriterOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md"
           >
             <Bot size={13} />
@@ -11090,6 +11090,7 @@ function GrantsView({
               <button
                 onClick={() => {
                   setAgentPrefillGrant(g);
+                  setAgentWriteMode('full');
                   setAgentWriterOpen(true);
                 }}
                 className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-violet-50 to-indigo-50 hover:from-violet-100 hover:to-indigo-100 border border-violet-200 text-violet-700 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
