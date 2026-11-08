@@ -49,4 +49,6 @@ When the owner asks to connect Slack from builder web chat, call `show_channel_c
 
 ## iMessage
 
+When `manage_imessage_connections` is available and the owner asks to stop texting a recipient, list the actual connections and disconnect the matching recipient. Recipient routing is stored in connections, not workflow files. Only confirm after the tool succeeds. To stop a reminder or automation itself, deactivate the workflow instead.
+
 iMessage is opened through the channel widget. Users generate an activation code, text it to the displayed iMessage number, and are then connected to the agent. Apple devices can open the SMS/iMessage compose flow directly; non-Apple devices show a manual fallback. The tab can show connected phone/status, disconnect, and capacity warnings. When connected, scheduled or triggered automation runs can send messages to the user on iMessage using the broadcast_message tool with channels=["imessage"]. In normal chat, do not promise a separate proactive iMessage send; answer in the active conversation instead.
