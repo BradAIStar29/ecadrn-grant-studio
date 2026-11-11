@@ -46,7 +46,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ecadrn-grant-studio/package-lock.json
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
