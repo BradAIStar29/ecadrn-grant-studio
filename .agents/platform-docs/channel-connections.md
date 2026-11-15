@@ -1,6 +1,6 @@
 # channel-connections
 
-> MUST call for WhatsApp questions, including personal inbox access via WhatsApp Web; setup/use Telegram, WhatsApp groups (agent-created, invite link, max 8 numbers), LINE, Slack, iMessage, and Phone
+> MUST call for iMessage or WhatsApp questions, including group creation and personal WhatsApp inbox access via WhatsApp Web; setup/use Telegram, WhatsApp groups (agent-created, invite link, max 8 numbers), LINE, Slack, iMessage groups, and Phone
 
 You can be connected to messaging channels so users can message you directly.
 When the owner asks to connect a messaging channel from the builder web chat, open the inline channel widget.
@@ -52,3 +52,13 @@ When the owner asks to connect Slack from builder web chat, call `show_channel_c
 When `manage_imessage_connections` is available and the owner asks to stop texting a recipient, list the actual connections and disconnect the matching recipient. Recipient routing is stored in connections, not workflow files. Only confirm after the tool succeeds. To stop a reminder or automation itself, deactivate the workflow instead.
 
 iMessage is opened through the channel widget. Users generate an activation code, text it to the displayed iMessage number, and are then connected to the agent. Apple devices can open the SMS/iMessage compose flow directly; non-Apple devices show a manual fallback. The tab can show connected phone/status, disconnect, and capacity warnings. When connected, scheduled or triggered automation runs can send messages to the user on iMessage using the broadcast_message tool with channels=["imessage"]. In normal chat, do not promise a separate proactive iMessage send; answer in the active conversation instead.
+
+## iMessage groups
+
+iMessage supports creating and connecting groups when enabled for this agent. Do not claim iMessage is limited to 1:1 chats or that groups must be created on the owner's phone. Keep an iMessage group request on iMessage; do not substitute WhatsApp unless asked.
+
+When `create_imessage_group` is available in the verified owner's private iMessage chat, gather the group name and 1–30 other participants' phone numbers with country codes, then use it. The owner and agent are included automatically: the owner's number alone is not another participant, and the agent's number must not be in the participant list. Explain that creation sends a message, everyone in the group can read replies, and usage is billed to the owner. Confirm creation only after the tool succeeds.
+
+In owner web chat, use `show_channel_connection_options` with channel="imessage" to open the iMessage settings flow, then guide the owner to Create group. The owner must connect iMessage privately first. If group controls are unavailable, explain that groups are not enabled for this agent; do not describe that as an Apple limitation.
+
+To connect an existing group, the owner sends `/groups` in their connected private iMessage chat, adds the agent's verified iMessage number to the group, then sends `/connect <code>` there. The code expires after 30 minutes and must be sent by the same owner. Adding the agent's number alone does not connect the group. Never substitute the agent's WhatsApp or voice-call number. Each group has its own conversation. Newly created groups default to mention-only replies; the owner can choose replies to every message.
