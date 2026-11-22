@@ -78,8 +78,17 @@ const DEFAULT_CONFIG = { model: 'gemini-3.8-flash', temperature: 0.4, category: 
 //   3rd+ hit      → 24h cooldown (daily revert as requested)
 // When primary recovers, state is cleared and everything reverts to normal.
 
-const MODEL_TIERS = [
+const MODEL_TIERS: Array<{ model: string; label: string; noSearch?: boolean }> = [
   { model: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash' },
+  // Gemini 4 Hydrogen (stable, released Nov 2026) — frontier-class intelligence
+  // with a unified 1M-token context, and the ONLY Gemini 4 model on the free
+  // tier (Carbon/Argon/Neon are paid-only). Separate quota pool from the 3.x
+  // Flash tiers, so it absorbs bursts after 3.8 Flash's daily quota runs out
+  // instead of dropping straight to 3.6 Flash.
+  // noSearch: Google Search grounding is NOT available on Hydrogen's free tier
+  // (Maps/Search grounding are paid-only), so search actions run knowledge-only
+  // on this tier and are flagged as degraded rather than erroring out.
+  { model: 'gemini-4-hydrogen',     label: 'Gemini 4 Hydrogen (free)', noSearch: true },
   // Gemini 3.7 Flash & 3.5 Flash removed 2026-11-01 — Google deprecated them
   // (2026-10-08) and auto-routes requests into 3.8/3.6 Flash, so after a quota
   // failure they just doubled up on an exhausted pool and wasted a retry.
@@ -2401,7 +2410,15 @@ export default {
       let usedFallback = false;
 
       for (let tier = startTier; tier < MODEL_TIERS.length && !resultText; tier++) {
-        const tierConfig = { ...config, model: MODEL_TIERS[tier].model };
+        const tierMeta = MODEL_TIERS[tier];
+        // Gemini 4 Hydrogen's free tier has no Google Search grounding. For a
+        // search action, skip it entirely — a knowledge-only answer from the
+        // top model is worth less than a grounded one from a Flash tier.
+        if (config.useSearch && tierMeta.noSearch) {
+          console.log(`Skipping ${tierMeta.model} for "${action}" — no search grounding on its free tier`);
+          continue;
+        }
+        const tierConfig = { ...config, model: tierMeta.model };
         const tierAi = (tier >= 1 && fallbackAi) ? fallbackAi : ai;
         let tierSucceeded = false;
 
